@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planes Nearby</title>
+<!--
+  Live aircraft map for a Google Nest Hub (2nd gen, 1024x600).
+  Data: adsb.lol (aircraft), Planespotters.net (actual photos), Wikipedia (generic type photos),
+  map tiles © OpenStreetMap contributors © CARTO.
+
+  Optional URL settings (add after the link, e.g. ?r=40&rotate=15):
+    lat, lon   centre point             (default Marton: -40.07, 175.38)
+    r          radius in nautical miles (default 60, max 250)
+    zoom       fixed map zoom, e.g. 9   (default: fit the radius ring)
+    name       place name in header     (default Marton)
+    rotate     seconds per featured plane, 0 = always show nearest (default 10)
+    tz         clock time zone          (default Pacific/Auckland)
+-->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--bg:#0b1016;--panel:#141b24;--deep:#0e141c;--txt:#e8eef5;--dim:#8b9aab;--acc:#ff9a1f;--plane:#ffd84a;--good:#4cd37a;--bad:#ff6b6b}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column;padding:1.2vh 1.2vw;gap:1.2vh}
+
+header{display:flex;align-items:center;gap:1.6vw;height:6vh;font-size:3.1vh;flex:0 0 auto}
+header .t{font-weight:700}
+header .c{color:var(--dim)}
+header .sp{flex:1}
+#status{font-size:2.3vh;color:var(--dim)}
+#status.err{color:var(--bad)}
+#clock{font-weight:700;font-variant-numeric:tabular-nums}
+
+main{flex:1;display:flex;gap:1.2vw;min-height:0}
+#map{flex:1;border-radius:1.6vh;overflow:hidden;background:#0d1117}
+.leaflet-container{background:#0d1117;font-family:inherit}
+.leaflet-control-attribution{font-size:9px!important;background:rgba(0,0,0,.55)!important;color:#9aa!important}
+.leaflet-control-attribution a{color:#bcc!important}
+
+/* plane markers */
+.pl{position:relative;width:28px;height:28px}
+.pl svg{width:28px;height:28px;color:var(--plane);filter:drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);transition:transform .6s}
+.pl span{position:absolute;top:27px;left:50%;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:0 4px;border-radius:3px;white-space:nowrap}
+.pl.on svg{color:var(--acc);transform-origin:center}
+.pl.on{width:36px;height:36px}
+.pl.on svg{width:36px;height:36px}
+.pl.on span{top:35px;background:var(--acc);color:#000}
+
+/* side panel */
+#side{flex:0 0 36%;background:var(--panel);border-radius:1.6vh;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.ph{position:relative;flex:0 0 43%;background:#05080c}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#2a3a4d}
+.noimg svg{width:13vh;height:13vh}
+.badge{position:absolute;top:1vh;left:1vh;background:rgba(0,0,0,.7);padding:.4vh 1vh;border-radius:.8vh;font-size:2vh;font-weight:600}
+.badge.actual{color:var(--good)}
+.badge.generic{color:var(--plane)}
+.credit{position:absolute;right:.8vh;bottom:.6vh;max-width:85%;font-size:1.7vh;background:rgba(0,0,0,.65);padding:.3vh .7vh;border-radius:.6vh;color:#cfd8e3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.info{flex:1;padding:1.4vh 1.8vh;display:flex;flex-direction:column;gap:.6vh;min-height:0}
+.top{display:flex;align-items:baseline;gap:1vh}
+.cs{flex:1;font-size:5.6vh;font-weight:800;letter-spacing:.03em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.idx{font-size:2vh;color:var(--dim);white-space:nowrap}
+.ty{font-size:2.6vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
+.st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
+.st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.st b small{font-size:2.1vh;font-weight:500;color:var(--dim);margin-left:.4vh}
+.st span{font-size:1.7vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.hd{display:inline-block;width:3.2vh;height:3.2vh;margin-right:.6vh;vertical-align:-0.4vh;color:var(--acc)}
+.empty{display:none;flex:1;align-items:center;justify-content:center;text-align:center;padding:2vh;color:var(--dim);font-size:3vh}
+</style>
+</head>
+<body>
+<header>
+  <span class="t">✈ Planes near <span id="place">Marton</span></span>
+  <span class="c" id="count">Loading…</span>
+  <span class="sp"></span>
+  <span id="status"></span>
+  <span id="clock"></span>
+</header>
+
+<main>
+  <div id="map"></div>
+  <section id="side">
+    <div class="ph" id="ph">
+      <div class="noimg" id="noimg"></div>
+      <img id="img" alt="" referrerpolicy="no-referrer" style="display:none">
+      <div class="badge" id="badge" style="display:none"></div>
+      <div class="credit" id="credit" style="display:none"></div>
+    </div>
+    <div class="info" id="info">
+      <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div></div>
+      <div class="ty" id="ty">&nbsp;</div>
+      <div class="stats">
+        <div class="st"><span>Altitude</span><b id="sAlt">—</b></div>
+        <div class="st"><span>Distance</span><b id="sDist">—</b></div>
+        <div class="st"><span>Heading</span><b id="sHdg">—</b></div>
+        <div class="st"><span>Speed</span><b id="sSpd">—</b></div>
+      </div>
+    </div>
+    <div class="empty" id="empty"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- settings ----------
+  var P = new URLSearchParams(location.search);
+  function num(k, d) { var v = parseFloat(P.get(k)); return isNaN(v) ? d : v; }
+  var LAT = num("lat", -40.07);
+  var LON = num("lon", 175.38);
+  var RADIUS_NM = Math.min(num("r", 60), 250);
+  var ZOOM = num("zoom", 0);
+  var PLACE = P.get("name") || "Marton";
+  var ROTATE_S = num("rotate", 10);
+  var TZ = P.get("tz") || "Pacific/Auckland";
+  var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
+  var ROTATE_N = 8;        // featured panel cycles through this many nearest planes
+  var API = "https://api.adsb.lol/v2/point/" + LAT + "/" + LON + "/" + RADIUS_NM;
+
+  // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
+  var TYPES = {
+    A319:["Airbus A319","Airbus A319"], A320:["Airbus A320","Airbus A320 family"],
+    A321:["Airbus A321","Airbus A321"], A20N:["Airbus A320neo","Airbus A320neo family"],
+    A21N:["Airbus A321neo","Airbus A321neo"], A332:["Airbus A330-200","Airbus A330"],
+    A333:["Airbus A330-300","Airbus A330"], A339:["Airbus A330-900neo","Airbus A330neo"],
+    A359:["Airbus A350-900","Airbus A350"], A35K:["Airbus A350-1000","Airbus A350"],
+    A388:["Airbus A380","Airbus A380"], BCS3:["Airbus A220-300","Airbus A220"],
+    B737:["Boeing 737-700","Boeing 737 Next Generation"], B738:["Boeing 737-800","Boeing 737 Next Generation"],
+    B739:["Boeing 737-900","Boeing 737 Next Generation"], B38M:["Boeing 737 MAX 8","Boeing 737 MAX"],
+    B39M:["Boeing 737 MAX 9","Boeing 737 MAX"], B752:["Boeing 757-200","Boeing 757"],
+    B763:["Boeing 767-300","Boeing 767"], B772:["Boeing 777-200","Boeing 777"],
+    B77L:["Boeing 777-200LR","Boeing 777"], B77W:["Boeing 777-300ER","Boeing 777"],
+    B744:["Boeing 747-400","Boeing 747-400"], B748:["Boeing 747-8","Boeing 747-8"],
+    B788:["Boeing 787-8","Boeing 787 Dreamliner"], B789:["Boeing 787-9","Boeing 787 Dreamliner"],
+    B78X:["Boeing 787-10","Boeing 787 Dreamliner"], E190:["Embraer E190","Embraer E-Jet family"],
+    E75L:["Embraer E175","Embraer E-Jet family"],
+    AT72:["ATR 72","ATR 72"], AT75:["ATR 72-500","ATR 72"], AT76:["ATR 72-600","ATR 72"],
+    DH8C:["Dash 8 Q300","De Havilland Canada Dash 8"], DH8D:["Dash 8 Q400","De Havilland Canada Dash 8"],
+    SF34:["Saab 340","Saab 340"], B190:["Beechcraft 1900","Beechcraft 1900"],
+    SW4:["Metroliner","Fairchild Swearingen Metroliner"], J32:["Jetstream 32","British Aerospace Jetstream"],
+    C208:["Cessna 208 Caravan","Cessna 208 Caravan"], PC12:["Pilatus PC-12","Pilatus PC-12"],
+    BE20:["King Air 200","Beechcraft Super King Air"], B350:["King Air 350","Beechcraft Super King Air"],
+    BE9L:["King Air 90","Beechcraft King Air"], BN2P:["BN-2 Islander","Britten-Norman Islander"],
+    P68:["Partenavia P.68","Partenavia P.68"], PA31:["Piper Navajo","Piper PA-31 Navajo"],
+    P28A:["Piper Cherokee","Piper PA-28 Cherokee"], C152:["Cessna 152","Cessna 152"],
+    C172:["Cessna 172","Cessna 172"], C182:["Cessna 182","Cessna 182 Skylane"],
+    C206:["Cessna 206","Cessna 206"], DA40:["Diamond DA40","Diamond DA40 Diamond Star"],
+    DA42:["Diamond DA42","Diamond DA42 Twin Star"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
+    C30J:["C-130J Super Hercules","Lockheed Martin C-130J Super Hercules"],
+    C130:["C-130 Hercules","Lockheed C-130 Hercules"], P8:["P-8A Poseidon","Boeing P-8 Poseidon"],
+    NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"],
+    AS50:["AS350 Squirrel","Eurocopter AS350 Écureuil"], EC35:["EC135","Eurocopter EC135"],
+    B06:["Bell 206","Bell 206"], R22:["Robinson R22","Robinson R22"], R44:["Robinson R44","Robinson R44"],
+    CL60:["Challenger 600","Bombardier Challenger 600 series"], GLEX:["Global Express","Bombardier Global Express"]
+  };
+
+  var PLANE_PATH = "M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z";
+  var PLANE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="' + PLANE_PATH + '"/></svg>';
+  function arrow(deg) {
+    return '<svg class="hd" viewBox="0 0 24 24" style="transform:rotate(' + Math.round(deg) + 'deg)"><path d="M12 2 19 21 12 17 5 21z" fill="currentColor"/></svg>';
+  }
+
+  // ---------- helpers ----------
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function first() { for (var i = 0; i < arguments.length; i++) if (arguments[i] !== undefined && arguments[i] !== null) return arguments[i]; return null; }
+  var DIRS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  function compass(d) { return DIRS[Math.round(((d % 360) + 360) % 360 / 22.5) % 16]; }
+  function rad(d) { return d * Math.PI / 180; }
+  function distKm(lat1, lon1, lat2, lon2) {
+    var dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function bearing(lat1, lon1, lat2, lon2) {
+    var y = Math.sin(rad(lon2 - lon1)) * Math.cos(rad(lat2));
+    var x = Math.cos(rad(lat1)) * Math.sin(rad(lat2)) - Math.sin(rad(lat1)) * Math.cos(rad(lat2)) * Math.cos(rad(lon2 - lon1));
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+  function titleCase(s) { return s.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }); }
+  function typeName(a) {
+    if (a.type && TYPES[a.type]) return TYPES[a.type][0];
+    if (a.desc) return titleCase(a.desc);
+    return a.type || "Unknown type";
+  }
+  function altHtml(a) {
+    if (a.alt === "ground") return "Ground";
+    if (a.alt === null) return "—";
+    var trend = a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "";
+    return Math.round(a.alt).toLocaleString("en-NZ") + "<small>ft" + trend + "</small>";
+  }
+  function setStatus(msg) { $("status").textContent = msg || ""; $("status").className = msg ? "err" : ""; }
+
+  // ---------- map ----------
+  var map = null, markers = {};
+  if (typeof L === "undefined") {
+    setStatus("Map library didn't load");
+  } else {
+    map = L.map("map", {
+      zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+      touchZoom: false, boxZoom: false, keyboard: false, tap: false, zoomSnap: 0.25
+    });
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      subdomains: "abcd", maxZoom: 19,
+      attribution: "© OpenStreetMap contributors © CARTO"
+    }).addTo(map);
+    var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: "#3a5068", weight: 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
+    L.circle([LAT, LON], { radius: 25000, color: "#2c3d50", weight: 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
+    L.circleMarker([LAT, LON], { radius: 5, color: "#0b1016", weight: 2, fillColor: "#4cd37a", fillOpacity: 1, interactive: false }).addTo(map);
+    if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
+    else map.fitBounds(ring.getBounds(), { padding: [6, 6] });
+  }
+
+  function iconFor(a, on) {
+    var size = on ? 36 : 28;
+    var html = '<div class="pl' + (on ? " on" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
+      Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg><span>' + esc(a.callsign) + "</span></div>";
+    return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
+  }
+
+  function drawMap(featured) {
+    if (!map) return;
+    var seen = {};
+    aircraft.forEach(function (a) {
+      seen[a.hex] = true;
+      var on = featured && a.hex === featured.hex;
+      var ic = iconFor(a, on);
+      var m = markers[a.hex];
+      if (!m) {
+        m = L.marker([a.lat, a.lon], { icon: ic.icon, interactive: false, keyboard: false }).addTo(map);
+        m._key = ic.key;
+        markers[a.hex] = m;
+      } else {
+        m.setLatLng([a.lat, a.lon]);
+        if (m._key !== ic.key) { m.setIcon(ic.icon); m._key = ic.key; }
+      }
+      m.setZIndexOffset(on ? 1000 : 0);
+    });
+    Object.keys(markers).forEach(function (hex) {
+      if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
+    });
+  }
+
+  // ---------- photos ----------
+  var hexCache = {};   // hex -> photo | null | "pending"
+  var typeCache = {};  // type/desc -> photo | null | "pending"
+
+  function getJSON(url) {
+    return fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
+  function fetchActual(hex) {
+    return getJSON("https://api.planespotters.net/pub/photos/hex/" + hex).then(function (j) {
+      var p = j && j.photos && j.photos[0];
+      if (!p) return null;
+      return {
+        src: (p.thumbnail_large || p.thumbnail).src,
+        credit: "© " + (p.photographer || "unknown") + " · Planespotters.net",
+        kind: "actual"
+      };
+    });
+  }
+  function fetchGeneric(type, desc) {
+    var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=800";
+    var url = (type && TYPES[type])
+      ? base + "&titles=" + encodeURIComponent(TYPES[type][1])
+      : base + "&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent((desc || type) + " aircraft");
+    return getJSON(url).then(function (j) {
+      var pages = j && j.query && j.query.pages;
+      if (!pages) return null;
+      var pg = pages[Object.keys(pages)[0]];
+      if (!pg || !pg.thumbnail) return null;
+      return { src: pg.thumbnail.source, credit: "Type photo · Wikipedia", kind: "generic" };
+    });
+  }
+  function load(cache, key, fn) {
+    cache[key] = "pending";
+    fn().then(function (p) { cache[key] = p; render(); })
+        .catch(function () { cache[key] = null; setTimeout(function () { delete cache[key]; }, 300000); render(); });
+  }
+  function photoFor(a) {
+    if (a.hex && a.hex.charAt(0) !== "~") {
+      var h = hexCache[a.hex];
+      if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
+      if (h === "pending") return null;
+      if (h) return h;
+    }
+    var key = a.type || a.desc;
+    if (!key) return null;
+    var t = typeCache[key];
+    if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(a.type, a.desc); }); return null; }
+    return t === "pending" ? null : t;
+  }
+
+  // ---------- data ----------
+  var aircraft = [];
+  var featHex = null, lastRot = 0, lastOk = 0;
+
+  function poll() {
+    fetch(API, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        aircraft = (j.ac || []).filter(function (a) {
+          return a.lat != null && a.lon != null && (a.seen_pos == null || a.seen_pos < 60);
+        }).map(function (a) {
+          var alt = a.alt_baro === "ground" ? "ground" : first(a.alt_baro, a.alt_geom);
+          return {
+            hex: a.hex,
+            callsign: ((a.flight || "").trim()) || a.r || (a.hex || "").toUpperCase(),
+            reg: a.r || "",
+            type: a.t || "",
+            desc: a.desc || "",
+            lat: a.lat, lon: a.lon,
+            alt: typeof alt === "number" || alt === "ground" ? alt : null,
+            vr: first(a.baro_rate, a.geom_rate, 0),
+            track: first(a.track, a.true_heading, a.mag_heading),
+            gs: a.gs,
+            dist: distKm(LAT, LON, a.lat, a.lon),
+            brg: bearing(LAT, LON, a.lat, a.lon)
+          };
+        }).sort(function (x, y) { return x.dist - y.dist; });
+        lastOk = Date.now();
+        setStatus("");
+        pickFeatured(true);
+        render();
+      })
+      .catch(function () { setStatus("Can't reach adsb.lol – retrying"); });
+  }
+
+  function pickFeatured(force) {
+    var top = aircraft.slice(0, ROTATE_N);
+    var before = featHex;
+    if (!top.length) { featHex = null; return before !== featHex; }
+    var idx = -1;
+    for (var i = 0; i < top.length; i++) if (top[i].hex === featHex) idx = i;
+    if (idx < 0) { featHex = top[0].hex; lastRot = Date.now(); }
+    else if (ROTATE_S <= 0) { featHex = top[0].hex; }
+    else if (!force && Date.now() - lastRot >= ROTATE_S * 1000) { featHex = top[(idx + 1) % top.length].hex; lastRot = Date.now(); }
+    return before !== featHex;
+  }
+
+  // ---------- render ----------
+  var shownImg = null;
+  function render() {
+    $("count").textContent = aircraft.length + " aircraft within " + RADIUS_NM + " nm";
+
+    var f = null, fi = 0;
+    for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === featHex) { f = aircraft[i]; fi = i; }
+    if (!f && aircraft.length) { f = aircraft[0]; fi = 0; }
+    drawMap(f);
+
+    if (!f) {
+      $("ph").style.display = "none";
+      $("info").style.display = "none";
+      $("empty").style.display = "flex";
+      $("empty").textContent = "No aircraft within " + RADIUS_NM + " nm right now";
+      return;
+    }
+    $("ph").style.display = "";
+    $("info").style.display = "";
+    $("empty").style.display = "none";
+
+    $("cs").textContent = f.callsign;
+    $("idx").textContent = "#" + (fi + 1) + " nearest";
+    var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
+    if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
+    $("ty").textContent = line;
+    $("sAlt").innerHTML = altHtml(f);
+    $("sDist").innerHTML = f.dist.toFixed(1) + "<small>km " + compass(f.brg) + "</small>";
+    $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
+    $("sSpd").innerHTML = f.gs == null ? "—" : Math.round(f.gs) + "<small>kt</small>";
+
+    var ph = photoFor(f);
+    var img = $("img");
+    if (ph) {
+      if (shownImg !== ph.src) { img.src = ph.src; shownImg = ph.src; }
+      img.style.display = "block";
+      $("noimg").innerHTML = "";
+      $("badge").style.display = "block";
+      $("badge").className = "badge " + ph.kind;
+      $("badge").textContent = ph.kind === "actual" ? "This aircraft" : "Type photo";
+      $("credit").style.display = "block";
+      $("credit").textContent = ph.credit;
+    } else {
+      img.style.display = "none"; shownImg = null;
+      $("noimg").innerHTML = PLANE_SVG;
+      $("badge").style.display = "none";
+      $("credit").style.display = "none";
+    }
+
+    // pre-fetch photos for the next few so rotation is instant
+    aircraft.slice(0, ROTATE_N).forEach(photoFor);
+  }
+
+  // ---------- clock / timers ----------
+  function tick() {
+    try {
+      $("clock").textContent = new Date().toLocaleTimeString("en-NZ", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+      $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (pickFeatured(false)) render();
+    if (lastOk && Date.now() - lastOk > 60000) setStatus("Data is stale – retrying");
+  }
+
+  $("place").textContent = PLACE;
+  poll();
+  setInterval(poll, REFRESH_MS);
+  tick();
+  setInterval(tick, 1000);
+  // Reload hourly to keep the Nest Hub's browser fresh over long sessions
+  setTimeout(function () { location.reload(); }, 3600000);
+})();
+</script>
+</body>
+</html>
