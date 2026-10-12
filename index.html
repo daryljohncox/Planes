@@ -579,6 +579,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     render();
   }
 
+  // Ground-station test beacons (e.g. TXP1HAWK, TXP2RUAO) broadcast fake offshore positions.
+  // Hide a target only when ALL of these hold, so a real aircraft with a GPS fault still shows.
+  function isTestTarget(a) {
+    return a.nac_p === 0 && a.sil === 0 && a.alt_baro === "ground" && (a.gs == null || a.gs < 1);
+  }
+
   var pollSeq = 0;
   function poll() {
     var seq = ++pollSeq, pLat = cLat, pLon = cLon;
@@ -587,7 +593,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       .then(function (j) {
         if (seq !== pollSeq) return;   // a newer request (map moved) has replaced this one
         aircraft = (j.ac || []).filter(function (a) {
-          return a.lat != null && a.lon != null && (a.seen_pos == null || a.seen_pos < 60);
+          return a.lat != null && a.lon != null && (a.seen_pos == null || a.seen_pos < 60) && !isTestTarget(a);
         }).map(function (a) {
           var alt = a.alt_baro === "ground" ? "ground" : first(a.alt_baro, a.alt_geom);
           return {
