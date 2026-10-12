@@ -7,6 +7,7 @@
 <!--
   Live aircraft map for a Google Nest Hub (2nd gen, 1024x600).
   Data: adsb.lol (aircraft), Planespotters.net (actual photos), Wikipedia (generic type photos),
+  OurAirports (airports.json, public domain – rebuild with tools/build-airports.py),
   map tiles © OpenStreetMap contributors © CARTO.
 
   Side panel lists every plane in the search area; tap one (here or on the map) for its photo and data.
@@ -56,6 +57,21 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
+/* categories: military = green, trainer = yellow (the selected plane stays orange) */
+.pl.mil:not(.on) svg{color:#1fa24a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.mil:not(.on) span{background:#137a35;color:#fff}
+.pl.trn:not(.on) svg{color:#ffd400;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.trn:not(.on) span{background:#ffd400;color:#000}
+/* airports */
+.apt{position:relative;width:12px;height:12px}
+.apt i{position:absolute;inset:0;border-radius:50%;background:#fff;border:3px solid #6a1b9a;box-shadow:0 0 0 1px rgba(255,255,255,.8)}
+.apt.t1 i{border-width:4px}
+.apt.mil i{border-color:#137a35}
+.apt b{position:absolute;left:15px;top:-2px;font:700 11px system-ui,sans-serif;color:#4a1170;white-space:nowrap;
+  text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff}
+.apt.mil b{color:#0e5e28}
+.apt b small{font-weight:500;margin-left:4px}
+body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .lightmap .pl.on svg{color:#ff6a00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 3px rgba(0,0,0,.6))}
 .lightmap .pl span{background:rgba(19,40,74,.85)}
 .lightmap .pl.on span{background:#ff6a00;color:#000}
@@ -99,6 +115,14 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   background:none;color:var(--txt);text-align:left;font:inherit;cursor:pointer}
 .row:active{background:#1c2633}
 .row .ri{color:var(--plane);width:4vh;height:4vh;flex:0 0 auto}
+.row .ri.mil{color:#3fd06a}
+.row .ri.trn{color:#ffd400}
+.tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
+.tag.mil{background:#137a35;color:#fff}
+.tag.trn{background:#ffd400;color:#000}
+.rc .tag{font-size:1.5vh}
+.aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
+.rt .apsl{color:#9fd8ff}
 .row .ri svg{width:100%;height:100%}
 .row .rm{flex:1;min-width:0}
 .row .rc{display:block;font-size:3vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -145,6 +169,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div></div>
       <div class="ty" id="ty">&nbsp;</div>
       <div class="rte" id="rte"></div>
+      <div class="aps" id="aps"></div>
       <div class="stats">
         <div class="st"><span>Altitude</span><b id="sAlt">—</b></div>
         <div class="st"><span>From <span id="distName">Marton</span></span><b id="sDist">—</b></div>
@@ -342,9 +367,20 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     L.DomEvent.disableClickPropagation(homeBtn);
   }
 
+  // Trainer types (RNZAF T-6C / CT-4 plus common flight-school aircraft). Trainers win over military.
+  var TRAINER_TYPES = { TEX2:1, CT4:1, PC21:1, PC9:1, PC7:1, C150:1, C152:1, C172:1, P28A:1, P28R:1,
+    DA20:1, DA40:1, DA42:1, P92:1, P2002:1, P2008:1, P2010:1, PA38:1 };
+  function category(raw) {
+    if (raw.t && TRAINER_TYPES[raw.t]) return "trn";
+    if (raw.dbFlags & 1) return "mil";   // feed's military flag
+    return "";
+  }
+  var CAT_NAME = { mil: "Military", trn: "Trainer" };
+  function tagHtml(a) { return a.cat ? '<span class="tag ' + a.cat + '">' + CAT_NAME[a.cat] + "</span>" : ""; }
+
   function iconFor(a, on) {
     var size = on ? 36 : 28;
-    var html = '<div class="pl' + (on ? " on" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
+    var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
       Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg><span>' + esc(a.callsign) + "</span></div>";
     return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
@@ -372,6 +408,70 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
     });
   }
+
+  // ---------- airports (OurAirports data in airports.json) ----------
+  // Entries: [code, name, lat, lon, elevation_ft, tier]  tier 1 = large, 2 = medium, 3 = small airfield
+  var AIRPORTS = [], aptLayer = null;
+  var MIL_APT = /air ?force|air ?base|airbase|rnzaf|raaf|military|naval air|\bbase\b/i;
+  function apt(r) { return { code: r[0], name: r[1], lat: r[2], lon: r[3], elev: r[4], tier: r[5], mil: MIL_APT.test(r[1]) }; }
+
+  // airports within km of a point (quick lat/lon box first, then real distance)
+  function airportsNear(lat, lon, km, maxTier) {
+    var dLat = km / 111, dLon = km / (111 * Math.max(0.2, Math.cos(rad(lat)))), out = [];
+    for (var i = 0; i < AIRPORTS.length; i++) {
+      var r = AIRPORTS[i];
+      if (r[5] > maxTier || Math.abs(r[2] - lat) > dLat || Math.abs(r[3] - lon) > dLon) continue;
+      var d = distKm(lat, lon, r[2], r[3]);
+      if (d <= km) { var a = apt(r); a.d = d; out.push(a); }
+    }
+    return out.sort(function (x, y) { return x.d - y.d; });
+  }
+
+  // Best guess at what a low plane is doing near an airport. Returns {icon, text, ap} or null.
+  function airportStatus(a) {
+    if (!AIRPORTS.length || a.lat == null) return null;
+    var fast = a.gs != null && a.gs > 180;                 // airliners/jets: ignore small airfields
+    var near = airportsNear(a.lat, a.lon, 30, fast ? 2 : 3);
+    if (!near.length) return null;
+    if (a.alt === "ground") return near[0].d < 5 ? { icon: "●", text: "On ground at", ap: near[0] } : null;
+    if (a.alt == null) return null;
+    for (var i = 0; i < near.length; i++) {
+      var ap = near[i], agl = a.alt - ap.elev, km = ap.d;
+      var ahead = a.track == null ? true : Math.abs(((bearing(a.lat, a.lon, ap.lat, ap.lon) - a.track + 540) % 360) - 180) < 70;
+      if (a.vr < -300 && (ahead || km < 4) && agl < 1500 + km * 400) return { icon: "↘", text: "Arriving", ap: ap };
+      if (a.vr > 300 && km < 20 && agl < 6000 && (!ahead || km < 4)) return { icon: "↗", text: "Departing", ap: ap };
+      if (Math.abs(a.vr) <= 300 && km < 10 && agl < 2000) return { icon: "↻", text: "In circuit at", ap: ap };
+    }
+    return null;
+  }
+
+  // Airport markers in view: large always, medium from zoom 6, small airfields from zoom 9; names from zoom 9
+  function drawAirports() {
+    if (!map || !AIRPORTS.length) return;
+    if (!aptLayer) aptLayer = L.layerGroup().addTo(map);
+    aptLayer.clearLayers();
+    var z = map.getZoom(), b = map.getBounds().pad(0.1), maxTier = z >= 9 ? 3 : z >= 6 ? 2 : 1, n = 0;
+    for (var i = 0; i < AIRPORTS.length && n < 300; i++) {
+      var r = AIRPORTS[i];
+      if (r[5] > maxTier || !b.contains([r[2], r[3]])) continue;
+      var a = apt(r), label = esc(a.code) + (z >= 9 ? "<small>" + esc(a.name) + "</small>" : "");
+      var html = '<div class="apt t' + a.tier + (a.mil ? " mil" : "") + '"><i></i><b>' + label + "</b></div>";
+      L.marker([a.lat, a.lon], {
+        icon: L.divIcon({ className: "", html: html, iconSize: [12, 12], iconAnchor: [6, 6] }),
+        interactive: false, keyboard: false, zIndexOffset: -1000
+      }).addTo(aptLayer);
+      n++;
+    }
+  }
+  fetch("airports.json")
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (list) {
+      // biggest first, so the 300-marker cap drops small strips before main airports
+      AIRPORTS = list.sort(function (x, y) { return x[5] - y[5]; });
+      drawAirports(); render();
+    })
+    .catch(function () { /* airports are optional – map still works without them */ });
+  if (map) map.on("moveend zoomend", drawAirports);
 
   // ---------- photos ----------
   // ---------- routes (origin -> destination, looked up by callsign via api/route.js) ----------
@@ -502,6 +602,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
             vr: first(a.baro_rate, a.geom_rate, 0),
             track: first(a.track, a.true_heading, a.mag_heading),
             gs: a.gs,
+            cat: category(a),
             dist: distKm(pLat, pLon, a.lat, a.lon),
             brg: bearing(pLat, pLon, a.lat, a.lon),
             homeDist: distKm(LAT, LON, a.lat, a.lon),
@@ -553,11 +654,13 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     $("detail").style.display = "flex";
 
     $("cs").textContent = f.callsign;
-    $("idx").textContent = fi >= 0 ? "following" : "signal lost";
+    $("idx").innerHTML = (fi >= 0 ? "following" : "signal lost") + tagHtml(f);
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
     $("ty").textContent = line;
     showRoute(f);
+    var st = airportStatus(f);
+    $("aps").textContent = st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
@@ -590,10 +693,12 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   function renderList() {
     var top = $("rows").scrollTop;
     $("rows").innerHTML = aircraft.map(function (a) {
-      var ty = typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : "");
+      var ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
+      var st = airportStatus(a);
+      if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
       return '<button type="button" class="row" data-hex="' + esc(a.hex) + '">' +
-        '<span class="ri"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg></span>' +
-        '<span class="rm"><span class="rc">' + esc(a.callsign) + '</span><span class="rt">' + esc(ty) + '</span></span>' +
+        '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg></span>' +
+        '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span></span>' +
         '<span class="rs"><b>' + esc(altText(a)) + '</b><br>' + a.dist.toFixed(1) + ' km · ' +
         (a.gs == null ? "—" : Math.round(a.gs * 1.852) + " km/h") + '</span></button>';
     }).join("");
