@@ -62,7 +62,9 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .pl.mil:not(.on) span{background:#137a35;color:#fff}
 .pl.trn:not(.on) svg{color:#ffd400;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.trn:not(.on) span{background:#ffd400;color:#000}
-/* airline = white, private = red */
+/* military trainer = brown, airline = white, private = red */
+.pl.mtr:not(.on) svg{color:#8b5a2b;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.mtr:not(.on) span{background:#6b4220;color:#fff}
 .pl.com:not(.on) svg{color:#fff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.com:not(.on) span{background:#fff;color:#13284a;box-shadow:0 0 0 1px #13284a}
 .pl.pvt:not(.on) svg{color:#d7191c;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
@@ -122,11 +124,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#3fd06a}
 .row .ri.trn{color:#ffd400}
+.row .ri.mtr{color:#c08a55}
 .row .ri.com{color:#fff}
 .row .ri.pvt{color:#ff4b4e}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
 .tag.mil{background:#137a35;color:#fff}
 .tag.trn{background:#ffd400;color:#000}
+.tag.mtr{background:#6b4220;color:#fff}
 .rc .tag{font-size:1.5vh}
 .aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
 .rt .apsl{color:#9fd8ff}
@@ -456,18 +460,21 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   // Airline flights use an ICAO airline callsign: 3 letters then a flight number (ANZ1786, JST245)
   var AIRLINE_CS = /^[A-Z]{3}\d{1,4}[A-Z]{0,2}$/;
-  // Colour groups: trainer yellow > military green > airline white > private red. Helicopters keep
+  // Colour groups: military trainer brown > trainer yellow > military green > airline white > private red. Helicopters keep
   // the old colours (green if military, otherwise the default navy).
+  // Types only flown as military trainers (counted as military even if the feed's flag is missing)
+  var MIL_TRAINER_TYPES = { TEX2:1, PC21:1, PC9:1, HAWK:1, T38:1, M346:1 };
   function category(raw) {
     var mil = raw.dbFlags & 1;   // feed's military flag
     if (isHeli(raw)) return mil ? "mil" : "";
-    if (raw.t && TRAINER_TYPES[raw.t]) return "trn";
+    if (raw.t && MIL_TRAINER_TYPES[raw.t]) return "mtr";
+    if (raw.t && TRAINER_TYPES[raw.t]) return mil ? "mtr" : "trn";
     if (mil) return "mil";
     var cs = (raw.flight || "").trim();
     if (AIRLINE_CS.test(cs) && cs !== (raw.r || "").replace(/-/g, "")) return "com";
     return "pvt";
   }
-  var CAT_NAME = { mil: "Military", trn: "Trainer" };   // only these get a tag; colour shows the rest
+  var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer" };   // only these get a tag; colour shows the rest
   function tagHtml(a) { return CAT_NAME[a.cat] ? '<span class="tag ' + a.cat + '">' + CAT_NAME[a.cat] + "</span>" : ""; }
 
   function iconFor(a, on) {
