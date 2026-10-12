@@ -17,6 +17,7 @@
     zoom       fixed map zoom, e.g. 9   (default: fit the radius ring)
     name       place name in header     (default Marton)
     tz         clock time zone          (default Pacific/Auckland)
+    map        natgeo (default atlas style), topo (OpenTopoMap), dark (original dark map)
 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -52,6 +53,12 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .pl svg{width:28px;height:28px;color:var(--plane);filter:drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);transition:transform .6s}
 .pl span{position:absolute;top:27px;left:50%;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:0 4px;border-radius:3px;white-space:nowrap}
 .pl.on svg{color:var(--acc);transform-origin:center}
+/* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
+.lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
+.lightmap .pl svg{color:#13284a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
+.lightmap .pl.on svg{color:#ff6a00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 3px rgba(0,0,0,.6))}
+.lightmap .pl span{background:rgba(19,40,74,.85)}
+.lightmap .pl.on span{background:#ff6a00;color:#000}
 .pl.on{width:36px;height:36px}
 .pl.on svg{width:36px;height:36px}
 .pl.on span{top:35px;background:var(--acc);color:#000}
@@ -156,6 +163,8 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   var ZOOM = num("zoom", 0);
   var PLACE = P.get("name") || "Marton";
   var TZ = P.get("tz") || "Pacific/Auckland";
+  var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
+  if (MAP_STYLE !== "dark") document.body.classList.add("lightmap");
   var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
@@ -249,18 +258,30 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       zoomControl: false, dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
       touchZoom: true, boxZoom: false, keyboard: false, zoomSnap: 0.25, inertia: true
     });
-    // Free dark basemap + place-name labels (no API key needed)
-    var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
-    L.tileLayer(ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 16, attribution: "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"
-    }).addTo(map);
-    L.tileLayer(ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 }).addTo(map);
+    // Basemap (all free, no API key). ?map=natgeo (default) | topo | dark
+    var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+    if (MAP_STYLE === "dark") {
+      L.tileLayer(ESRI + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 16, attribution: "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"
+      }).addTo(map);
+      L.tileLayer(ESRI + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 }).addTo(map);
+    } else if (MAP_STYLE === "topo") {
+      L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        maxZoom: 17, subdomains: "abc",
+        attribution: "© OpenStreetMap contributors, SRTM · Map style © OpenTopoMap (CC-BY-SA)"
+      }).addTo(map);
+    } else {
+      L.tileLayer(ESRI + "NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 16, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+      }).addTo(map);
+    }
     // Centre the map first – Leaflet can't draw shapes until it has a view
     if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
     else map.fitBounds(L.latLng(LAT, LON).toBounds(RADIUS_NM * 1852 * 2), { padding: [6, 6] });
     // Range rings follow the search area; the green dot stays at home
-    var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: "#3a5068", weight: 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
-    var ring25 = L.circle([LAT, LON], { radius: 25000, color: "#2c3d50", weight: 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
+    var LIGHT = MAP_STYLE !== "dark";
+    var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
+    var ring25 = L.circle([LAT, LON], { radius: 25000, color: LIGHT ? "#2b4a6f" : "#2c3d50", weight: LIGHT ? 1.5 : 1, opacity: LIGHT ? 0.6 : 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
     L.circleMarker([LAT, LON], { radius: 5, color: "#0b1016", weight: 2, fillColor: "#4cd37a", fillOpacity: 1, interactive: false }).addTo(map);
 
     // Home view + return-to-home after the map has been left alone
