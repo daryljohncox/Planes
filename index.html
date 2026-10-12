@@ -762,7 +762,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       var pg = null;
       for (var i = 0; i < list.length && !pg; i++)
         if (list[i].thumbnail && (known || AIRCRAFT_DESC.test(list[i].description || ""))) pg = list[i];
-      return pg ? { src: pg.thumbnail.source, credit: "Type photo · Wikipedia", kind: "generic" } : null;
+      return pg ? { src: pg.thumbnail.source, credit: "Example photo · Wikipedia", kind: "generic" } : null;
     });
   }
   function load(cache, key, fn) {
@@ -957,7 +957,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       $("noimg").innerHTML = "";
       $("badge").style.display = "block";
       $("badge").className = "badge " + ph.kind;
-      $("badge").textContent = ph.kind === "actual" ? "This aircraft" : "Type photo";
+      $("badge").textContent = ph.kind === "actual" ? "This aircraft" : "Example " + typeName(f) + " · not this aircraft";
       $("credit").style.display = "block";
       $("credit").textContent = ph.credit;
     } else {
