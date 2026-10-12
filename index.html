@@ -233,7 +233,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     P28A:["Piper Cherokee","Piper PA-28 Cherokee"], C152:["Cessna 152","Cessna 152"],
     C172:["Cessna 172","Cessna 172"], C182:["Cessna 182","Cessna 182 Skylane"],
     C206:["Cessna 206","Cessna 206"], DA40:["Diamond DA40","Diamond DA40 Diamond Star"],
-    DA42:["Diamond DA42","Diamond DA42 Twin Star"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
+    DA42:["Diamond DA42","Diamond DA42 Twin Star"], P208:["Tecnam P2008","Tecnam P2008"],
+    R66:["Robinson R66","Robinson R66"], A139:["AW139","AgustaWestland AW139"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
     C30J:["C-130J Super Hercules","Lockheed Martin C-130J Super Hercules"],
     C130:["C-130 Hercules","Lockheed C-130 Hercules"], P8:["P-8A Poseidon","Boeing P-8 Poseidon"],
     NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"],
@@ -244,6 +245,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 
   var PLANE_PATH = "M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z";
   var PLANE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="' + PLANE_PATH + '"/></svg>';
+  // Top-down helicopter, nose up: two-blade-pair main rotor, body, tail boom and tail rotor
+  var HELI_SHAPE = '<rect x="0.8" y="9.2" width="22.4" height="1.6" rx=".8" transform="rotate(45 12 10)"/>' +
+    '<rect x="0.8" y="9.2" width="22.4" height="1.6" rx=".8" transform="rotate(-45 12 10)"/>' +
+    '<ellipse cx="12" cy="10.5" rx="3.2" ry="4.8"/><rect x="11.2" y="14" width="1.6" height="7.5" rx=".6"/>' +
+    '<rect x="9" y="20" width="6" height="1.5" rx=".6"/>';
+  function shapeOf(a) { return a.heli ? HELI_SHAPE : '<path d="' + PLANE_PATH + '"/>'; }
   function arrow(deg) {
     return '<svg class="hd" viewBox="0 0 24 24" style="transform:rotate(' + Math.round(deg) + 'deg)"><path d="M12 2 19 21 12 17 5 21z" fill="currentColor"/></svg>';
   }
@@ -427,7 +434,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 
   // Trainer types (RNZAF T-6C / CT-4 plus common flight-school aircraft). Trainers win over military.
   var TRAINER_TYPES = { TEX2:1, CT4:1, PC21:1, PC9:1, PC7:1, C150:1, C152:1, C172:1, P28A:1, P28R:1,
-    DA20:1, DA40:1, DA42:1, P92:1, P2002:1, P2008:1, P2010:1, PA38:1 };
+    DA20:1, DA40:1, DA42:1, P92:1, P2002:1, P208:1, P2008:1, P2010:1, PA38:1 };
+  // Helicopter type codes – backup for when the feed doesn't send the rotorcraft category (A7)
+  var HELI_TYPES = { R22:1, R44:1, R66:1, AS50:1, AS55:1, AS65:1, AS32:1, EC20:1, EC25:1, EC30:1, EC35:1, EC45:1,
+    EC55:1, EC75:1, H160:1, BK17:1, B06:1, B06T:1, B105:1, B212:1, B407:1, B412:1, B427:1, B429:1, B430:1, B505:1,
+    A109:1, A119:1, A139:1, A149:1, A169:1, A189:1, NH90:1, S76:1, S92:1, H60:1, UH1:1, UH1Y:1, H500:1, MD52:1,
+    MD60:1, EXPL:1, CH47:1, A129:1, LYNX:1, S300:1, H269:1, G2CA:1, KMAX:1 };
+  function isHeli(raw) {
+    return raw.category === "A7" || !!(raw.t && HELI_TYPES[raw.t]) || /helicopter|rotorcraft/i.test(raw.desc || "");
+  }
   function category(raw) {
     if (raw.t && TRAINER_TYPES[raw.t]) return "trn";
     if (raw.dbFlags & 1) return "mil";   // feed's military flag
@@ -439,7 +454,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function iconFor(a, on) {
     var size = on ? 36 : 28;
     var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
-      Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg><span>' + esc(a.callsign) + "</span></div>";
+      Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg><span>' + esc(a.callsign) + "</span></div>";
     return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
@@ -587,7 +602,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=800";
     var url = (type && TYPES[type])
       ? base + "&titles=" + encodeURIComponent(TYPES[type][1])
-      : base + "&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent((desc || type) + " aircraft");
+      : base + "&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent((desc || type) + ' hastemplate:"Infobox aircraft begin"');   // aircraft articles only
     return getJSON(url).then(function (j) {
       var pages = j && j.query && j.query.pages;
       if (!pages) return null;
@@ -668,6 +683,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             track: first(a.track, a.true_heading, a.mag_heading),
             gs: a.gs,
             cat: category(a),
+            heli: isHeli(a),
             dist: distKm(pLat, pLon, a.lat, a.lon),
             brg: bearing(pLat, pLon, a.lat, a.lon),
             homeDist: distKm(LAT, LON, a.lat, a.lon),
@@ -763,7 +779,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       var st = airportStatus(a);
       if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
       return '<button type="button" class="row" data-hex="' + esc(a.hex) + '">' +
-        '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)"><path d="' + PLANE_PATH + '"/></svg></span>' +
+        '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg></span>' +
         '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span></span>' +
         '<span class="rs"><b>' + esc(altText(a)) + '</b><br>' + a.dist.toFixed(1) + ' km · ' +
         (a.gs == null ? "—" : Math.round(a.gs * 1.852) + " km/h") + '</span></button>';
