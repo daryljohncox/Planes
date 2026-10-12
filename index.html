@@ -36,9 +36,12 @@ header .sp{flex:1}
 main{flex:1;display:flex;gap:1.2vw;min-height:0}
 #mapwrap{flex:1;position:relative;display:flex;min-width:0}
 #map{flex:1;border-radius:1.6vh;overflow:hidden;background:#0d1117;touch-action:none}
-#home{display:none;position:absolute;top:1.4vh;left:1.4vh;z-index:1000;width:7vh;height:7vh;min-width:44px;min-height:44px;
-  align-items:center;justify-content:center;font-size:4vh;line-height:1;color:var(--txt);background:rgba(20,27,36,.9);
-  border:1px solid #2c3d50;border-radius:1.2vh;cursor:pointer}
+#home{display:none;position:absolute;top:1.4vh;left:1.4vh;z-index:1000;height:7vh;min-height:44px;padding:0 2vh;gap:1vh;
+  align-items:center;justify-content:center;font:700 2.8vh system-ui,sans-serif;line-height:1;white-space:nowrap;
+  color:#000;background:var(--acc);border:0;border-radius:1.2vh;cursor:pointer;
+  box-shadow:0 0 0 2px rgba(0,0,0,.45),0 .6vh 1.6vh rgba(0,0,0,.6)}
+#home:active{background:#ffb14f}
+#home .ic{font-size:3.6vh}
 .leaflet-container{background:#0d1117;font-family:inherit}
 .leaflet-control-attribution{font-size:9px!important;background:rgba(0,0,0,.55)!important;color:#9aa!important}
 .leaflet-control-attribution a{color:#bcc!important}
@@ -89,7 +92,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 <main>
   <div id="mapwrap">
     <div id="map"></div>
-    <button id="home" type="button" aria-label="Back to home view">⌂</button>
+    <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
   </div>
   <section id="side">
     <div class="ph" id="ph">
@@ -463,6 +466,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   }
 
   $("place").textContent = PLACE;
+  $("homeName").textContent = PLACE;
   poll();
   setInterval(poll, REFRESH_MS);
   tick();
