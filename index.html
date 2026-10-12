@@ -78,19 +78,19 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
-/* categories: military = green, trainer = yellow (the selected plane stays orange) */
-.pl.mil:not(.on) svg{color:#1fa24a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
-.pl.mil:not(.on) span{background:#137a35;color:#fff}
+/* categories: military = brown, trainer = yellow (the selected plane stays orange) */
+.pl.mil:not(.on) svg{color:#6b3e14;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.mil:not(.on) span{background:#5a3310;color:#fff}
 .pl.trn:not(.on) svg{color:#ffd400;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.trn:not(.on) span{background:#ffd400;color:#000}
-/* military trainer = brown, airline = white, private = red */
-.pl.mtr:not(.on) svg{color:#8b5a2b;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
-.pl.mtr:not(.on) span{background:#6b4220;color:#fff}
-.pl.com:not(.on) svg{color:#fff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
-.pl.com:not(.on) span{background:#fff;color:#13284a;box-shadow:0 0 0 1px #13284a}
-.pl.pvt:not(.on) svg{color:#d7191c;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
-.pl.pvt:not(.on) span{background:#b01418;color:#fff}
-/* emergency = flashing red/white, rescue = pink, police = light blue, ag = orange-brown, glider = turquoise, cargo = light grey */
+/* military trainer = light brown, airline = red, private = white */
+.pl.mtr:not(.on) svg{color:#d2a46b;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.mtr:not(.on) span{background:#d2a46b;color:#2b1a08}
+.pl.pvt:not(.on) svg{color:#fff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.pvt:not(.on) span{background:#fff;color:#13284a;box-shadow:0 0 0 1px #13284a}
+.pl.com:not(.on) svg{color:#d7191c;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.com:not(.on) span{background:#b01418;color:#fff}
+/* emergency = flashing red/white, rescue = pink, police = light blue, ag = green, glider = turquoise, cargo = light grey */
 @keyframes emg{0%,100%{color:#ff0000}50%{color:#fff}}
 .pl.emg:not(.on) svg{animation:emg 1s steps(1) infinite;color:#ff0000;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 4px #ff0000)}
 .pl.emg span{background:#ff0000!important;color:#fff!important}
@@ -98,8 +98,8 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .pl.res:not(.on) span{background:#d6267e;color:#fff}
 .pl.pol:not(.on) svg{color:#8ecbff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.pol:not(.on) span{background:#8ecbff;color:#0b2545}
-.pl.ag:not(.on) svg{color:#c8641e;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
-.pl.ag:not(.on) span{background:#a24e12;color:#fff}
+.pl.ag:not(.on) svg{color:#1fa24a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.ag:not(.on) span{background:#137a35;color:#fff}
 .pl.gld:not(.on) svg{color:#14c2b0;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.gld:not(.on) span{background:#0f9488;color:#fff}
 .pl.cgo:not(.on) svg{color:#c4c9cf;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
@@ -108,10 +108,10 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .apt{position:relative;width:12px;height:12px}
 .apt i{position:absolute;inset:0;border-radius:50%;background:#fff;border:3px solid #6a1b9a;box-shadow:0 0 0 1px rgba(255,255,255,.8)}
 .apt.t1 i{border-width:4px}
-.apt.mil i{border-color:#137a35}
+.apt.mil i{border-color:#6b3e14}
 .apt b{position:absolute;left:15px;top:-2px;font:700 11px system-ui,sans-serif;color:#4a1170;white-space:nowrap;
   text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff}
-.apt.mil b{color:#0e5e28}
+.apt.mil b{color:#5a3310}
 .apt b small{font-weight:500;margin-left:4px}
 body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .lightmap .pl.on svg{color:#ff6a00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 3px rgba(0,0,0,.6))}
@@ -157,25 +157,25 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   background:none;color:var(--txt);text-align:left;font:inherit;cursor:pointer}
 .row:active{background:#1c2633}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
-.row .ri.mil{color:#3fd06a}
+.row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#ffd400}
-.row .ri.mtr{color:#c08a55}
-.row .ri.com{color:#fff}
-.row .ri.pvt{color:#ff4b4e}
+.row .ri.mtr{color:#e6c08f}
+.row .ri.com{color:#ff4b4e}
+.row .ri.pvt{color:#fff}
 .row .ri.emg{color:#ff0000;animation:emg 1s steps(1) infinite}
 .row .ri.res{color:#ff6fb5}
 .row .ri.pol{color:#8ecbff}
-.row .ri.ag{color:#e07b35}
+.row .ri.ag{color:#3fd06a}
 .row .ri.gld{color:#2fd8c5}
 .row .ri.cgo{color:#c4c9cf}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
-.tag.mil{background:#137a35;color:#fff}
+.tag.mil{background:#5a3310;color:#fff}
 .tag.trn{background:#ffd400;color:#000}
-.tag.mtr{background:#6b4220;color:#fff}
+.tag.mtr{background:#d2a46b;color:#2b1a08}
 .tag.emg{background:#ff0000;color:#fff}
 .tag.res{background:#d6267e;color:#fff}
 .tag.pol{background:#8ecbff;color:#0b2545}
-.tag.ag{background:#a24e12;color:#fff}
+.tag.ag{background:#137a35;color:#fff}
 .tag.gld{background:#0f9488;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
 .rc .tag{font-size:1.5vh}
@@ -515,9 +515,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Airline flights use an ICAO airline callsign: 3 letters then a flight number (ANZ1786, JST245)
   var AIRLINE_CS = /^[A-Z]{3}\d{1,4}[A-Z]{0,2}$/;
   // Colour groups, first match wins:
-  //   emergency (flashing red) > rescue / air ambulance pink > police light blue > helicopters (green if
-  //   military, otherwise navy) > military trainer brown > trainer yellow > topdressing / ag orange-brown >
-  //   glider / balloon / microlight turquoise > military green > cargo light grey > airline white > private red
+  //   emergency (flashing red) > rescue / air ambulance pink > police light blue > helicopters (brown if
+  //   military, otherwise navy) > military trainer light brown > trainer yellow > topdressing / ag green >
+  //   glider / balloon / microlight turquoise > military brown > cargo light grey > airline red > private white
   // Types only flown as military trainers (counted as military even if the feed's flag is missing)
   var MIL_TRAINER_TYPES = { TEX2:1, PC21:1, PC9:1, HAWK:1, T38:1, M346:1 };
   // Topdressing / agricultural / utility: Fletcher, Cresco, PAC 750XL, Air Tractors, Pawnee, Dromader, Thrush
@@ -552,19 +552,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
     ["res", "#ff4fa3", 1, "Rescue / air ambulance", "Life Flight, rescue & medical callsigns"],
     ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, police callsigns"],
-    ["mil", "#1fa24a", 0, "Military", "Air force, army & navy aircraft"],
-    ["mtr", "#8b5a2b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
+    ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
+    ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
     ["trn", "#ffd400", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
-    ["ag", "#c8641e", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
+    ["ag", "#1fa24a", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
-    ["com", "#ffffff", 0, "Airline", "Passenger flights with an airline flight number"],
-    ["pvt", "#d7191c", 0, "Private", "Everything else"],
-    ["", "#13284a", 1, "Helicopter", "Navy, or green if military"],
+    ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
+    ["pvt", "#ffffff", 0, "Private", "Everything else"],
+    ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
-    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff)/i.test(k[1]);   // light colours get a dark outline
+    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]);   // light colours get a dark outline
     return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
       (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
