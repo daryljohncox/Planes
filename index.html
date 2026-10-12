@@ -39,7 +39,28 @@ header .sp{flex:1}
 main{flex:1;display:flex;gap:1.2vw;min-height:0}
 #mapwrap{flex:1;position:relative;display:flex;min-width:0}
 #map{flex:1;border-radius:1.6vh;overflow:hidden;background:#0d1117;touch-action:none}
-#home{display:none;position:absolute;top:1.4vh;left:1.4vh;z-index:1000;height:7vh;min-height:44px;padding:0 2vh;gap:1vh;
+#mapbtns{position:absolute;top:1.4vh;left:1.4vh;z-index:1000;display:flex;gap:1.2vh}
+#keybtn{display:flex;height:7vh;min-height:44px;padding:0 2vh;gap:1vh;align-items:center;font:700 2.8vh system-ui,sans-serif;
+  line-height:1;white-space:nowrap;color:#fff;background:#13284a;border:0;border-radius:1.2vh;cursor:pointer;
+  box-shadow:0 0 0 2px rgba(255,255,255,.5),0 .6vh 1.6vh rgba(0,0,0,.6)}
+#keybtn:active{background:#24406b}
+#keybtn .dots{display:flex;gap:.4vh}
+#keybtn .dots i{width:1.4vh;height:1.4vh;border-radius:50%;background:#ffd400}
+#keybtn .dots i:nth-child(2){background:#1fa24a}
+#keybtn .dots i:nth-child(3){background:#d7191c}
+#key{position:absolute;top:10vh;left:1.4vh;bottom:1.4vh;z-index:1001;width:min(46vw,440px);display:flex;flex-direction:column;
+  background:var(--panel);color:var(--txt);border-radius:1.4vh;box-shadow:0 0 0 2px rgba(255,255,255,.15),0 1vh 3vh rgba(0,0,0,.7);overflow:hidden}
+#key[hidden]{display:none}
+#key .kh{display:flex;align-items:center;justify-content:space-between;padding:1.2vh 1.8vh;font-weight:700;font-size:2.6vh;border-bottom:1px solid #1d2632}
+#key .kh button{border:0;background:#1d2632;color:#fff;font-size:2.6vh;width:5.6vh;height:5.6vh;border-radius:1vh;cursor:pointer}
+#keyrows{overflow-y:auto;padding:.6vh 0}
+.krow{display:flex;align-items:center;gap:1.6vh;padding:.7vh 1.8vh}
+.krow .kic{flex:0 0 auto;width:5vh;height:5vh;border-radius:1vh;background:#dfe6ea;display:flex;align-items:center;justify-content:center}
+.krow .kic svg{width:3.8vh;height:3.8vh}
+.krow.emg svg{animation:emg 1s steps(1) infinite}
+.krow b{display:block;font-size:2.3vh}
+.krow small{display:block;font-size:1.8vh;color:var(--dim)}
+#home{display:none;height:7vh;min-height:44px;padding:0 2vh;gap:1vh;
   align-items:center;justify-content:center;font:700 2.8vh system-ui,sans-serif;line-height:1;white-space:nowrap;
   color:#000;background:var(--acc);border:0;border-radius:1.2vh;cursor:pointer;
   box-shadow:0 0 0 2px rgba(0,0,0,.45),0 .6vh 1.6vh rgba(0,0,0,.6)}
@@ -187,7 +208,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 <main>
   <div id="mapwrap">
     <div id="map"></div>
-    <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
+    <div id="mapbtns">
+      <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
+      <button id="keybtn" type="button"><span class="dots"><i></i><i></i><i></i></span><span>Colour key</span></button>
+    </div>
+    <div id="key" hidden>
+      <div class="kh"><span>Colour key</span><button id="keyclose" type="button" aria-label="Close">✕</button></div>
+      <div id="keyrows"></div>
+    </div>
   </div>
   <section id="side">
     <div id="list">
@@ -519,6 +547,34 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
     ag: "Topdressing", gld: "Glider", cgo: "Cargo" };   // only these get a tag; colour shows the rest
+  // Colour key (opened by the button next to "Return to …")
+  var KEY = [
+    ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
+    ["res", "#ff4fa3", 1, "Rescue / air ambulance", "Life Flight, rescue & medical callsigns"],
+    ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, police callsigns"],
+    ["mil", "#1fa24a", 0, "Military", "Air force, army & navy aircraft"],
+    ["mtr", "#8b5a2b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
+    ["trn", "#ffd400", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
+    ["ag", "#c8641e", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
+    ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
+    ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
+    ["com", "#ffffff", 0, "Airline", "Passenger flights with an airline flight number"],
+    ["pvt", "#d7191c", 0, "Private", "Everything else"],
+    ["", "#13284a", 1, "Helicopter", "Navy, or green if military"],
+    ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
+  ];
+  $("keyrows").innerHTML = KEY.map(function (k) {
+    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff)/i.test(k[1]);   // light colours get a dark outline
+    return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
+      (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
+      '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
+  }).join("");
+  function toggleKey(show) { $("key").hidden = !show; }
+  ["keybtn", "keyclose", "key"].forEach(function (id) {
+    $(id).addEventListener("click", function (e) { e.stopPropagation(); if (id !== "key") toggleKey(id === "keybtn" && $("key").hidden); });
+    ["mousedown", "touchstart", "pointerdown", "dblclick", "wheel"].forEach(function (ev) { $(id).addEventListener(ev, function (e) { e.stopPropagation(); }); });
+  });
+
   function tagHtml(a) { return CAT_NAME[a.cat] ? '<span class="tag ' + a.cat + '">' + CAT_NAME[a.cat] + "</span>" : ""; }
 
   function iconFor(a, on) {
