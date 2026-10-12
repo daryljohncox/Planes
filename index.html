@@ -69,6 +69,20 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .pl.com:not(.on) span{background:#fff;color:#13284a;box-shadow:0 0 0 1px #13284a}
 .pl.pvt:not(.on) svg{color:#d7191c;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
 .pl.pvt:not(.on) span{background:#b01418;color:#fff}
+/* emergency = flashing red/white, rescue = pink, police = light blue, ag = orange-brown, glider = turquoise, cargo = light grey */
+@keyframes emg{0%,100%{color:#ff0000}50%{color:#fff}}
+.pl.emg:not(.on) svg{animation:emg 1s steps(1) infinite;color:#ff0000;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 4px #ff0000)}
+.pl.emg span{background:#ff0000!important;color:#fff!important}
+.pl.res:not(.on) svg{color:#ff4fa3;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.res:not(.on) span{background:#d6267e;color:#fff}
+.pl.pol:not(.on) svg{color:#8ecbff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.pol:not(.on) span{background:#8ecbff;color:#0b2545}
+.pl.ag:not(.on) svg{color:#c8641e;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.ag:not(.on) span{background:#a24e12;color:#fff}
+.pl.gld:not(.on) svg{color:#14c2b0;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.gld:not(.on) span{background:#0f9488;color:#fff}
+.pl.cgo:not(.on) svg{color:#c4c9cf;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.cgo:not(.on) span{background:#c4c9cf;color:#13284a}
 /* airports */
 .apt{position:relative;width:12px;height:12px}
 .apt i{position:absolute;inset:0;border-radius:50%;background:#fff;border:3px solid #6a1b9a;box-shadow:0 0 0 1px rgba(255,255,255,.8)}
@@ -127,10 +141,22 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row .ri.mtr{color:#c08a55}
 .row .ri.com{color:#fff}
 .row .ri.pvt{color:#ff4b4e}
+.row .ri.emg{color:#ff0000;animation:emg 1s steps(1) infinite}
+.row .ri.res{color:#ff6fb5}
+.row .ri.pol{color:#8ecbff}
+.row .ri.ag{color:#e07b35}
+.row .ri.gld{color:#2fd8c5}
+.row .ri.cgo{color:#c4c9cf}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
 .tag.mil{background:#137a35;color:#fff}
 .tag.trn{background:#ffd400;color:#000}
 .tag.mtr{background:#6b4220;color:#fff}
+.tag.emg{background:#ff0000;color:#fff}
+.tag.res{background:#d6267e;color:#fff}
+.tag.pol{background:#8ecbff;color:#0b2545}
+.tag.ag{background:#a24e12;color:#fff}
+.tag.gld{background:#0f9488;color:#fff}
+.tag.cgo{background:#c4c9cf;color:#13284a}
 .rc .tag{font-size:1.5vh}
 .aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
 .rt .apsl{color:#9fd8ff}
@@ -460,21 +486,39 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   // Airline flights use an ICAO airline callsign: 3 letters then a flight number (ANZ1786, JST245)
   var AIRLINE_CS = /^[A-Z]{3}\d{1,4}[A-Z]{0,2}$/;
-  // Colour groups: military trainer brown > trainer yellow > military green > airline white > private red. Helicopters keep
-  // the old colours (green if military, otherwise the default navy).
+  // Colour groups, first match wins:
+  //   emergency (flashing red) > rescue / air ambulance pink > police light blue > helicopters (green if
+  //   military, otherwise navy) > military trainer brown > trainer yellow > topdressing / ag orange-brown >
+  //   glider / balloon / microlight turquoise > military green > cargo light grey > airline white > private red
   // Types only flown as military trainers (counted as military even if the feed's flag is missing)
   var MIL_TRAINER_TYPES = { TEX2:1, PC21:1, PC9:1, HAWK:1, T38:1, M346:1 };
+  // Topdressing / agricultural / utility: Fletcher, Cresco, PAC 750XL, Air Tractors, Pawnee, Dromader, Thrush
+  var AG_TYPES = { FU24:1, CRES:1, P750:1, AT3T:1, AT4T:1, AT5T:1, AT6T:1, AT8T:1, PA25:1, PA36:1, M18:1, T34T:1, S2R:1, S2RT:1 };
+  var GLIDER_TYPES = { GLID:1, BALL:1, ULAC:1 };
+  var EMERG_SQUAWK = { "7500":1, "7600":1, "7700":1 };
+  var RESCUE_CS = /^(LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|HEMS|WESTPAC|SAR\d)/;
+  var POLICE_CS = /^(EAGLE|POLICE|POL\d)/;
+  // Cargo airline callsign prefixes (FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, Airwork / NZ Post, Parcelair, ...)
+  var CARGO_CS = /^(FDX|UPS|DHK|DHL|DHX|BCS|GTI|CKS|CLX|ABW|NCA|PAC|ATN|AWK|PCA|TAY|BOX|MPH|SQC|CAO|CKK|ABD)\d/;
   function category(raw) {
     var mil = raw.dbFlags & 1;   // feed's military flag
+    var cs = (raw.flight || "").trim().toUpperCase();
+    var em = raw.emergency && raw.emergency !== "none" && raw.emergency !== "lifeguard";
+    if (EMERG_SQUAWK[raw.squawk] || em) return "emg";
+    if (RESCUE_CS.test(cs) || raw.emergency === "lifeguard") return "res";
+    if (POLICE_CS.test(cs)) return "pol";
     if (isHeli(raw)) return mil ? "mil" : "";
     if (raw.t && MIL_TRAINER_TYPES[raw.t]) return "mtr";
     if (raw.t && TRAINER_TYPES[raw.t]) return mil ? "mtr" : "trn";
+    if (raw.t && AG_TYPES[raw.t]) return "ag";
+    if (raw.category === "B1" || raw.category === "B2" || raw.category === "B4" || (raw.t && GLIDER_TYPES[raw.t])) return "gld";
     if (mil) return "mil";
-    var cs = (raw.flight || "").trim();
+    if (CARGO_CS.test(cs)) return "cgo";
     if (AIRLINE_CS.test(cs) && cs !== (raw.r || "").replace(/-/g, "")) return "com";
     return "pvt";
   }
-  var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer" };   // only these get a tag; colour shows the rest
+  var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
+    ag: "Topdressing", gld: "Glider", cgo: "Cargo" };   // only these get a tag; colour shows the rest
   function tagHtml(a) { return CAT_NAME[a.cat] ? '<span class="tag ' + a.cat + '">' + CAT_NAME[a.cat] + "</span>" : ""; }
 
   function iconFor(a, on) {
