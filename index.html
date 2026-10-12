@@ -305,7 +305,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     C172:["Cessna 172","Cessna 172"], C182:["Cessna 182","Cessna 182 Skylane"],
     C206:["Cessna 206","Cessna 206"], DA40:["Diamond DA40","Diamond DA40 Diamond Star"],
     DA42:["Diamond DA42","Diamond DA42 Twin Star"], P208:["Tecnam P2008","Tecnam P2008"],
-    R66:["Robinson R66","Robinson R66"], A139:["AW139","AgustaWestland AW139"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
+    R66:["Robinson R66","Robinson R66"], H500:["Hughes 500","MD Helicopters MD 500"], H269:["Hughes 269","Hughes TH-55 Osage"],
+    EC30:["Airbus H130","Eurocopter EC130"], B407:["Bell 407","Bell 407"], A119:["AW119 Koala","AgustaWestland AW119 Koala"], A139:["AW139","AgustaWestland AW139"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
     C30J:["C-130J Super Hercules","Lockheed Martin C-130J Super Hercules"],
     C130:["C-130 Hercules","Lockheed C-130 Hercules"], P8:["P-8A Poseidon","Boeing P-8 Poseidon"],
     NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"],
@@ -659,7 +660,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       var ahead = a.track == null ? true : Math.abs(((bearing(a.lat, a.lon, ap.lat, ap.lon) - a.track + 540) % 360) - 180) < 70;
       if (a.vr < -300 && (ahead || km < 4) && agl < 1500 + km * 400) return { icon: "↘", text: "Arriving", ap: ap };
       if (a.vr > 300 && km < 20 && agl < 6000 && (!ahead || km < 4)) return { icon: "↗", text: "Departing", ap: ap };
-      if (Math.abs(a.vr) <= 300 && km < 10 && agl < 2000) return { icon: "↻", text: "In circuit at", ap: ap };
+      if (Math.abs(a.vr) <= 300 && km < 10 && agl < 2000) return { icon: "○", text: "In circuit at", ap: ap };
     }
     return null;
   }
@@ -744,17 +745,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       };
     });
   }
+  var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
   function fetchGeneric(type, desc) {
-    var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=800";
-    var url = (type && TYPES[type])
-      ? base + "&titles=" + encodeURIComponent(TYPES[type][1])
-      : base + "&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent((desc || type) + ' hastemplate:"Infobox aircraft begin"');   // aircraft articles only
+    var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
+    var known = type && TYPES[type];
+    // Unknown types: search, then take the first result whose Wikipedia short description says it's an aircraft
+    // (a bare type code like "P208" can otherwise match a ship or anything else)
+    var url = known
+      ? base + "&prop=pageimages&titles=" + encodeURIComponent(TYPES[type][1])
+      : base + "&prop=pageimages|description&generator=search&gsrlimit=10&gsrsearch=" + encodeURIComponent((desc || type) + " aircraft");
     return getJSON(url).then(function (j) {
       var pages = j && j.query && j.query.pages;
       if (!pages) return null;
-      var pg = pages[Object.keys(pages)[0]];
-      if (!pg || !pg.thumbnail) return null;
-      return { src: pg.thumbnail.source, credit: "Type photo · Wikipedia", kind: "generic" };
+      var list = Object.keys(pages).map(function (k) { return pages[k]; })
+        .sort(function (x, y) { return (x.index || 0) - (y.index || 0); });
+      var pg = null;
+      for (var i = 0; i < list.length && !pg; i++)
+        if (list[i].thumbnail && (known || AIRCRAFT_DESC.test(list[i].description || ""))) pg = list[i];
+      return pg ? { src: pg.thumbnail.source, credit: "Type photo · Wikipedia", kind: "generic" } : null;
     });
   }
   function load(cache, key, fn) {
