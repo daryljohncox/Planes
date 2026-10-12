@@ -404,7 +404,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   var shownImg = null;
   function render() {
     $("place").textContent = away ? "map centre" : PLACE;
-    $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR) + " nm";
+    $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR * 1.852) + " km";
 
     var f = null, fi = 0;
     for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === featHex) { f = aircraft[i]; fi = i; }
@@ -415,7 +415,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       $("ph").style.display = "none";
       $("info").style.display = "none";
       $("empty").style.display = "flex";
-      $("empty").textContent = "No aircraft within " + Math.round(cR) + " nm right now";
+      $("empty").textContent = "No aircraft within " + Math.round(cR * 1.852) + " km right now";
       return;
     }
     $("ph").style.display = "";
