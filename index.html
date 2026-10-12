@@ -71,6 +71,11 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .leaflet-control-attribution a{color:#bcc!important}
 
 /* plane markers */
+.homepin{position:relative;width:30px;height:38px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.homepin svg{width:30px;height:38px;display:block}
+.homepin span{position:absolute;top:8px;left:33px;font:800 13px system-ui,sans-serif;color:#13284a;white-space:nowrap;
+  text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 4px #fff}
+body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #000}
 .pl{position:relative;width:28px;height:28px}
 .pl svg{width:28px;height:28px;color:var(--plane);filter:drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);transition:transform .6s}
 .pl span{position:absolute;top:27px;left:50%;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:0 4px;border-radius:3px;white-space:nowrap}
@@ -445,11 +450,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var LIGHT = MAP_STYLE !== "dark";
     var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
     var ring25 = L.circle([LAT, LON], { radius: 25000, color: LIGHT ? "#2b4a6f" : "#2c3d50", weight: LIGHT ? 1.5 : 1, opacity: LIGHT ? 0.6 : 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
-    L.circleMarker([LAT, LON], { radius: 5, color: "#0b1016", weight: 2, fillColor: "#4cd37a", fillOpacity: 1, interactive: false }).addTo(map);
+    // Home marker: house pin with the place name, sitting exactly at the centre of the rings when at home
+    L.marker([LAT, LON], { interactive: false, keyboard: false, zIndexOffset: -500, icon: L.divIcon({ className: "",
+      iconSize: [30, 38], iconAnchor: [15, 38],
+      html: '<div class="homepin"><svg viewBox="0 0 30 38"><path d="M15 37C15 37 2 22.5 2 14a13 13 0 0 1 26 0c0 8.5-13 23-13 23z" fill="#13284a" stroke="#fff" stroke-width="2"/>' +
+        '<path d="M15 7.5 8 13.5V21h4.6v-4.6h4.8V21H22v-7.5z" fill="#4cd37a"/></svg><span>' + esc(PLACE) + "</span></div>" }) }).addTo(map);
 
     // Home view + return-to-home after the map has been left alone
     var HOME_IDLE_MS = 60000;
-    var home = { c: map.getCenter(), z: map.getZoom() };
+    var home = { c: L.latLng(LAT, LON), z: map.getZoom() };   // always the real home point, not the current view
+    // Keep Leaflet's idea of the map size right (the Hub can lay the page out after the map starts),
+    // otherwise "centre" is off and home ends up away from the middle of the circle.
+    function fixSize() {
+      map.invalidateSize({ pan: false });
+      if (!selHex && !away) map.setView(home.c, map.getZoom(), { animate: false });   // at home: keep home centred
+    }
+    window.addEventListener("resize", fixSize);
+    if (window.ResizeObserver) new ResizeObserver(fixSize).observe($("map"));
     var homeBtn = $("home"), idleT = null, moving = false;
     function atHome() {
       return map.getZoom() === home.z && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
@@ -457,6 +474,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     function goHome() {
       clearTimeout(idleT);
       if (selHex) { selHex = null; selLast = null; render(); }   // stop following a plane
+      fixSize();
       map.flyTo(home.c, home.z, { duration: 0.8 });
     }
     // Search area: centred on the plane you're following, otherwise on the map view.
