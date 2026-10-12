@@ -347,6 +347,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // ---------- map ----------
   var map = null, markers = {};
   var mapFollow = null, mapUnfollow = null;   // set up once the map exists
+  var trailLine = null, trailCase = null;
   if (typeof L === "undefined") {
     setStatus("Map library didn't load");
   } else {
@@ -418,6 +419,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     }
     // Keep the followed plane centred. Pans done by the page itself don't trigger an extra fetch.
     var autoPan = false;
+    // Flight path of the selected plane: dark casing under an orange line
+    trailCase = L.polyline([], { color: "#000", weight: 6, opacity: 0.35, interactive: false }).addTo(map);
+    trailLine = L.polyline([], { color: "#ff6a00", weight: 3, opacity: 0.95, interactive: false }).addTo(map);
     mapFollow = function (a, now) {
       var pt = map.latLngToContainerPoint([a.lat, a.lon]), mid = map.getSize().divideBy(2);
       if (!moving && pt.distanceTo(mid) > 2) { autoPan = true; map.panTo([a.lat, a.lon], { animate: !now, duration: 0.8 }); }
@@ -630,6 +634,51 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     return t === "pending" ? null : t;
   }
 
+  // ---------- flight path ----------
+  // Every poll's positions are kept per plane (so a path exists even if the history lookup fails).
+  // Tapping a plane also fetches its whole current flight from /api/trace and joins the two.
+  var TRAIL_KEEP_MS = 10 * 60000, TRAIL_MAX = 3000;
+  var trails = {};       // hex -> { pts: [[lat, lon, unix_s]], seen: ms }
+  var traceCache = {};   // hex -> { pts, at } | "pending"
+  function recordTrails(list) {
+    var now = Date.now(), t = Math.round(now / 1000);
+    list.forEach(function (a) {
+      var tr = trails[a.hex] || (trails[a.hex] = { pts: [], seen: now });
+      var last = tr.pts[tr.pts.length - 1];
+      if (!last || last[0] !== a.lat || last[1] !== a.lon) tr.pts.push([a.lat, a.lon, t]);
+      if (tr.pts.length > TRAIL_MAX) tr.pts.shift();
+      tr.seen = now;
+    });
+    Object.keys(trails).forEach(function (hex) { if (now - trails[hex].seen > TRAIL_KEEP_MS && hex !== selHex) delete trails[hex]; });
+  }
+  function traceFor(hex) {
+    var c = traceCache[hex];
+    if (c === "pending") return null;
+    if (!c || Date.now() - c.at > 5 * 60000) {
+      if (!/^[0-9a-f]{6}$/.test(hex)) return null;   // non-ICAO (~) addresses have no history
+      traceCache[hex] = "pending";
+      fetch("/api/trace?hex=" + hex)
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) { traceCache[hex] = { pts: (j && j.pts) || [], at: Date.now() }; render(); })
+        .catch(function () { traceCache[hex] = { pts: [], at: Date.now() - 4 * 60000 }; });   // retry in a minute
+      return c && c.pts ? c.pts : null;
+    }
+    return c.pts;
+  }
+  function drawTrail(f) {
+    if (!trailLine) return;
+    var path = [];
+    if (f) {
+      var hist = traceFor(f.hex) || [], live = (trails[f.hex] && trails[f.hex].pts) || [];
+      var histEnd = hist.length ? hist[hist.length - 1][3] : 0;
+      hist.forEach(function (p) { path.push([p[0], p[1]]); });
+      live.forEach(function (p) { if (p[2] > histEnd) path.push([p[0], p[1]]); });
+      path.push([f.lat, f.lon]);
+    }
+    trailCase.setLatLngs(path);
+    trailLine.setLatLngs(path);
+  }
+
   // ---------- data ----------
   var aircraft = [];
   var lastOk = 0;
@@ -690,6 +739,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             homeBrg: bearing(LAT, LON, a.lat, a.lon)
           };
         }).sort(function (x, y) { return x.dist - y.dist; });
+        recordTrails(aircraft);
         lastOk = Date.now();
         setStatus("");
         if (selHex) {
@@ -713,6 +763,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       if (f) selLast = f; else f = selLast;
     }
     drawMap(f);
+    drawTrail(f);
 
     // pre-load photos for the nearest few so a tap shows one straight away
     aircraft.slice(0, PREFETCH_N).forEach(photoFor);
