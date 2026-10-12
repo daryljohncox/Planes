@@ -263,6 +263,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var LON = num("lon", 175.38);
   var RADIUS_NM = Math.min(num("r", 60), 250);
   var ZOOM = num("zoom", 0);
+  var HOME_ZOOM_IN = 0.75;   // extra zoom on top of "fit the whole circle" when no ?zoom= is given
   var PLACE = P.get("name") || "Marton";
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
@@ -445,7 +446,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     }
     // Centre the map first – Leaflet can't draw shapes until it has a view
     if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
-    else map.fitBounds(L.latLng(LAT, LON).toBounds(RADIUS_NM * 1852 * 2), { padding: [6, 6] });
+    // Default: fit the search circle, then zoom in a bit more (HOME_ZOOM_IN levels) so the local area is bigger
+    else map.setView([LAT, LON], map.getBoundsZoom(L.latLng(LAT, LON).toBounds(RADIUS_NM * 1852 * 2), false, L.point(12, 12)) + HOME_ZOOM_IN);
     // Range rings follow the search area; the green dot stays at home
     var LIGHT = MAP_STYLE !== "dark";
     var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
