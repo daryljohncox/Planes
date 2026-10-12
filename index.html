@@ -207,15 +207,18 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
       touchZoom: false, boxZoom: false, keyboard: false, tap: false, zoomSnap: 0.25
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd", maxZoom: 19,
-      attribution: "© OpenStreetMap contributors © CARTO"
+    // Free dark basemap + place-name labels (no API key needed)
+    var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+    L.tileLayer(ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 16, attribution: "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"
     }).addTo(map);
-    var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: "#3a5068", weight: 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
+    L.tileLayer(ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 }).addTo(map);
+    // Centre the map first – Leaflet can't draw shapes until it has a view
+    if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
+    else map.fitBounds(L.latLng(LAT, LON).toBounds(RADIUS_NM * 1852 * 2), { padding: [6, 6] });
+    L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: "#3a5068", weight: 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
     L.circle([LAT, LON], { radius: 25000, color: "#2c3d50", weight: 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
     L.circleMarker([LAT, LON], { radius: 5, color: "#0b1016", weight: 2, fillColor: "#4cd37a", fillOpacity: 1, interactive: false }).addTo(map);
-    if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
-    else map.fitBounds(ring.getBounds(), { padding: [6, 6] });
   }
 
   function iconFor(a, on) {
