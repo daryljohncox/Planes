@@ -133,7 +133,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
       <div class="ty" id="ty">&nbsp;</div>
       <div class="stats">
         <div class="st"><span>Altitude</span><b id="sAlt">—</b></div>
-        <div class="st"><span>Distance</span><b id="sDist">—</b></div>
+        <div class="st"><span>From <span id="distName">Marton</span></span><b id="sDist">—</b></div>
         <div class="st"><span>Heading</span><b id="sHdg">—</b></div>
         <div class="st"><span>Speed</span><b id="sSpd">—</b></div>
       </div>
@@ -158,7 +158,6 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   var TZ = P.get("tz") || "Pacific/Auckland";
   var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
-  var LOST_POLLS = 3;      // selected plane missing this many polls in a row -> back to the list
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
   var FEED = P.get("feed") || "/api/feed";
   // Current search area – starts at home, follows the map when it's panned/zoomed
@@ -241,6 +240,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 
   // ---------- map ----------
   var map = null, markers = {};
+  var mapFollow = null, mapUnfollow = null;   // set up once the map exists
   if (typeof L === "undefined") {
     setStatus("Map library didn't load");
   } else {
@@ -270,30 +270,46 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     function atHome() {
       return map.getZoom() === home.z && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
     }
-    function goHome() { clearTimeout(idleT); map.flyTo(home.c, home.z, { duration: 0.8 }); }
-    // Move the search area to the map view: centre of the screen, radius big enough to cover it
+    function goHome() {
+      clearTimeout(idleT);
+      if (selHex) { selHex = null; selLast = null; render(); }   // stop following a plane
+      map.flyTo(home.c, home.z, { duration: 0.8 });
+    }
+    // Search area: centred on the plane you're following, otherwise on the map view.
+    // Radius is big enough to cover what's on screen.
     function followView() {
-      if (atHome()) { cLat = LAT; cLon = LON; cR = RADIUS_NM; away = false; }
+      var following = selHex && selLast;
+      if (!following && atHome()) { cLat = LAT; cLon = LON; cR = RADIUS_NM; away = false; }
       else {
-        var c = map.getCenter(), b = map.getBounds();
+        var c = following ? L.latLng(selLast.lat, selLast.lon) : map.getCenter(), b = map.getBounds();
         var halfDiagNm = Math.max(c.distanceTo(b.getNorthEast()), c.distanceTo(b.getSouthWest())) / 1852;
         cLat = c.lat; cLon = c.lng; cR = Math.max(10, Math.min(250, halfDiagNm)); away = true;
       }
       ring.setLatLng([cLat, cLon]).setRadius(cR * 1852);
       ring25.setLatLng([cLat, cLon]);
     }
-    function touched() {
+    function touched(refetch) {
       clearTimeout(idleT);
-      homeBtn.style.display = atHome() ? "none" : "flex";
-      if (!atHome()) idleT = setTimeout(goHome, HOME_IDLE_MS);
+      homeBtn.style.display = !selHex && atHome() ? "none" : "flex";
+      if (!selHex && !atHome()) idleT = setTimeout(goHome, HOME_IDLE_MS);   // no auto-return while following
       followView();
-      clearTimeout(refetchT);
-      refetchT = setTimeout(poll, 400);   // fetch planes for the new area once you stop moving
+      if (refetch) {
+        clearTimeout(refetchT);
+        refetchT = setTimeout(poll, 400);   // fetch planes for the new area once you stop moving
+      }
     }
+    // Keep the followed plane centred. Pans done by the page itself don't trigger an extra fetch.
+    var autoPan = false;
+    mapFollow = function (a, now) {
+      var pt = map.latLngToContainerPoint([a.lat, a.lon]), mid = map.getSize().divideBy(2);
+      if (!moving && pt.distanceTo(mid) > 2) { autoPan = true; map.panTo([a.lat, a.lon], { animate: !now, duration: 0.8 }); }
+      touched(false);
+    };
+    mapUnfollow = function () { touched(true); };
     var refetchT = null;
-    map.on("move", function () { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); });
+    map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
-    map.on("moveend zoomend", function () { moving = false; touched(); });
+    map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
     L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); goHome(); });
     L.DomEvent.disableClickPropagation(homeBtn);
   }
@@ -382,10 +398,24 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   // ---------- data ----------
   var aircraft = [];
   var lastOk = 0;
-  // Selection: null = show the list; otherwise the hex of the plane you tapped (stays until you go back)
-  var selHex = null, selLast = null, selMiss = 0;
-  function select(hex) { selHex = hex; selLast = null; selMiss = 0; render(); }
-  function unselect() { selHex = null; selLast = null; selMiss = 0; render(); }
+  // Selection: null = show the list; otherwise the plane you tapped. The map and search area follow it
+  // until you tap "All planes" or "Return to home" – it never drops back on its own.
+  var selHex = null, selLast = null;
+  function follow(a, now) {
+    if (mapFollow) mapFollow(a, now);
+    else { cLat = a.lat; cLon = a.lon; away = true; }
+  }
+  function select(hex) {
+    selHex = hex; selLast = null;
+    for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === hex) selLast = aircraft[i];
+    if (selLast) { follow(selLast, false); poll(); }
+    render();
+  }
+  function unselect() {
+    selHex = null; selLast = null;
+    if (mapUnfollow) mapUnfollow();
+    render();
+  }
 
   var pollSeq = 0;
   function poll() {
@@ -410,15 +440,15 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
             track: first(a.track, a.true_heading, a.mag_heading),
             gs: a.gs,
             dist: distKm(pLat, pLon, a.lat, a.lon),
-            brg: bearing(pLat, pLon, a.lat, a.lon)
+            brg: bearing(pLat, pLon, a.lat, a.lon),
+            homeDist: distKm(LAT, LON, a.lat, a.lon),
+            homeBrg: bearing(LAT, LON, a.lat, a.lon)
           };
         }).sort(function (x, y) { return x.dist - y.dist; });
         lastOk = Date.now();
         setStatus("");
         if (selHex) {
-          var found = aircraft.some(function (a) { return a.hex === selHex; });
-          selMiss = found ? 0 : selMiss + 1;
-          if (selMiss >= LOST_POLLS) { selHex = null; selLast = null; selMiss = 0; }
+          for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) { selLast = aircraft[i]; follow(selLast, false); }
         }
         render();
       })
@@ -428,7 +458,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   // ---------- render ----------
   var shownImg = null;
   function render() {
-    $("place").textContent = away ? "map centre" : PLACE;
+    $("place").textContent = selHex && selLast ? selLast.callsign : away ? "map centre" : PLACE;
     $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR * 1.852) + " km";
 
     // Selected plane (keep showing its last data if it drops out of one or two polls)
@@ -460,12 +490,12 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     $("detail").style.display = "flex";
 
     $("cs").textContent = f.callsign;
-    $("idx").textContent = fi >= 0 ? "#" + (fi + 1) + " nearest" : "signal lost";
+    $("idx").textContent = fi >= 0 ? "following" : "signal lost";
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
     $("ty").textContent = line;
     $("sAlt").innerHTML = altHtml(f);
-    $("sDist").innerHTML = f.dist.toFixed(1) + "<small>km " + compass(f.brg) + "</small>";
+    $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
     $("sSpd").innerHTML = f.gs == null ? "—" : Math.round(f.gs * 1.852) + "<small>km/h</small>";
 
@@ -523,6 +553,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 
   $("place").textContent = PLACE;
   $("homeName").textContent = PLACE;
+  $("distName").textContent = PLACE;
   poll();
   setInterval(poll, REFRESH_MS);
   tick();
