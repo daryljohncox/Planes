@@ -121,7 +121,8 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   var TZ = P.get("tz") || "Pacific/Auckland";
   var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
   var ROTATE_N = 8;        // featured panel cycles through this many nearest planes
-  var API = "https://api.adsb.lol/v2/point/" + LAT + "/" + LON + "/" + RADIUS_NM;
+  // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
+  var API = (P.get("feed") || "/api/feed") + "?lat=" + LAT + "&lon=" + LON + "&r=" + RADIUS_NM;
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
   var TYPES = {
@@ -329,7 +330,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
         pickFeatured(true);
         render();
       })
-      .catch(function () { setStatus("Can't reach adsb.lol – retrying"); });
+      .catch(function () { setStatus("Plane feed busy – retrying"); });
   }
 
   function pickFeatured(force) {
