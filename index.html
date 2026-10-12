@@ -79,6 +79,11 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .cs{flex:1;font-size:5.6vh;font-weight:800;letter-spacing:.03em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .idx{font-size:2vh;color:var(--dim);white-space:nowrap}
 .ty{font-size:2.6vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rte{display:flex;align-items:baseline;gap:1vh;font-size:2.6vh;white-space:nowrap;overflow:hidden;min-height:3.4vh}
+.rte b{font-size:3.2vh;font-weight:800;letter-spacing:.02em}
+.rte .ar{color:var(--acc);font-weight:800}
+.rte .ct{color:var(--dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rte.none{color:var(--dim);font-size:2.2vh}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
 .st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
 .st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
@@ -138,6 +143,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     <div class="info" id="info">
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div></div>
       <div class="ty" id="ty">&nbsp;</div>
+      <div class="rte" id="rte"></div>
       <div class="stats">
         <div class="st"><span>Altitude</span><b id="sAlt">—</b></div>
         <div class="st"><span>From <span id="distName">Marton</span></span><b id="sDist">—</b></div>
@@ -367,6 +373,39 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   }
 
   // ---------- photos ----------
+  // ---------- routes (origin -> destination, looked up by callsign via api/route.js) ----------
+  var routeCache = {};   // callsign -> route | null | "pending"
+  function routeFor(a) {
+    var cs = a.flight;
+    if (!cs) return null;
+    var r = routeCache[cs];
+    if (r === undefined) {
+      routeCache[cs] = "pending";
+      var base = (P.get("feed") || "/api/feed").replace(/feed$/, "route");
+      fetch(base + "?cs=" + encodeURIComponent(cs) + "&lat=" + a.lat.toFixed(2) + "&lon=" + a.lon.toFixed(2))
+        .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+        .then(function (j) { routeCache[cs] = (j && j.route) || null; render(); })
+        .catch(function () {   // network hiccup: show "unknown" and try again in a minute
+          routeCache[cs] = null; render();
+          setTimeout(function () { delete routeCache[cs]; }, 60000);
+        });
+      return "pending";
+    }
+    return r;
+  }
+  function apHtml(ap) {
+    var code = ap.iata || ap.icao || "?";
+    var place = ap.city || ap.name || "";
+    return "<b>" + esc(code) + "</b>" + (place ? '<span class="ct">' + esc(place) + "</span>" : "");
+  }
+  function showRoute(a) {
+    var r = routeFor(a), el = $("rte");
+    if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
+    if (!r) { el.className = "rte none"; el.textContent = "Route unknown"; return; }
+    el.className = "rte";
+    el.innerHTML = apHtml(r.from) + '<span class="ar">→</span>' + apHtml(r.to);
+  }
+
   var hexCache = {};   // hex -> photo | null | "pending"
   var typeCache = {};  // type/desc -> photo | null | "pending"
 
@@ -452,6 +491,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
           return {
             hex: a.hex,
             callsign: ((a.flight || "").trim()) || a.r || (a.hex || "").toUpperCase(),
+            flight: (a.flight || "").trim(),
             reg: a.r || "",
             type: a.t || "",
             desc: a.desc || "",
@@ -515,6 +555,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
     $("ty").textContent = line;
+    showRoute(f);
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
