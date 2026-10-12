@@ -84,6 +84,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 .rte .ar{color:var(--acc);font-weight:800}
 .rte .ct{color:var(--dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
 .rte.none{color:var(--dim);font-size:2.2vh}
+.rte .unk{color:var(--dim)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
 .st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
 .st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
@@ -394,6 +395,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
     return r;
   }
   function apHtml(ap) {
+    if (!ap) return '<b class="unk">?</b>';   // that end of the route isn't known
     var code = ap.iata || ap.icao || "?";
     var place = ap.city || ap.name || "";
     return "<b>" + esc(code) + "</b>" + (place ? '<span class="ct">' + esc(place) + "</span>" : "");
@@ -401,7 +403,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   function showRoute(a) {
     var r = routeFor(a), el = $("rte");
     if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
-    if (!r) { el.className = "rte none"; el.textContent = "Route unknown"; return; }
+    if (!r || (!r.from && !r.to)) { el.className = "rte none"; el.textContent = "Route unknown"; return; }
     el.className = "rte";
     el.innerHTML = apHtml(r.from) + '<span class="ar">→</span>' + apHtml(r.to);
   }
