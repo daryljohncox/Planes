@@ -863,7 +863,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.nac_p === 0 && a.sil === 0 && a.alt_baro === "ground" && still) return true;
     if (/^C\d/.test(a.category || "")) return true;
     var cs = (a.flight || "").trim().toUpperCase();
-    if (/^(TWR|TOWER|GND|GROUND|TEST|TST|TXP)\d*$/.test(cs)) return true;
+    var GROUND_ID = /^(TWR|TOWER|GND|GRND|GROUND|SERV|TEST|TST|TXP)\d*$/;
+    // The aircraft database tags these with type / registration "TWR" too, not just the callsign
+    if (GROUND_ID.test(cs) || GROUND_ID.test((a.t || "").toUpperCase()) || GROUND_ID.test((a.r || "").toUpperCase())) return true;
+    if (/\b(tower|ground station|ground vehicle)\b/i.test(a.desc || "")) return true;
     if (!cs && !a.r && !a.t && still && (a.alt_baro === "ground" || a.alt_baro == null || a.alt_baro < 500)) return true;
     return false;
   }
