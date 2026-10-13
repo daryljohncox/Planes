@@ -312,7 +312,26 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"],
     AS50:["AS350 Squirrel","Eurocopter AS350 Écureuil"], EC35:["EC135","Eurocopter EC135"],
     B06:["Bell 206","Bell 206"], R22:["Robinson R22","Robinson R22"], R44:["Robinson R44","Robinson R44"],
-    CL60:["Challenger 600","Bombardier Challenger 600 series"], GLEX:["Global Express","Bombardier Global Express"]
+    CL60:["Challenger 600","Bombardier Challenger 600 series"], GLEX:["Global Express","Bombardier Global Express"],
+    // helicopters common in NZ / AU (police, rescue, charter, ag)
+    B429:["Bell 429","Bell 429 GlobalRanger"], B412:["Bell 412","Bell 412"], B212:["Bell 212","Bell 212"],
+    B505:["Bell 505","Bell 505 Jet Ranger X"], UH1:["Bell UH-1 Iroquois","Bell UH-1 Iroquois"],
+    BK17:["BK 117","MBB/Kawasaki BK 117"], EC45:["H145","Eurocopter EC145"], EC20:["EC120 Colibri","Eurocopter EC120 Colibri"],
+    EC25:["H225 Super Puma","Eurocopter EC225 Super Puma"], AS55:["AS355 Twin Squirrel","Eurocopter AS355 Écureuil 2"],
+    AS65:["AS365 Dauphin","Eurocopter AS365 Dauphin"], A169:["AW169","AgustaWestland AW169"], A189:["AW189","AgustaWestland AW189"],
+    S76:["Sikorsky S-76","Sikorsky S-76"], H60:["Black Hawk","Sikorsky UH-60 Black Hawk"], SH60:["Seahawk","Sikorsky SH-60 Seahawk"],
+    MD52:["MD 520N","MD Helicopters MD 520N"],
+    // light aircraft, ag and military types seen around NZ
+    CT4:["CT/4 Airtrainer","Pacific Aerospace CT/4 Airtrainer"], PC21:["Pilatus PC-21","Pilatus PC-21"],
+    FU24:["Fletcher FU-24","Pacific Aerospace Fletcher"], CRES:["PAC Cresco","Pacific Aerospace Cresco"],
+    P750:["PAC 750XL","Pacific Aerospace 750XL"], AT8T:["Air Tractor AT-802","Air Tractor AT-802"],
+    DHC2:["DHC-2 Beaver","de Havilland Canada DHC-2 Beaver"], DHC6:["DHC-6 Twin Otter","de Havilland Canada DHC-6 Twin Otter"],
+    PC6T:["Pilatus Porter","Pilatus PC-6 Porter"], SR22:["Cirrus SR22","Cirrus SR22"], SR20:["Cirrus SR20","Cirrus SR20"],
+    BE58:["Beechcraft Baron","Beechcraft Baron"], BE36:["Beechcraft Bonanza","Beechcraft Bonanza"],
+    PA34:["Piper Seneca","Piper PA-34 Seneca"], PA44:["Piper Seminole","Piper PA-44 Seminole"],
+    C310:["Cessna 310","Cessna 310"], C421:["Cessna 421","Cessna 421"], C150:["Cessna 150","Cessna 150"],
+    C25A:["Citation CJ2","Cessna CitationJet/M2"], C17:["C-17 Globemaster III","Boeing C-17 Globemaster III"],
+    A400:["A400M Atlas","Airbus A400M Atlas"]
   };
 
   var PLANE_PATH = "M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z";
@@ -796,14 +815,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     });
   }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
-  function fetchGeneric(type, desc) {
+  function fetchGeneric(type, desc, heli) {
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
     var known = type && TYPES[type];
     // Unknown types: search, then take the first result whose Wikipedia short description says it's an aircraft
     // (a bare type code like "P208" can otherwise match a ship or anything else)
     var url = known
       ? base + "&prop=pageimages&titles=" + encodeURIComponent(TYPES[type][1])
-      : base + "&prop=pageimages|description&generator=search&gsrlimit=10&gsrsearch=" + encodeURIComponent((desc || type) + " aircraft");
+      : base + "&prop=pageimages|description&generator=search&gsrlimit=10&gsrsearch=" + encodeURIComponent((desc || type) + (heli ? " helicopter" : " aircraft"));
     return getJSON(url).then(function (j) {
       var pages = j && j.query && j.query.pages;
       if (!pages) return null;
@@ -830,7 +849,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var key = a.type || a.desc;
     if (!key) return null;
     var t = typeCache[key];
-    if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(a.type, a.desc); }); return null; }
+    if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(a.type, a.desc, a.heli); }); return null; }
     return t === "pending" ? null : t;
   }
 
