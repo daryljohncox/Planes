@@ -545,21 +545,39 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var AG_TYPES = { FU24:1, CRES:1, P750:1, AT3T:1, AT4T:1, AT5T:1, AT6T:1, AT8T:1, PA25:1, PA36:1, M18:1, T34T:1, S2R:1, S2RT:1 };
   var GLIDER_TYPES = { GLID:1, BALL:1, ULAC:1 };
   var EMERG_SQUAWK = { "7500":1, "7600":1, "7700":1 };
-  // Rescue / air ambulance: NZ & AU style callsigns (RSCU52 = SA Rescue, CFH = CareFlight, FD = Flying Doctor, ...)
-  var RESCUE_CS = /^(LIFE|RESCUE|RESQ|RSQ|RSCU|RSC\d|AMBUL|AMBO|MEDIC|MEDEVAC|HEMS|WESTPAC|SAR\d|HELIMED|CAREFLIGHT|CFH\d|FD\d|RFDS|RFD\d|AIRMED|LIFEFLT)/;
-  var POLICE_CS = /^(EAGLE|POLICE|POLAIR|POL\d)/;
-  // Cargo airline callsign prefixes (FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, Airwork / NZ Post, Parcelair, ...)
-  var CARGO_CS = /^(FDX|UPS|DHK|DHL|DHX|BCS|GTI|CKS|CLX|ABW|NCA|PAC|ATN|AWK|PCA|TAY|BOX|MPH|SQC|CAO|CKK|ABD)\d/;
+  // Callsign lists. NZ designators are from CAA NZ's operator call sign register; Australian special-task
+  // designators from AIP / NAFC OPS 007 (POL, AM, RSCU, BMBR …). A designator matches when digits follow it.
+  // Rescue / air ambulance / SAR / firefighting
+  //   NZ: AMD Airmed, CFL Care Flight, CGD/CGS/NLD Coastguard, FDC Flydoc, GIS Gismed, HLM Helimed, HLR Helilink Rescue,
+  //       KRC Kiwi Rescue (RNZAF), LFT Life Flight, MDK Medicare, MDL Medilift, NAR North Air Rescue,
+  //       PHL Philips Search & Rescue, WPR Westpac Rescue
+  //   AU: RSCU Rescue, AM Ambulance, FD Royal Flying Doctor, CFH CareFlight; fire: SPTR BDOG FBIR BMBR HLTK FSCN
+  var RESCUE_CS = new RegExp("^(" +
+    "(AMD|CFL|CGD|CGS|NLD|FDC|GIS|HLM|HLR|KRC|LFT|MDK|MDL|NAR|PHL|WPR|RSCU|RSC|AM|FD|RFD|CFH|SAR|" +
+    "SPTR|BDOG|FBIR|BMBR|HLTK|FSCN|FBD|BOM|HTK|BDG)\\d" +
+    "|LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|MEDIVAC|HEMS|WESTPAC|HELIMED|CAREFLIGHT|AIRMED|LIFEFLT|RFDS|" +
+    "COASTGUARD|FIREBIRD|BOMBER|HELITAK|FIRESPOT|BIRDOG)");
+  // Police: NZ PLC / EAGLE; AU POLAIR (POL, POLR) and Federal Police (FPL, FPLR)
+  var POLICE_CS = /^((PLC|POL|POLR|FPL|FPLR)\d|EAGLE|POLICE|POLAIR|FEDPOL)/;
+  // Flight schools & aero clubs flying under their own callsign (yellow even if the type isn't a known trainer)
+  //   ADY NZ Intl Commercial Pilot Academy, CAT CTC, CGE/FCP Nelson Aviation College, MSY Massey,
+  //   FMD Flight Training Manawatu, BOI / CAC / NTA / PGS aero clubs
+  var TRAINER_CS = /^(ADY|CAT|CGE|FCP|MSY|FMD|BOI|CAC|NTA|PGS)\d/;
+  // Military callsigns (backup for the feed's flag): KIW RNZAF, ASY RAAF
+  var MIL_CS = /^((KIW|ASY)\d|KIWI\d)/;
+  // Cargo: FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, ...; NZ: AFN Air Freight NZ, APK Parcelair, AWK Airwork,
+  // PST Airwork NZ Post, TNZ Texel Air; AU: EFA Express Freighters Australia, TFX Toll
+  var CARGO_CS = /^(FDX|UPS|DHK|DHL|DHX|BCS|GTI|CKS|CLX|ABW|NCA|PAC|ATN|AWK|PCA|TAY|BOX|MPH|SQC|CAO|CKK|ABD|AFN|APK|PST|TNZ|EFA|TFX)\d/;
   function category(raw) {
-    var mil = raw.dbFlags & 1;   // feed's military flag
     var cs = (raw.flight || "").trim().toUpperCase();
+    var mil = (raw.dbFlags & 1) || MIL_CS.test(cs);   // feed's military flag, or a military callsign
     var em = raw.emergency && raw.emergency !== "none" && raw.emergency !== "lifeguard";
     if (EMERG_SQUAWK[raw.squawk] || em) return "emg";
     if (RESCUE_CS.test(cs) || raw.emergency === "lifeguard") return "res";
     if (POLICE_CS.test(cs)) return "pol";
     if (isHeli(raw)) return mil ? "mil" : "";
     if (raw.t && MIL_TRAINER_TYPES[raw.t]) return "mtr";
-    if (raw.t && TRAINER_TYPES[raw.t]) return mil ? "mtr" : "trn";
+    if ((raw.t && TRAINER_TYPES[raw.t]) || TRAINER_CS.test(cs)) return mil ? "mtr" : "trn";
     if (raw.t && AG_TYPES[raw.t]) return "ag";
     if (raw.category === "B1" || raw.category === "B2" || raw.category === "B4" || (raw.t && GLIDER_TYPES[raw.t])) return "gld";
     if (mil) return "mil";
@@ -572,8 +590,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Colour key (opened by the button next to "Return to …")
   var KEY = [
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
-    ["res", "#ff4fa3", 1, "Rescue / air ambulance", "Life Flight, rescue & medical callsigns"],
-    ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, police callsigns"],
+    ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
+    ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, POLAIR, police callsigns"],
     ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
     ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
     ["trn", "#ffd400", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
