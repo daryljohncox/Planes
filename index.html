@@ -739,10 +739,41 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var place = ap.city || ap.name || "";
     return "<b>" + esc(code) + "</b>" + (place ? '<span class="ct">' + esc(place) + "</span>" : "");
   }
-  function showRoute(a) {
-    var r = routeFor(a), el = $("rte");
+  // Route databases go by callsign, so they can hold an old or different flight. Check the route fits
+  // what the plane is doing; once it doesn't, that callsign's route is dropped.
+  var aptByCode = null;
+  function aptCoords(ap) {
+    if (!ap || !AIRPORTS.length) return null;
+    if (!aptByCode) { aptByCode = {}; AIRPORTS.forEach(function (r) { aptByCode[r[0]] = r; }); }
+    return aptByCode[ap.iata] || aptByCode[ap.icao] || null;
+  }
+  function sameAirport(ap, r) { return r && ap && ap.lat === r[2] && ap.lon === r[3]; }
+  function routeFits(a, r, st) {
+    var to = aptCoords(r.to), from = aptCoords(r.from);
+    if (!to) return true;   // can't check
+    var dTo = distKm(a.lat, a.lon, to[2], to[3]), dFrom = from ? distKm(a.lat, a.lon, from[2], from[3]) : 1e9;
+    // landing somewhere that isn't the route's destination
+    if (st && st.text === "Arriving" && dTo > 25 && !sameAirport(st.ap, to)) return false;
+    // well clear of both ends but flying away from the destination
+    if (a.track != null && a.alt !== "ground" && dTo > 100 && dFrom > 50) {
+      var off = Math.abs(((bearing(a.lat, a.lon, to[2], to[3]) - a.track + 540) % 360) - 180);
+      if (off > 100) return false;
+    }
+    return true;
+  }
+  var ADHOC = { res: 1, pol: 1 };   // rescue & police reuse callsigns for one-off flights: databases can't know
+  function showRoute(a, st) {
+    var r = ADHOC[a.cat] ? null : routeFor(a), el = $("rte");
     if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
-    if (!r || (!r.from && !r.to)) { el.className = "rte none"; el.textContent = "Route unknown"; return; }
+    if (r && (r.from || r.to) && !routeFits(a, r, st)) { routeCache[a.flight] = r = null; }
+    if (!r || (!r.from && !r.to)) {
+      if (st && st.text === "Arriving") {   // at least say where it's landing
+        el.className = "rte";
+        el.innerHTML = apHtml(null) + '<span class="ar">→</span>' + apHtml({ iata: st.ap.code, name: st.ap.name });
+        return;
+      }
+      el.className = "rte none"; el.textContent = "Route unknown"; return;
+    }
     el.className = "rte";
     el.innerHTML = apHtml(r.from) + '<span class="ar">→</span>' + apHtml(r.to);
   }
@@ -890,6 +921,26 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     return false;
   }
 
+  // ---------- backup aircraft details (api/aircraft.js) for planes the feed has no type for ----------
+  var acInfo = {}, acBusy = 0;   // hex -> {t, desc, r, owner} | null | "pending"
+  function infoFor(a) {
+    if (a.t || !a.hex || !/^[0-9a-f]{6}$/i.test(a.hex)) return null;
+    var x = acInfo[a.hex];
+    if (x === undefined && acBusy < 3) {
+      acInfo[a.hex] = "pending"; acBusy++;
+      var base = (P.get("feed") || "/api/feed").replace(/feed$/, "aircraft");
+      getJSON(base + "?hex=" + a.hex + "&reg=" + encodeURIComponent(a.r || ""))
+        .then(function (j) { acInfo[a.hex] = (j && j.ac) || null; })
+        .catch(function () { delete acInfo[a.hex]; })   // try again on a later poll
+        .then(function () { acBusy--; });
+    }
+    return x && x !== "pending" ? x : null;
+  }
+  function withInfo(a) {
+    var x = infoFor(a);
+    return x ? Object.assign({}, a, { t: x.t || a.t, desc: a.desc || x.desc || "", r: a.r || x.r || "", owner: x.owner || "" }) : a;
+  }
+
   var pollSeq = 0;
   function poll() {
     var seq = ++pollSeq, pLat = cLat, pLon = cLon;
@@ -899,7 +950,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         if (seq !== pollSeq) return;   // a newer request (map moved) has replaced this one
         aircraft = (j.ac || []).filter(function (a) {
           return a.lat != null && a.lon != null && (a.seen_pos == null || a.seen_pos < 60) && !isTestTarget(a);
-        }).map(function (a) {
+        }).map(withInfo).map(function (a) {
           var alt = a.alt_baro === "ground" ? "ground" : first(a.alt_baro, a.alt_geom);
           return {
             hex: a.hex,
@@ -908,6 +959,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             reg: a.r || "",
             type: a.t || "",
             desc: a.desc || "",
+            owner: a.owner || "",
             country: countryOf(a.hex),
             lat: a.lat, lon: a.lon,
             alt: typeof alt === "number" || alt === "ground" ? alt : null,
@@ -972,10 +1024,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     $("idx").innerHTML = (fi >= 0 ? "following" : "signal lost") + tagHtml(f);
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
+    if (f.owner) line += " · " + f.owner;
     if (f.country) line += " · " + f.country;
     $("ty").textContent = line;
-    showRoute(f);
     var st = airportStatus(f);
+    showRoute(f, st);
     $("aps").textContent = st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
