@@ -852,9 +852,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
 
   // Ground-station test beacons (e.g. TXP1HAWK, TXP2RUAO) broadcast fake offshore positions.
-  // Hide a target only when ALL of these hold, so a real aircraft with a GPS fault still shows.
+  // Those are hidden only when ALL of nac_p 0, sil 0, on ground and stationary hold, so a real aircraft with a GPS fault still shows.
+  // Also hidden: ground transmitters that aren't aircraft –
+  //  * ADS-B emitter category C* (surface emergency / service vehicles, towers and other obstacles)
+  //  * site monitors with a ground-station callsign like "TWR" (seen at Oamaru, Dunedin, Invercargill)
+  //  * stationary targets with no callsign, registration or type (e.g. C87ED2 / C87ED8 / C87ED9 near
+  //    Queenstown and Dunedin) – a real aircraft that's moving or identifies itself still shows
   function isTestTarget(a) {
-    return a.nac_p === 0 && a.sil === 0 && a.alt_baro === "ground" && (a.gs == null || a.gs < 1);
+    var still = a.gs == null || a.gs < 1;
+    if (a.nac_p === 0 && a.sil === 0 && a.alt_baro === "ground" && still) return true;
+    if (/^C\d/.test(a.category || "")) return true;
+    var cs = (a.flight || "").trim().toUpperCase();
+    if (/^(TWR|TOWER|GND|GROUND|TEST|TST|TXP)\d*$/.test(cs)) return true;
+    if (!cs && !a.r && !a.t && still && (a.alt_baro === "ground" || a.alt_baro == null || a.alt_baro < 500)) return true;
+    return false;
   }
 
   var pollSeq = 0;
