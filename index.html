@@ -148,6 +148,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .rte .ct{color:var(--dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
 .rte.none{color:var(--dim);font-size:2.2vh}
 .rte .unk{color:var(--dim)}
+.rte .ft{color:var(--dim);font-size:2.2vh;margin-left:.6vh;flex-shrink:0}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
 .st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
 .st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
@@ -425,7 +426,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function typeName(a) {
     if (a.type && TYPES[a.type]) return TYPES[a.type][0];
     if (a.desc) return titleCase(a.desc);
-    return a.type || "Unknown type";
+    if (a.type) return a.type;
+    // No database knows it (e.g. CFL06 Care Flight): say what we can from the feed
+    if (a.heli) return a.cat === "res" ? "Rescue helicopter" : a.cat === "pol" ? "Police helicopter" : "Helicopter";
+    return a.cat === "res" ? "Air ambulance" : "Unknown type";
   }
   function altHtml(a) {
     if (a.alt === "ground") return "Ground";
@@ -576,6 +580,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     "SPTR|BDOG|FBIR|BMBR|HLTK|FSCN|FBD|BOM|HTK|BDG)\\d" +
     "|LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|MEDIVAC|HEMS|WESTPAC|HELIMED|CAREFLIGHT|AIRMED|LIFEFLT|RFDS|" +
     "COASTGUARD|FIREBIRD|BOMBER|HELITAK|FIRESPOT|BIRDOG)");
+  // Operator shown when the databases don't know the aircraft (telephony names from the same register)
+  var RESCUE_OPS = { AMD: "Airmed", CFL: "Care Flight", CGD: "Coastguard", CGS: "Coastguard", NLD: "Coastguard",
+    FDC: "Flydoc", GIS: "Gismed", HLM: "Helimed", HLR: "Helilink Rescue", KRC: "RNZAF Kiwi Rescue", LFT: "Life Flight",
+    MDK: "Medicare", MDL: "Medilift", NAR: "North Air Rescue", PHL: "Philips Search & Rescue", WPR: "Westpac Rescue",
+    CFH: "CareFlight", RFD: "Royal Flying Doctor", FD: "Royal Flying Doctor", PLC: "NZ Police", EAGLE: "NZ Police Eagle" };
+  function operatorOf(cs) {
+    var m = /^([A-Z]{2,5})\d/.exec(cs || "") || /^(EAGLE)/.exec(cs || "");
+    return m && RESCUE_OPS[m[1]] || "";
+  }
   // Police: NZ PLC / EAGLE; AU POLAIR (POL, POLR) and Federal Police (FPL, FPLR)
   var POLICE_CS = /^((PLC|POL|POLR|FPL|FPLR)\d|EAGLE|POLICE|POLAIR|FEDPOL)/;
   // Flight schools & aero clubs flying under their own callsign (yellow even if the type isn't a known trainer)
@@ -781,7 +794,27 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     return true;
   }
   var ADHOC = { res: 1, pol: 1 };   // rescue & police reuse callsigns for one-off flights: databases can't know
+  // Approximate time in the air, from the current leg's trace (api/trace.js): "35 min", "1 h 20 min".
+  // "+" when the trace starts already airborne (takeoff happened out of coverage or before a signal gap).
+  function airTimeHtml(a) {
+    if (a.alt === "ground") return "";
+    var pts = traceFor(a.hex);
+    if (!pts || !pts.length) return "";
+    var i = 0, seenGround = false;
+    while (i < pts.length && pts[i][2] === "ground") { seenGround = true; i++; }
+    if (i >= pts.length) return "";
+    var mins = Math.round((Date.now() / 1000 - pts[i][3]) / 60);
+    if (mins < 1 || mins > 24 * 60) return "";
+    var txt = mins < 60 ? mins + " min" : Math.floor(mins / 60) + " h " + (mins % 60) + " min";
+    return '<span class="ft">· ' + txt + (seenGround ? "" : "+") + " in the air</span>";
+  }
   function showRoute(a, st) {
+    var el = $("rte");
+    showRoute0(a, st);
+    var at = airTimeHtml(a);
+    if (at) el.insertAdjacentHTML("beforeend", at);
+  }
+  function showRoute0(a, st) {
     var r = ADHOC[a.cat] ? null : routeFor(a), el = $("rte");
     if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
     if (r && (r.from || r.to) && !routeFits(a, r, st)) { routeCache[a.flight] = r = null; }
@@ -846,10 +879,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       if (h === "pending") return null;
       if (h) return h;
     }
-    var key = a.type || a.desc;
+    var key = a.type || a.desc, type = a.type;
+    // Unknown type: show a typical one of what it is (NZ rescue helicopters are mostly BK 117 / H145,
+    // NZ Police's Eagle is a Bell 429)
+    if (!key && a.heli) key = type = a.cat === "res" ? "BK17" : a.cat === "pol" ? "B429" : "";
     if (!key) return null;
     var t = typeCache[key];
-    if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(a.type, a.desc, a.heli); }); return null; }
+    if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(type, a.desc, a.heli); }); return null; }
     return t === "pending" ? null : t;
   }
 
@@ -978,7 +1014,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             reg: a.r || "",
             type: a.t || "",
             desc: a.desc || "",
-            owner: a.owner || "",
+            owner: a.owner || operatorOf((a.flight || "").trim().toUpperCase()),
             country: countryOf(a.hex),
             lat: a.lat, lon: a.lon,
             alt: typeof alt === "number" || alt === "ground" ? alt : null,
@@ -1067,7 +1103,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       $("credit").textContent = ph.credit;
     } else {
       img.style.display = "none"; shownImg = null;
-      $("noimg").innerHTML = PLANE_SVG;
+      $("noimg").innerHTML = f.heli ? '<svg viewBox="0 0 24 24" fill="currentColor">' + HELI_SHAPE + "</svg>" : PLANE_SVG;
       $("badge").style.display = "none";
       $("credit").style.display = "none";
     }
