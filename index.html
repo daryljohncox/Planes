@@ -545,8 +545,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var AG_TYPES = { FU24:1, CRES:1, P750:1, AT3T:1, AT4T:1, AT5T:1, AT6T:1, AT8T:1, PA25:1, PA36:1, M18:1, T34T:1, S2R:1, S2RT:1 };
   var GLIDER_TYPES = { GLID:1, BALL:1, ULAC:1 };
   var EMERG_SQUAWK = { "7500":1, "7600":1, "7700":1 };
-  var RESCUE_CS = /^(LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|HEMS|WESTPAC|SAR\d)/;
-  var POLICE_CS = /^(EAGLE|POLICE|POL\d)/;
+  // Rescue / air ambulance: NZ & AU style callsigns (RSCU52 = SA Rescue, CFH = CareFlight, FD = Flying Doctor, ...)
+  var RESCUE_CS = /^(LIFE|RESCUE|RESQ|RSQ|RSCU|RSC\d|AMBUL|AMBO|MEDIC|MEDEVAC|HEMS|WESTPAC|SAR\d|HELIMED|CAREFLIGHT|CFH\d|FD\d|RFDS|RFD\d|AIRMED|LIFEFLT)/;
+  var POLICE_CS = /^(EAGLE|POLICE|POLAIR|POL\d)/;
   // Cargo airline callsign prefixes (FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, Airwork / NZ Post, Parcelair, ...)
   var CARGO_CS = /^(FDX|UPS|DHK|DHL|DHX|BCS|GTI|CKS|CLX|ABW|NCA|PAC|ATN|AWK|PCA|TAY|BOX|MPH|SQC|CAO|CKK|ABD)\d/;
   function category(raw) {
