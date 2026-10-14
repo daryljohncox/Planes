@@ -81,7 +81,7 @@ static void draw(bool force = false) {
   uint16_t col = TFT_WHITE;
   if (WiFi.status() != WL_CONNECTED) { big = "No Wi-Fi"; col = C_RED; small = "Reconnecting..."; }
   else if (!connected) { big = "Finding Hub"; col = C_GREY; small = hubIp.length() ? "Trying " + hubIp : "Searching the network"; }
-  else if (paused) { big = "Paused"; col = C_GREY; small = "Tap Resume to keep the map up"; }
+  else if (paused) { big = "Paused"; col = C_GREY; small = "Tap Resume to put the map back"; }
   else if (hub == H_OURS) { big = "Map is on"; col = C_GREEN; small = hubName; }
   else if (hub == H_OTHER) { big = "Hub busy"; col = C_ORANGE; small = otherApp + " is playing"; }
   else if (launchAt) { big = "Casting..."; col = C_ORANGE; small = hubName; }
@@ -151,6 +151,15 @@ static void launchDashcast() {
   sendReceiver(d);
   launchAt = millis();
   launchOldSession = dashSession;  // when relaunching, wait for the new session, not the old one
+}
+
+// Takes our map off the Hub (used by Pause), so it goes back to its clock / photos.
+static void stopMap() {
+  if (!connected || dashSession.isEmpty()) return;
+  Serial.println("Stopping DashCast");
+  JsonDocument d; d["type"] = "STOP"; d["sessionId"] = dashSession;
+  sendReceiver(d);
+  launchAt = 0;
 }
 
 static void loadMap(const String &transportId, const String &sessionId) {
@@ -331,6 +340,7 @@ static void handleTouch() {
   if (hit(BTN_PAUSE, x, y)) {
     paused = !paused;
     note = "";
+    if (paused && hub == H_OURS) stopMap();
     if (!paused) idleSince = millis() - RECAST_DELAY_MS;  // recast straight away if idle
   } else if (hit(BTN_CAST, x, y)) {
     paused = false;
