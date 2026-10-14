@@ -23,7 +23,8 @@
     announce   km from the map centre at which planes are announced (default 25)
     voice      0 = start with spoken announcements off (also switchable with the Voice button)
 
-  Voice: announcements are spoken by api/tts.js (Microsoft's free en-NZ "Molly" voice, Google's as backup),
+  Voice: announcements are spoken by api/tts.js (Microsoft's free neural voices, British "Sonia" by default,
+  chosen in the Voice panel; Google's as backup),
   with the device's own voice as a last resort. Settings, rare plane list and hourly counts are kept in
   localStorage on the device. Rain radar: RainViewer. Space station: orbit from api/iss.js + satellite.js.
 -->
@@ -1277,7 +1278,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["hourly", "Hourly summary", "How many planes passed in the last hour"],
     ["chime", "Chime first", "Ding-dong before each announcement"]
   ];
-  var VOICE = Object.assign({ on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
+  var VOICE = Object.assign({ voice: "sonia", on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
     iss: true, hourly: true, chime: true }, store.get("voice", {}));
   if (P.get("voice") === "0") VOICE.on = false;
   var ANNOUNCE_KM = num("announce", 25);
@@ -1288,19 +1289,31 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.cat === "mil" || a.cat === "mtr") return "mil";
     return "light";
   }
+  // Free Microsoft neural voices (api/tts.js); the first is the default
+  var VOICE_NAMES = [["sonia", "Sonia", "British female"], ["libby", "Libby", "British female, younger"],
+    ["hollie", "Hollie", "British female, softer"], ["molly", "Molly", "New Zealand female"], ["natasha", "Natasha", "Australian female"]];
   function drawVoicePanel() {
-    $("voicerows").innerHTML = VOICE_ROWS.map(function (r) {
+    $("voicerows").innerHTML = '<div class="note">Which voice</div>' + VOICE_NAMES.map(function (v) {
+        return '<button type="button" class="tg' + (VOICE.voice === v[0] ? " on" : "") + '" data-v="' + v[0] + '"><span><b>' + esc(v[1]) +
+          "</b><small>" + esc(v[2]) + "</small></span><i></i></button>";
+      }).join("") + '<button type="button" class="act" id="voicetest">Test the voice</button>' +
+      '<div class="note">What to announce</div>' + VOICE_ROWS.map(function (r) {
       return '<button type="button" class="tg' + (VOICE[r[0]] ? " on" : "") + (r[3] ? " sub" : "") + '" data-k="' + r[0] + '"><span><b>' + esc(r[1]) + "</b>" +
         (r[2] ? "<small>" + esc(r[2]) + "</small>" : "") + "</span><i></i></button>";
-    }).join("") + '<button type="button" class="act" id="voicetest">Test the voice</button>' +
-      '<div class="note">Voice: Molly (New Zealand English). Tap a plane, then the speaker button, to hear it any time.</div>';
+    }).join("") + '<div class="note">Tap a plane, then the speaker button, to hear it any time.</div>';
     $("voicebtn").classList.toggle("off", !VOICE.on);
   }
   $("voicerows").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("button") : null;
     if (!b) return;
     if (b.id === "voicetest") { unlockAudio(); say({ text: "Kia ora. This is how plane announcements will sound." }); return; }
+    if (b.getAttribute("data-v")) {
+      VOICE.voice = b.getAttribute("data-v"); store.set("voice", VOICE); drawVoicePanel();
+      unlockAudio(); say({ text: "Hello, this is " + b.querySelector("b").textContent + ".", urgent: true });
+      return;
+    }
     var k = b.getAttribute("data-k");
+    if (!k) return;
     VOICE[k] = !VOICE[k];
     store.set("voice", VOICE);
     if (k === "on" && !VOICE.on) stopSpeaking();
@@ -1373,8 +1386,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return ok();
       var u = new SpeechSynthesisUtterance(text), vs = speechSynthesis.getVoices() || [];
       var pick = function (re) { for (var i = 0; i < vs.length; i++) if (re.test(vs[i].lang + " " + vs[i].name)) return vs[i]; return null; };
-      u.voice = pick(/en[-_]NZ/i) || pick(/en[-_]AU.*(female|karen|catherine)/i) || pick(/en[-_]AU/i) || pick(/en[-_]GB.*female/i) || null;
-      u.lang = u.voice ? u.voice.lang : "en-NZ";
+      var loc = { molly: "NZ", natasha: "AU" }[VOICE.voice] || "GB";
+      u.voice = pick(new RegExp("en[-_]" + loc + ".*(female|sonia|libby|hazel|susan|serena|kate|karen|catherine|molly)", "i")) ||
+        pick(new RegExp("en[-_]" + loc, "i")) || pick(/en[-_]GB/i) || null;
+      u.lang = u.voice ? u.voice.lang : "en-" + loc;
       u.onend = u.onerror = function () { ok(); };
       speechSynthesis.speak(u);
       setTimeout(ok, 20000);
@@ -1386,7 +1401,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       var guard = setTimeout(finish, 30000);
       player.onended = finish;
       player.onerror = function () { if (!done) { done = true; clearTimeout(guard); speakDevice(text).then(ok); } };
-      player.src = TTS + "?text=" + encodeURIComponent(text);
+      player.src = TTS + "?v=" + encodeURIComponent(VOICE.voice || "sonia") + "&text=" + encodeURIComponent(text);
       var p = player.play();
       if (p && p.catch) p.catch(function (e) {
         if (e && e.name === "NotAllowedError") { $("voicehint").hidden = false; finish(); }   // needs a tap first

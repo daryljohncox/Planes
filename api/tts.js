@@ -1,14 +1,19 @@
 // Vercel serverless relay: text to speech for the spoken plane announcements.
-//   GET /api/tts?text=Air%20New%20Zealand%20A320...  ->  audio/mpeg
-// 1) Microsoft Edge "Read aloud" voice en-NZ Molly (free, natural female NZ voice; same service the
-//    edge-tts project uses). 2) Google Translate's voice (Australian English) if that fails.
+//   GET /api/tts?text=Air%20New%20Zealand%20A320...&v=sonia  ->  audio/mpeg
+// 1) Microsoft Edge "Read aloud" neural voices (free; same service the edge-tts project uses).
+//    v = sonia (British, default), libby, hollie (British), molly (New Zealand), natasha (Australian).
+// 2) Google Translate's voice in the same accent if that fails.
 // Same text gives the same audio, so answers are edge-cached.
 const crypto = require("crypto");
 const WebSocket = require("ws");
 
 const TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
 const CHROMIUM = process.env.EDGE_TTS_VERSION || "130.0.2849.68";
-const VOICE = "Microsoft Server Speech Text to Speech Voice (en-NZ, MollyNeural)";
+const VOICES = {
+  sonia: "en-GB, SoniaNeural", libby: "en-GB, LibbyNeural", hollie: "en-GB, HollieNeural",
+  molly: "en-NZ, MollyNeural", natasha: "en-AU, NatashaNeural"
+};
+const GOOGLE_LANG = { "en-GB": "en-GB", "en-NZ": "en-AU", "en-AU": "en-AU" };
 const WSS = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=" + TOKEN;
 const MAX_CHARS = 400;
 
@@ -16,9 +21,11 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const text = String(req.query.text || "").replace(/\s+/g, " ").trim().slice(0, MAX_CHARS);
   if (!text) return res.status(400).json({ error: "text missing" });
+  const voice = VOICES[String(req.query.v || "").toLowerCase()] || VOICES.sonia;
+  const lang = voice.split(",")[0];
   let audio = null, src = "";
-  try { audio = await edge(text, 0); src = "edge"; } catch (e) { audio = null; }
-  if (!audio) { try { audio = await google(text); src = "google"; } catch (e) { audio = null; } }
+  try { audio = await edge(text, voice, 0); src = "edge " + voice; } catch (e) { audio = null; }
+  if (!audio) { try { audio = await google(text, GOOGLE_LANG[lang] || "en-GB"); src = "google " + lang; } catch (e) { audio = null; } }
   if (!audio || !audio.length) {
     res.setHeader("Cache-Control", "no-store");
     return res.status(502).json({ error: "no voice available" });
@@ -39,7 +46,7 @@ const uuid = () => crypto.randomUUID().replace(/-/g, "");
 const stamp = () => new Date().toUTCString().replace(/^(\w+), (\d+) (\w+) (\d+) /, "$1 $3 $2 $4 ").replace("GMT", "GMT+0000 (Coordinated Universal Time)");
 const xml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
 
-function edge(text, skewS, retried) {
+function edge(text, voice, skewS, retried) {
   return new Promise((resolve, reject) => {
     const url = WSS + "&ConnectionId=" + uuid() + "&Sec-MS-GEC=" + secMsGec(skewS) + "&Sec-MS-GEC-Version=1-" + CHROMIUM;
     const major = CHROMIUM.split(".")[0];
@@ -66,7 +73,7 @@ function edge(text, skewS, retried) {
       const theirs = Date.parse(rs.headers.date || "");
       if (rs.statusCode === 403 && !retried && !isNaN(theirs)) {
         done = true; clearTimeout(timer);
-        edge(text, (theirs - Date.now()) / 1000, true).then(resolve, reject);
+        edge(text, voice, (theirs - Date.now()) / 1000, true).then(resolve, reject);
         return;
       }
       finish(new Error("HTTP " + rs.statusCode));
@@ -78,7 +85,7 @@ function edge(text, skewS, retried) {
         '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},' +
         '"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n');
       ws.send("X-RequestId:" + uuid() + "\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:" + stamp() + "Z\r\nPath:ssml\r\n\r\n" +
-        "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='" + VOICE + "'>" +
+        "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='Microsoft Server Speech Text to Speech Voice (" + voice + ")'>" +
         "<prosody pitch='+0Hz' rate='+0%' volume='+0%'>" + xml(text) + "</prosody></voice></speak>");
     });
     ws.on("message", (data, isBinary) => {
@@ -92,14 +99,14 @@ function edge(text, skewS, retried) {
 }
 
 // Backup voice. Google's endpoint takes up to ~200 characters, so long text is sent in pieces.
-async function google(text) {
+async function google(text, lang) {
   const parts = [], words = text.split(" ");
   let cur = "";
   words.forEach((w) => { if ((cur + " " + w).length > 190) { parts.push(cur); cur = w; } else cur = cur ? cur + " " + w : w; });
   if (cur) parts.push(cur);
   const out = [];
   for (const p of parts) {
-    const up = await fetch("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-AU&q=" + encodeURIComponent(p),
+    const up = await fetch("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=" + lang + "&q=" + encodeURIComponent(p),
       { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://translate.google.com/" } });
     if (!up.ok) throw new Error("HTTP " + up.status);
     out.push(Buffer.from(await up.arrayBuffer()));
