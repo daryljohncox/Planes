@@ -1,0 +1,41 @@
+# Builds the CYD cast firmware. On main it also commits cyd/planecast-cyd.bin,
+# which the browser installer at /cyd/ flashes.
+name: CYD firmware
+on:
+  push:
+    branches: [main]
+    paths: ['tools/cyd-cast/**', '.github/workflows/cyd-firmware.yml']
+  pull_request:
+    paths: ['tools/cyd-cast/**', '.github/workflows/cyd-firmware.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio==6.1.16 esptool==4.8.1
+      - run: pio run -d tools/cyd-cast
+      - name: Merge into one image for the browser installer
+        run: |
+          B=tools/cyd-cast/.pio/build/cyd
+          esptool.py --chip esp32 merge_bin -o cyd/planecast-cyd.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 $B/firmware.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: planecast-cyd
+          path: cyd/planecast-cyd.bin
+      - name: Commit the image so /cyd/ serves it
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cyd/planecast-cyd.bin
+          git diff --cached --quiet || (git commit -m "Build CYD firmware image" && git push)
