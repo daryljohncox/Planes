@@ -12,6 +12,7 @@
 #include <WiFiClientSecure.h>
 #include <WiFiManager.h>
 #include <ESPmDNS.h>
+#include <HTTPClient.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
@@ -20,7 +21,7 @@
 
 // ---------- settings (defaults; changeable on the Wi-Fi setup page) ----------
 static String mapUrl = "https://planes-steel.vercel.app/";
-static String hubIp = "10.0.0.75";          // tried first; otherwise the Hub is found by mDNS
+static String hubIp = "10.0.0.75";          // preferred Hub; checked to really be a Nest Hub before casting
 
 static const char *DASHCAST_APP = "84912283";  // DashCast receiver (what catt uses for websites)
 static const char *DASHCAST_NS = "urn:x-cast:com.madmod.dashcast";
@@ -80,7 +81,7 @@ static void draw(bool force = false) {
   String big, small;
   uint16_t col = TFT_WHITE;
   if (WiFi.status() != WL_CONNECTED) { big = "No Wi-Fi"; col = C_RED; small = "Reconnecting..."; }
-  else if (!connected) { big = "Finding Hub"; col = C_GREY; small = hubIp.length() ? "Trying " + hubIp : "Searching the network"; }
+  else if (!connected) { big = "Finding Hub"; col = C_GREY; small = "Looking for a Nest Hub"; }
   else if (paused) { big = "Paused"; col = C_GREY; small = "Tap Resume to put the map back"; }
   else if (hub == H_OURS) { big = "Map is on"; col = C_GREEN; small = hubName; }
   else if (hub == H_OTHER) { big = "Hub busy"; col = C_ORANGE; small = otherApp + " is playing"; }
@@ -258,24 +259,50 @@ static void castPoll() {
 }
 
 // ---------- finding and connecting to the Hub ----------
-static bool findHub() {
-  IPAddress ip;
-  if (hubIp.length() && ip.fromString(hubIp)) {
-    WiFiClient probe;
-    if (probe.connect(ip, 8009, 2000)) { probe.stop(); hubAddr = ip; return true; }
+// Only ever casts to a Nest Hub (or Nest Hub Max): never to a TV, Chromecast or speaker.
+// 1) mDNS: Cast devices announce their model ("md"); take a Hub, preferring the saved IP.
+// 2) If mDNS finds nothing, use the saved IP only if the device there says it's a Hub
+//    (its /setup/eureka_info page on port 8008). An IP that DHCP has handed to a TV is refused.
+static bool isHubModel(const String &md) { return md.indexOf("Hub") >= 0; }
+static String modelAt(IPAddress ip) {
+  HTTPClient http;
+  http.setConnectTimeout(2000);
+  http.setTimeout(2000);
+  if (!http.begin("http://" + ip.toString() + ":8008/setup/eureka_info?params=name,device_info")) return "";
+  String model;
+  if (http.GET() == 200) {
+    JsonDocument d;
+    if (!deserializeJson(d, http.getString())) {
+      model = d["device_info"]["model_name"] | "";
+      String nm = d["name"] | "";
+      if (isHubModel(model) && nm.length()) hubName = nm;
+    }
   }
+  http.end();
+  return model;
+}
+static bool findHub() {
+  IPAddress saved;
+  bool haveSaved = hubIp.length() && saved.fromString(hubIp);
   int n = MDNS.queryService("googlecast", "tcp");
   int pick = -1;
   for (int i = 0; i < n; i++) {
-    String md = MDNS.txt(i, "md");
-    if (pick < 0 || md.indexOf("Hub") >= 0) pick = i;   // prefer a Nest Hub over speakers / TVs
-    if (md.indexOf("Hub") >= 0) break;
+    if (!isHubModel(MDNS.txt(i, "md"))) continue;          // skip TVs, Chromecasts, speakers
+    if (pick < 0) pick = i;
+    if (haveSaved && MDNS.IP(i) == saved) { pick = i; break; }
   }
-  if (pick < 0) return false;
-  hubAddr = MDNS.IP(pick);
-  String fn = MDNS.txt(pick, "fn");
-  if (fn.length()) hubName = fn;
-  return true;
+  if (pick >= 0) {
+    hubAddr = MDNS.IP(pick);
+    String fn = MDNS.txt(pick, "fn");
+    if (fn.length()) hubName = fn;
+    return true;
+  }
+  if (haveSaved) {
+    String model = modelAt(saved);
+    if (isHubModel(model)) { hubAddr = saved; return true; }
+    Serial.println("Saved IP " + hubIp + " is not a Nest Hub (" + (model.length() ? model : String("no answer")) + ")");
+  }
+  return false;
 }
 
 static uint32_t nextConnect = 0;
