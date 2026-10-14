@@ -15,8 +15,8 @@
   Optional URL settings (add after the link, e.g. ?r=40&zoom=9):
     lat, lon   centre point             (default Marton: -40.07, 175.38)
     r          radius in nautical miles (default 60, max 250)
-    zoom       fixed map zoom, e.g. 9   (default: Sanson at the map edge)
-    edge       km from home to the map edge in the home view (default 17, Marton to Sanson)
+    zoom       fixed map zoom, e.g. 9   (default: 25 km to the map edge)
+    edge       km from home to the map edge in the home view (default 25; Sanson is about 17)
     name       place name in header     (default Marton)
     tz         clock time zone          (default Pacific/Auckland)
     map        natgeo (default atlas style), topo (OpenTopoMap), dark (original dark map)
@@ -268,7 +268,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var LON = num("lon", 175.38);
   var RADIUS_NM = Math.min(num("r", 60), 250);
   var ZOOM = num("zoom", 0);
-  var HOME_EDGE_KM = num("edge", 17);   // home view: zoomed so this distance reaches the map edge (Marton → Sanson ≈ 17 km)
+  var HOME_EDGE_KM = num("edge", 25);   // home view: zoomed so this distance reaches the map edge (Sanson is ≈ 17 km)
   var PLACE = P.get("name") || "Marton";
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
@@ -474,7 +474,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     }
     // Centre the map first – Leaflet can't draw shapes until it has a view
     if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
-    // Default: Marton in the middle, zoomed so HOME_EDGE_KM (Sanson) is at the edge of the map
+    // Default: Marton in the middle, zoomed so HOME_EDGE_KM reaches the edge of the map
     else map.setView([LAT, LON], map.getBoundsZoom(L.latLng(LAT, LON).toBounds(HOME_EDGE_KM * 1000 * 2), false, L.point(12, 12)));
     // Range rings follow the search area; the green dot stays at home
     var LIGHT = MAP_STYLE !== "dark";
