@@ -15,7 +15,8 @@
   Optional URL settings (add after the link, e.g. ?r=40&zoom=9):
     lat, lon   centre point             (default Marton: -40.07, 175.38)
     r          radius in nautical miles (default 60, max 250)
-    zoom       fixed map zoom, e.g. 9   (default: fit the radius ring)
+    ring       home circle radius in km (default 40); planes are still shown out to r
+    zoom       fixed map zoom, e.g. 9   (default: fit the home circle)
     name       place name in header     (default Marton)
     tz         clock time zone          (default Pacific/Auckland)
     map        natgeo (default atlas style), topo (OpenTopoMap), dark (original dark map)
@@ -267,7 +268,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var LON = num("lon", 175.38);
   var RADIUS_NM = Math.min(num("r", 60), 250);
   var ZOOM = num("zoom", 0);
-  var HOME_ZOOM_IN = 0.75;   // extra zoom on top of "fit the whole circle" when no ?zoom= is given
+  var RING_KM = num("ring", 40);   // circle drawn round home; the home view is zoomed to fit it
   var PLACE = P.get("name") || "Marton";
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
@@ -473,12 +474,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     }
     // Centre the map first – Leaflet can't draw shapes until it has a view
     if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
-    // Default: fit the search circle, then zoom in a bit more (HOME_ZOOM_IN levels) so the local area is bigger
-    else map.setView([LAT, LON], map.getBoundsZoom(L.latLng(LAT, LON).toBounds(RADIUS_NM * 1852 * 2), false, L.point(12, 12)) + HOME_ZOOM_IN);
-    // Range rings follow the search area; the green dot stays at home
+    // Default: fit the home circle (RING_KM) on screen
+    else map.setView([LAT, LON], map.getBoundsZoom(L.latLng(LAT, LON).toBounds(RING_KM * 1000 * 2), false, L.point(12, 12)));
+    // The ring is the home circle at home, and shows the search area once you move away; the house pin stays at home
     var LIGHT = MAP_STYLE !== "dark";
-    var ring = L.circle([LAT, LON], { radius: RADIUS_NM * 1852, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
-    var ring25 = L.circle([LAT, LON], { radius: 25000, color: LIGHT ? "#2b4a6f" : "#2c3d50", weight: LIGHT ? 1.5 : 1, opacity: LIGHT ? 0.6 : 1, fill: false, dashArray: "2 6", interactive: false }).addTo(map);
+    var ring = L.circle([LAT, LON], { radius: RING_KM * 1000, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
     // Home marker: house pin with the place name, sitting exactly at the centre of the rings when at home
     L.marker([LAT, LON], { interactive: false, keyboard: false, zIndexOffset: -500, icon: L.divIcon({ className: "",
       iconSize: [30, 38], iconAnchor: [15, 38],
@@ -516,8 +516,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         var halfDiagNm = Math.max(c.distanceTo(b.getNorthEast()), c.distanceTo(b.getSouthWest())) / 1852;
         cLat = c.lat; cLon = c.lng; cR = Math.max(10, Math.min(250, halfDiagNm)); away = true;
       }
-      ring.setLatLng([cLat, cLon]).setRadius(cR * 1852);
-      ring25.setLatLng([cLat, cLon]);
+      ring.setLatLng([cLat, cLon]).setRadius(away ? cR * 1852 : RING_KM * 1000);
     }
     function touched(refetch) {
       clearTimeout(idleT);
@@ -541,7 +540,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     };
     mapUnfollow = function () { touched(true); };
     var refetchT = null;
-    map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
+    map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
     map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
     L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); goHome(); });
