@@ -5,6 +5,8 @@
 // receiver and loads the map. It leaves the Hub alone while another app (Spotify, YouTube…) is cast.
 //
 // Screen: status + "Cast now" and "Pause" buttons. Hold the BOOT button 3 s to redo Wi-Fi setup.
+// The same screen is served as a web page at http://<CYD IP>/ (shown top right on the CYD), so a phone
+// home-screen shortcut can show the status and press the same buttons.
 // First boot: join the "PlaneCast-Setup" Wi-Fi from a phone and pick your home Wi-Fi.
 
 #include <Arduino.h>
@@ -13,6 +15,7 @@
 #include <WiFiManager.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <WebServer.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
@@ -42,6 +45,7 @@ SPIClass touchSpi(VSPI);
 XPT2046_Touchscreen touch(XPT_CS, XPT_IRQ);
 Preferences prefs;
 WiFiClientSecure sock;
+WebServer web(80);
 
 // ---------- state ----------
 enum HubState { H_NONE, H_IDLE, H_OURS, H_OTHER };
@@ -76,19 +80,27 @@ static void drawBtn(const Btn &b, const char *label, uint16_t fill) {
   tft.drawString(label, b.x + b.w / 2, b.y + b.h / 2, 4);
 }
 
+// What the screen (and the web page) says right now
+struct Status { String big, small; uint16_t col; };
+static Status status() {
+  Status st; st.col = TFT_WHITE;
+  if (WiFi.status() != WL_CONNECTED) { st.big = "No Wi-Fi"; st.col = C_RED; st.small = "Reconnecting..."; }
+  else if (!connected) { st.big = "Finding Hub"; st.col = C_GREY; st.small = "Looking for a Nest Hub"; }
+  else if (paused) { st.big = "Paused"; st.col = C_GREY; st.small = "Tap Resume to put the map back"; }
+  else if (hub == H_OURS) { st.big = "Map is on"; st.col = C_GREEN; st.small = hubName; }
+  else if (hub == H_OTHER) { st.big = "Hub busy"; st.col = C_ORANGE; st.small = otherApp + " is playing"; }
+  else if (launchAt) { st.big = "Casting..."; st.col = C_ORANGE; st.small = hubName; }
+  else { st.big = "Hub idle"; st.col = C_ORANGE; st.small = "Casting the map shortly"; }
+  if (note.length()) st.small = note;
+  return st;
+}
+
 static String lastDrawn;
 static void draw(bool force = false) {
-  String big, small;
-  uint16_t col = TFT_WHITE;
-  if (WiFi.status() != WL_CONNECTED) { big = "No Wi-Fi"; col = C_RED; small = "Reconnecting..."; }
-  else if (!connected) { big = "Finding Hub"; col = C_GREY; small = "Looking for a Nest Hub"; }
-  else if (paused) { big = "Paused"; col = C_GREY; small = "Tap Resume to put the map back"; }
-  else if (hub == H_OURS) { big = "Map is on"; col = C_GREEN; small = hubName; }
-  else if (hub == H_OTHER) { big = "Hub busy"; col = C_ORANGE; small = otherApp + " is playing"; }
-  else if (launchAt) { big = "Casting..."; col = C_ORANGE; small = hubName; }
-  else { big = "Hub idle"; col = C_ORANGE; small = "Casting the map shortly"; }
-  if (note.length()) small = note;
-  String key = big + "|" + small + (paused ? "|P" : "|");
+  Status st = status();
+  String big = st.big, small = st.small;
+  uint16_t col = st.col;
+  String key = big + "|" + small + (paused ? "|P" : "|") + WiFi.localIP().toString();
   if (!force && key == lastDrawn) return;
   lastDrawn = key;
 
@@ -96,6 +108,10 @@ static void draw(bool force = false) {
   tft.setTextDatum(TL_DATUM);
   tft.setTextColor(C_GREY, C_BG);
   tft.drawString("Plane map -> Nest Hub", 12, 10, 2);
+  if (WiFi.status() == WL_CONNECTED) {         // address of the phone page
+    tft.setTextDatum(TR_DATUM);
+    tft.drawString(WiFi.localIP().toString(), 308, 10, 2);
+  }
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(col, C_BG);
   tft.drawString(big, 160, 80, 4);
@@ -354,6 +370,92 @@ static void wifiSetup(bool forcePortal) {
   if (!ok) ESP.restart();
 }
 
+// ---------- buttons (screen and web page) ----------
+static void pressPause() {
+  paused = !paused;
+  note = "";
+  if (paused && hub == H_OURS) stopMap();
+  if (!paused) idleSince = millis() - RECAST_DELAY_MS;  // recast straight away if idle
+}
+static void pressCast() {
+  paused = false;
+  forceLaunch = true;
+}
+
+// ---------- phone page: same status and buttons as the screen ----------
+static const char PAGE[] PROGMEM = R"HTML(<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#081020"><meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json"><link rel="icon" href="/icon.svg">
+<title>PlaneCast</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:#081020;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ display:flex;flex-direction:column;padding:16px;gap:16px}
+.top{display:flex;justify-content:space-between;color:#8a8a8a;font-size:15px}
+.mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+#big{font-size:44px;font-weight:700}
+#small{font-size:19px}
+#ip{font-size:15px;color:#8a8a8a}
+.btns{display:flex;gap:14px}
+button{flex:1;height:88px;border:0;border-radius:16px;background:#303030;color:#fff;font:600 26px system-ui,sans-serif}
+button:active{filter:brightness(1.4)}
+button.go{background:#2bd432;color:#000}
+#err{color:#ff3030;text-align:center;font-size:15px;min-height:18px}
+</style></head><body>
+<div class="top"><span>Plane map &rarr; Nest Hub</span><span id="me"></span></div>
+<div class="mid"><div id="big">&hellip;</div><div id="small"></div><div id="ip"></div></div>
+<div id="err"></div>
+<div class="btns"><button id="cast">Cast now</button><button id="pause">Pause</button></div>
+<script>
+var $=function(i){return document.getElementById(i)};
+function show(s){$("big").textContent=s.big;$("big").style.color=s.color;$("small").textContent=s.small;
+ $("ip").textContent=s.hubIp||"";$("me").textContent=location.host;
+ $("pause").textContent=s.paused?"Resume":"Pause";$("pause").className=s.paused?"go":"";$("err").textContent=""}
+function get(){fetch("/status",{cache:"no-store"}).then(function(r){return r.json()}).then(show)
+ .catch(function(){$("err").textContent="Can't reach the CYD - is your phone on the home Wi-Fi?"})}
+function press(w){fetch("/"+w,{method:"POST"}).then(function(r){return r.json()}).then(show).catch(get)}
+$("cast").onclick=function(){press("cast")};$("pause").onclick=function(){press("pause")};
+get();setInterval(get,2000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)get()});
+</script></body></html>)HTML";
+
+static const char ICON[] PROGMEM = R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="20" fill="#13284a"/><path transform="translate(18 18) scale(2.5)" fill="#ffd84a" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>)SVG";
+
+static String hex565(uint16_t c) {   // screen colour -> CSS colour
+  char b[8];
+  snprintf(b, sizeof b, "#%02x%02x%02x", ((c >> 11) & 0x1F) * 255 / 31, ((c >> 5) & 0x3F) * 255 / 63, (c & 0x1F) * 255 / 31);
+  return b;
+}
+static void sendStatus() {
+  Status st = status();
+  JsonDocument d;
+  d["big"] = st.big; d["small"] = st.small; d["color"] = hex565(st.col);
+  d["paused"] = paused;
+  d["hubIp"] = connected ? hubAddr.toString() : "";
+  String s; serializeJson(d, s);
+  web.sendHeader("Cache-Control", "no-store");
+  web.send(200, "application/json", s);
+}
+static void webSetup() {
+  web.on("/", HTTP_GET, []() { web.send_P(200, "text/html", PAGE); });
+  web.on("/status", HTTP_GET, sendStatus);
+  web.on("/cast", HTTP_POST, []() { pressCast(); draw(true); sendStatus(); });
+  web.on("/pause", HTTP_POST, []() { pressPause(); draw(true); sendStatus(); });
+  web.on("/icon.svg", HTTP_GET, []() { web.sendHeader("Cache-Control", "max-age=86400"); web.send_P(200, "image/svg+xml", ICON); });
+  web.on("/manifest.json", HTTP_GET, []() {
+    web.send(200, "application/manifest+json",
+      "{\"name\":\"PlaneCast\",\"short_name\":\"PlaneCast\",\"start_url\":\"/\",\"display\":\"standalone\","
+      "\"background_color\":\"#081020\",\"theme_color\":\"#081020\","
+      "\"icons\":[{\"src\":\"/icon.svg\",\"sizes\":\"any\",\"type\":\"image/svg+xml\"}]}");
+  });
+  web.onNotFound([]() { web.sendHeader("Location", "/"); web.send(302, "text/plain", ""); });
+  web.begin();
+  MDNS.addService("http", "tcp", 80);
+}
+
 // ---------- touch ----------
 static bool hit(const Btn &b, int x, int y) { return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h; }
 
@@ -364,15 +466,8 @@ static void handleTouch() {
   lastTap = millis();
   TS_Point p = touch.getPoint();
   int x = map(p.x, 200, 3700, 0, 320), y = map(p.y, 240, 3800, 0, 240);
-  if (hit(BTN_PAUSE, x, y)) {
-    paused = !paused;
-    note = "";
-    if (paused && hub == H_OURS) stopMap();
-    if (!paused) idleSince = millis() - RECAST_DELAY_MS;  // recast straight away if idle
-  } else if (hit(BTN_CAST, x, y)) {
-    paused = false;
-    forceLaunch = true;
-  }
+  if (hit(BTN_PAUSE, x, y)) pressPause();
+  else if (hit(BTN_CAST, x, y)) pressCast();
   draw(true);
 }
 
@@ -392,6 +487,7 @@ void setup() {
   WiFi.setHostname("planecast-cyd");
   wifiSetup(false);
   MDNS.begin("planecast-cyd");
+  webSetup();
   draw(true);
 }
 
@@ -404,6 +500,7 @@ void loop() {
   } else bootDown = 0;
 
   handleTouch();
+  web.handleClient();
 
   if (WiFi.status() != WL_CONNECTED) { connected = false; draw(); delay(200); return; }
 

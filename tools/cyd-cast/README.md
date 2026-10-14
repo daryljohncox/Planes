@@ -5,6 +5,7 @@ Firmware for an ESP32 "Cheap Yellow Display" (ESP32-2432S028R, 2.8" ILI9341) tha
 - Holds a Cast connection to the Hub (TLS port 8009, the protocol catt uses) and watches its status.
 - When the Hub returns to its idle screen for 5 s, it launches DashCast (`84912283`) and loads the map with `force: true`, like `catt cast_site`.
 - Leaves the Hub alone while another app is cast. Screen buttons: **Cast now** (takes over) and **Pause / Resume**.
+- Phone page: the CYD serves the same status and Cast now / Pause buttons at `http://<CYD IP>/` (the IP shows top right on its screen). Open it in Chrome on the phone and use "Add to Home screen". The phone must be on the home Wi-Fi.
 - First boot opens a `PlaneCast-Setup` hotspot (WiFiManager) for Wi-Fi, map address and Hub IP. It only ever casts to a Nest Hub: mDNS devices whose model ("md") contains "Hub", preferring the saved IP; if mDNS finds none, the saved IP is used only when its `:8008/setup/eureka_info` says it is a Hub (so a TV that took the old IP is never cast to). Hold BOOT 3 s to reopen setup.
 
 ## Install
