@@ -263,7 +263,7 @@ static bool findHub() {
     if (md.indexOf("Hub") >= 0) break;
   }
   if (pick < 0) return false;
-  hubAddr = MDNS.address(pick);
+  hubAddr = MDNS.IP(pick);
   String fn = MDNS.txt(pick, "fn");
   if (fn.length()) hubName = fn;
   return true;
