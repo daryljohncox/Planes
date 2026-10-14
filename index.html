@@ -14,8 +14,8 @@
 
   Optional URL settings (add after the link, e.g. ?r=40&zoom=9):
     lat, lon   centre point             (default Marton: -40.07, 175.38)
-    r          radius in nautical miles (default 60, max 250)
-    ring       home circle radius in km (default 40); planes are still shown out to r
+    r          plane search radius in nautical miles (default: the home circle, 40 km ≈ 22 nm; max 250)
+    ring       home circle radius in km (default 40)
     zoom       fixed map zoom, e.g. 9   (default: fit the home circle)
     name       place name in header     (default Marton)
     tz         clock time zone          (default Pacific/Auckland)
@@ -266,9 +266,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function num(k, d) { var v = parseFloat(P.get(k)); return isNaN(v) ? d : v; }
   var LAT = num("lat", -40.07);
   var LON = num("lon", 175.38);
-  var RADIUS_NM = Math.min(num("r", 60), 250);
-  var ZOOM = num("zoom", 0);
   var RING_KM = num("ring", 40);   // circle drawn round home; the home view is zoomed to fit it
+  var RADIUS_NM = Math.min(num("r", RING_KM / 1.852), 250);   // plane search radius at home (defaults to the circle)
+  var ZOOM = num("zoom", 0);
   var PLACE = P.get("name") || "Marton";
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
