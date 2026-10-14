@@ -24,16 +24,22 @@
   <p class="sub">Turns an ESP32 "Cheap Yellow Display" into a little box that keeps the plane map on your Nest Hub.</p>
 
   <div class="box">
-    <esp-web-install-button manifest="manifest.json">
-      <button slot="activate">Install on the CYD</button>
+    <esp-web-install-button manifest="manifest-2usb.json">
+      <button slot="activate">Install: CYD with two USB ports</button>
       <span slot="unsupported">This browser can't flash devices. Open this page in Chrome or Edge on a computer.</span>
       <span slot="not-allowed">This page needs to be opened over https.</span>
+    </esp-web-install-button>
+    <br><br>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install: CYD with one USB port</button>
+      <span slot="unsupported"></span>
+      <span slot="not-allowed"></span>
     </esp-web-install-button>
   </div>
 
   <ol>
     <li>Plug the CYD into a computer with a USB data cable and open this page in Chrome or Edge.</li>
-    <li>Press <b>Install on the CYD</b>, pick the port that appears (often "USB Serial" or "CH340"), and confirm. It takes about a minute.</li>
+    <li>Press the button for your board, pick the port that appears (often "USB Serial" or "CH340"), and confirm. It takes about a minute.</li>
     <li>Plug the CYD into any USB charger near the Hub. Its screen will say <b>Wi-Fi setup</b>.</li>
     <li>On your phone, join the Wi-Fi called <b>PlaneCast-Setup</b>. A page opens (or go to <code>192.168.4.1</code>). Pick your home Wi-Fi, type its password and press Save.</li>
     <li>The CYD finds the Hub and puts the map up. From then on it recasts within a few seconds whenever the Hub drops back to the clock or photos.</li>

@@ -1,0 +1,8 @@
+{
+  "name": "PlaneCast CYD (two USB ports)",
+  "version": "1",
+  "new_install_prompt_erase": true,
+  "builds": [
+    { "chipFamily": "ESP32", "parts": [{ "path": "planecast-cyd2usb.bin", "offset": 0 }] }
+  ]
+}

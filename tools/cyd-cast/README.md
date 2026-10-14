@@ -13,4 +13,4 @@ Easiest: open https://planes-steel.vercel.app/cyd/ in Chrome on a computer and p
 
 From source: `pio run -d tools/cyd-cast -t upload`, then `pio device monitor` for the log.
 
-Some newer CYD boards (two USB ports) use an ST7789 screen: swap `-DILI9341_2_DRIVER=1` for `-DST7789_DRIVER=1` in `platformio.ini`.
+Boards with two USB ports (USB-C + micro-USB) have an inverted panel: use env `cyd2usb` (adds `-DTFT_INVERSION_ON`). If yours shows an ST7789 instead, swap `-DILI9341_2_DRIVER=1` for `-DST7789_DRIVER=1`.
