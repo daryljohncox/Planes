@@ -476,8 +476,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (ZOOM > 0) map.setView([LAT, LON], ZOOM);
     // Default: fit the home circle (RING_KM) on screen
     else map.setView([LAT, LON], map.getBoundsZoom(L.latLng(LAT, LON).toBounds(RING_KM * 1000 * 2), false, L.point(12, 12)));
-    // The ring is the home circle at home, and shows the search area once you move away; the house pin stays at home
+    // Lock the map to the home circle: no zooming out past it or panning away from it
+    var ringBounds = L.latLng(LAT, LON).toBounds(RING_KM * 1000 * 2);
+    map.setMinZoom(map.getZoom());
+    map.setMaxBounds(ringBounds);
+    map.options.maxBoundsViscosity = 1;
+    // Home circle, with everything outside it greyed out
     var LIGHT = MAP_STYLE !== "dark";
+    var hole = [];
+    for (var i = 0; i < 120; i++) {
+      var t = i / 120 * 2 * Math.PI, dy = RING_KM / 111.32 * Math.cos(t);
+      hole.push([LAT + dy, LON + RING_KM / (111.32 * Math.cos(LAT * Math.PI / 180)) * Math.sin(t)]);
+    }
+    L.polygon([[[-89, -179], [-89, 179], [89, 179], [89, -179]], hole], { stroke: false, fillColor: LIGHT ? "#1b2633" : "#000", fillOpacity: LIGHT ? 0.55 : 0.6, interactive: false }).addTo(map);
     var ring = L.circle([LAT, LON], { radius: RING_KM * 1000, color: LIGHT ? "#2b4a6f" : "#3a5068", weight: LIGHT ? 2 : 1, opacity: LIGHT ? 0.75 : 1, fill: false, dashArray: "4 6", interactive: false }).addTo(map);
     // Home marker: house pin with the place name, sitting exactly at the centre of the rings when at home
     L.marker([LAT, LON], { interactive: false, keyboard: false, zIndexOffset: -500, icon: L.divIcon({ className: "",
@@ -516,7 +527,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         var halfDiagNm = Math.max(c.distanceTo(b.getNorthEast()), c.distanceTo(b.getSouthWest())) / 1852;
         cLat = c.lat; cLon = c.lng; cR = Math.max(10, Math.min(250, halfDiagNm)); away = true;
       }
-      ring.setLatLng([cLat, cLon]).setRadius(away ? cR * 1852 : RING_KM * 1000);
     }
     function touched(refetch) {
       clearTimeout(idleT);
@@ -540,7 +550,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     };
     mapUnfollow = function () { touched(true); };
     var refetchT = null;
-    map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
     map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
     L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); goHome(); });
@@ -736,7 +745,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var z = map.getZoom(), b = map.getBounds().pad(0.1), maxTier = z >= 9 ? 3 : z >= 6 ? 2 : 1, n = 0;
     for (var i = 0; i < AIRPORTS.length && n < 300; i++) {
       var r = AIRPORTS[i];
-      if (r[5] > maxTier || !b.contains([r[2], r[3]])) continue;
+      if (r[5] > maxTier || !b.contains([r[2], r[3]]) || distKm(LAT, LON, r[2], r[3]) > RING_KM) continue;   // only inside the home circle
       var a = apt(r), label = esc(a.code) + (z >= 9 ? "<small>" + esc(a.name) + "</small>" : "");
       var html = '<div class="apt t' + a.tier + (a.mil ? " mil" : "") + '"><i></i><b>' + label + "</b></div>";
       L.marker([a.lat, a.lon], {
@@ -1040,7 +1049,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             homeDist: distKm(LAT, LON, a.lat, a.lon),
             homeBrg: bearing(LAT, LON, a.lat, a.lon)
           };
-        }).sort(function (x, y) { return x.dist - y.dist; });
+        }).filter(function (a) { return a.homeDist <= RING_KM; })   // only planes inside the home circle
+          .sort(function (x, y) { return x.dist - y.dist; });
         recordTrails(aircraft);
         lastOk = Date.now();
         setStatus("");
@@ -1056,7 +1066,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var shownImg = null;
   function render() {
     $("place").textContent = selHex && selLast ? selLast.callsign : away ? "map centre" : PLACE;
-    $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR * 1.852) + " km";
+    $("count").textContent = aircraft.length + " aircraft within " + Math.round(Math.min(cR * 1.852, RING_KM)) + " km";
 
     // Selected plane (keep showing its last data if it drops out of one or two polls)
     var f = null, fi = -1;
@@ -1075,7 +1085,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       if (!aircraft.length) {
         $("list").style.display = "none";
         $("empty").style.display = "flex";
-        $("empty").textContent = "No aircraft within " + Math.round(cR * 1.852) + " km right now";
+        $("empty").textContent = "No aircraft within " + Math.round(Math.min(cR * 1.852, RING_KM)) + " km right now";
       } else {
         $("empty").style.display = "none";
         $("list").style.display = "flex";
