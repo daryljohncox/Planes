@@ -20,9 +20,17 @@
     name       place name in header     (default Marton)
     tz         clock time zone          (default Pacific/Auckland)
     map        natgeo (default atlas style), topo (OpenTopoMap), dark (original dark map)
+    announce   km from the map centre at which planes are announced (default 25)
+    voice      0 = start with spoken announcements off (also switchable with the Voice button)
+
+  Voice: announcements are spoken by api/tts.js (Microsoft's free en-NZ "Molly" voice, Google's as backup),
+  with the device's own voice as a last resort. Settings, rare plane list and hourly counts are kept in
+  localStorage on the device. Rain radar: RainViewer. Space station: orbit from api/iss.js + satellite.js.
 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- satellite.js: space station position and passes (optional; loads in the background) -->
+<script async src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 <style>
 :root{--bg:#0b1016;--panel:#141b24;--deep:#0e141c;--txt:#e8eef5;--dim:#8b9aab;--acc:#ff9a1f;--plane:#ffd84a;--good:#4cd37a;--bad:#ff6b6b}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -203,6 +211,75 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   color:var(--acc);font:700 2.6vh system-ui,sans-serif;text-align:left;cursor:pointer}
 #back:active{background:#1c2633}
 .empty{display:none;flex:1;align-items:center;justify-content:center;text-align:center;padding:2vh;color:var(--dim);font-size:3vh}
+
+/* right-hand map buttons: voice settings, rare plane list, rain radar */
+#mapbtns2{position:absolute;top:1.4vh;right:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-end}
+.mbtn{display:flex;height:7vh;min-height:44px;padding:0 1.8vh;gap:1vh;align-items:center;font:700 2.6vh system-ui,sans-serif;
+  line-height:1;white-space:nowrap;color:#fff;background:#13284a;border:0;border-radius:1.2vh;cursor:pointer;
+  box-shadow:0 0 0 2px rgba(255,255,255,.5),0 .6vh 1.6vh rgba(0,0,0,.6)}
+.mbtn:active{background:#24406b}
+.mbtn svg{width:3.4vh;height:3.4vh}
+.mbtn.off{background:#3a4552;color:#c9d2dc}
+.mbtn b{min-width:3vh;padding:0 .8vh;border-radius:1vh;background:#ffd400;color:#000;font-size:2.2vh;line-height:3vh;text-align:center}
+.mbtn b:empty{display:none}
+.pop{position:absolute;top:1.4vh;right:1.4vh;bottom:1.4vh;z-index:1003;width:min(50vw,470px);display:flex;flex-direction:column;
+  background:var(--panel);color:var(--txt);border-radius:1.4vh;box-shadow:0 0 0 2px rgba(255,255,255,.15),0 1vh 3vh rgba(0,0,0,.7);overflow:hidden}
+.pop[hidden]{display:none}
+.pop .kh{display:flex;align-items:center;justify-content:space-between;padding:1.2vh 1.8vh;font-weight:700;font-size:2.6vh;border-bottom:1px solid #1d2632}
+.pop .kh button{border:0;background:#1d2632;color:#fff;font-size:2.6vh;width:5.6vh;height:5.6vh;border-radius:1vh;cursor:pointer}
+.pop .pb{flex:1;overflow-y:auto;touch-action:pan-y}
+.tg{display:flex;align-items:center;gap:1.6vh;width:100%;padding:1.1vh 1.8vh;border:0;border-bottom:1px solid #1d2632;background:none;
+  color:var(--txt);font:inherit;text-align:left;cursor:pointer}
+.tg span{flex:1}
+.tg b{display:block;font-size:2.4vh}
+.tg small{display:block;font-size:1.8vh;color:var(--dim)}
+.tg i{flex:0 0 auto;width:7vh;height:3.8vh;border-radius:2vh;background:#3a4552;position:relative;transition:background .2s}
+.tg i:after{content:"";position:absolute;top:.4vh;left:.4vh;width:3vh;height:3vh;border-radius:50%;background:#fff;transition:left .2s}
+.tg.on i{background:var(--good)}
+.tg.on i:after{left:3.6vh}
+.tg.sub{padding-left:4vh}
+.pop .note{padding:1.2vh 1.8vh;font-size:1.9vh;color:var(--dim)}
+.pop .act{margin:1.2vh 1.8vh;padding:1.2vh 2vh;border:0;border-radius:1vh;background:var(--acc);color:#000;font:700 2.4vh system-ui,sans-serif;cursor:pointer}
+.rr{display:flex;align-items:center;gap:1.4vh;width:100%;padding:1vh 1.8vh;border:0;border-bottom:1px solid #1d2632;background:none;
+  color:var(--txt);font:inherit;text-align:left;cursor:pointer}
+.rr .rm{flex:1;min-width:0}
+.rr .rc{display:block;font-size:2.6vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .rt{display:block;font-size:1.9vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .rw{font-size:1.9vh;color:var(--dim);text-align:right;white-space:nowrap;line-height:1.35}
+.rr .rw .now{color:var(--good);font-weight:700}
+.rr .star{color:#ffd400;font-size:3vh}
+/* pop-up card for the plane being announced */
+#card{position:absolute;left:1.4vh;right:1.4vh;bottom:3vh;z-index:1002;display:flex;gap:1.6vh;align-items:center;
+  max-width:min(92%,640px);margin:0 auto;padding:1.2vh;background:rgba(14,20,28,.94);color:var(--txt);border-radius:1.4vh;
+  box-shadow:0 0 0 2px var(--acc),0 1vh 3vh rgba(0,0,0,.7);cursor:pointer;animation:cardin .35s ease-out}
+#card[hidden]{display:none}
+#card.rare{box-shadow:0 0 0 3px #ffd400,0 1vh 3vh rgba(0,0,0,.7)}
+#card.emg{box-shadow:0 0 0 3px #ff0000,0 1vh 3vh rgba(0,0,0,.7)}
+@keyframes cardin{from{transform:translateY(4vh);opacity:0}to{transform:none;opacity:1}}
+#card .cph{flex:0 0 auto;width:22vh;height:14vh;border-radius:1vh;overflow:hidden;background:#05080c;display:flex;align-items:center;justify-content:center;color:#2a3a4d}
+#card .cph img{width:100%;height:100%;object-fit:cover;display:block}
+#card .cph svg{width:9vh;height:9vh}
+#card .ctx{flex:1;min-width:0}
+#card .ccs{font-size:3.4vh;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#card .ccs small{font-size:2vh;font-weight:700;color:#ffd400;margin-left:1vh;text-transform:uppercase;letter-spacing:.06em}
+#card .csay{font-size:2.3vh;color:#cfd8e3;line-height:1.3}
+/* announced plane pulses; rare planes wear a gold ring */
+@keyframes pulse{0%{transform:scale(.6);opacity:.95}100%{transform:scale(2.4);opacity:0}}
+.pl.flash:before{content:"";position:absolute;inset:-6px;border-radius:50%;border:4px solid var(--acc);animation:pulse 1.2s ease-out infinite}
+.pl.rare:after{content:"";position:absolute;inset:-5px;border-radius:50%;border:3px solid #ffd400;box-shadow:0 0 6px #ffd400}
+/* tap-to-hear button in the plane details */
+#hear{flex:0 0 auto;align-self:center;width:6vh;height:6vh;border:0;border-radius:1vh;background:#1d2632;color:var(--acc);cursor:pointer;display:flex;align-items:center;justify-content:center}
+#hear:active{background:#2a3646}
+#hear svg{width:3.8vh;height:3.8vh}
+/* space station */
+.iss{position:relative;width:34px;height:34px;filter:drop-shadow(0 0 2px #000)}
+.iss svg{width:34px;height:34px}
+.iss span{position:absolute;top:33px;left:50%;transform:translateX(-50%);font:700 11px system-ui,sans-serif;color:#000;background:#fff;padding:0 4px;border-radius:3px;white-space:nowrap}
+#issbadge{position:absolute;left:1.4vh;bottom:1.4vh;z-index:1000;padding:.8vh 1.4vh;border-radius:1vh;background:rgba(19,40,74,.92);color:#fff;
+  font:700 2.2vh system-ui,sans-serif;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+#issbadge[hidden]{display:none}
+#voicehint{position:absolute;left:50%;top:10vh;transform:translateX(-50%);z-index:1003;padding:1vh 2vh;border-radius:1vh;background:var(--acc);color:#000;font:700 2.4vh system-ui,sans-serif}
+#voicehint[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -221,6 +298,22 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
       <button id="keybtn" type="button"><span class="dots"><i></i><i></i><i></i></span><span>Colour key</span></button>
     </div>
+    <div id="mapbtns2">
+      <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
+      <button id="rarebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="#ffd400"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><span>Rare planes</span><b id="rarecount"></b></button>
+      <button id="rainbtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 10.5A6.5 6.5 0 0 0 6.6 8.2 5 5 0 0 0 7 18h11a4 4 0 0 0 1-7.5z" opacity=".9"/><path d="M8 19.5l-1 3M12 19.5l-1 3M16 19.5l-1 3" stroke="#7fd0ff" stroke-width="1.8" stroke-linecap="round"/></svg><span>Rain</span></button>
+    </div>
+    <div id="voicepanel" class="pop" hidden>
+      <div class="kh"><span>Voice announcements</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="pb" id="voicerows"></div>
+    </div>
+    <div id="rarepanel" class="pop" hidden>
+      <div class="kh"><span>Rare plane list</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="pb" id="rarerows"></div>
+    </div>
+    <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
+    <div id="issbadge" hidden></div>
+    <div id="voicehint" hidden>Tap the screen once to turn the voice on</div>
     <div id="key" hidden>
       <div class="kh"><span>Colour key</span><button id="keyclose" type="button" aria-label="Close">✕</button></div>
       <div id="keyrows"></div>
@@ -240,7 +333,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       <div class="credit" id="credit" style="display:none"></div>
     </div>
     <div class="info" id="info">
-      <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div></div>
+      <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div><button id="hear" type="button" aria-label="Read out"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button></div>
       <div class="ty" id="ty">&nbsp;</div>
       <div class="rte" id="rte"></div>
       <div class="csn" id="csn"></div>
@@ -665,7 +758,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 
   function iconFor(a, on) {
     var size = on ? 36 : 28;
-    var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
+    var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + (flashUntil[a.hex] > Date.now() ? " flash" : "") +
+      (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
       Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg><span>' + esc(a.callsign) + "</span></div>";
     return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
@@ -1050,6 +1144,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
           for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) { selLast = aircraft[i]; follow(selLast, false); }
         }
         render();
+        voiceCheck(aircraft);
       })
       .catch(function () { setStatus("Plane feed busy – retrying"); });
   }
@@ -1150,6 +1245,534 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   });
   $("back").addEventListener("click", unselect);
 
+  // ---------- saved settings (per device; the page still works if storage is blocked) ----------
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem("planes." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem("planes." + k, JSON.stringify(v)); } catch (e) { /* not saved */ } }
+  };
+
+  // ---------- NZ towns (towns.json, from GeoNames – rebuild with tools/build-towns.py) ----------
+  var TOWNS = [];
+  fetch("towns.json").then(function (r) { return r.ok ? r.json() : []; }).then(function (t) { TOWNS = t || []; }).catch(function () {});
+  function nearestTown(lat, lon) {
+    var best = null, bd = 1e9;
+    for (var i = 0; i < TOWNS.length; i++) {
+      var t = TOWNS[i];
+      if (Math.abs(t[1] - lat) > 1.5 || Math.abs(t[2] - lon) > 2) continue;
+      var d = distKm(lat, lon, t[1], t[2]);
+      if (d < bd) { bd = d; best = t; }
+    }
+    return best ? { name: best[0], lat: best[1], lon: best[2] } : null;
+  }
+
+  // ---------- voice settings ----------
+  // Groups you can switch on/off. Emergencies and rare planes are always announced while the voice is on.
+  var VOICE_ROWS = [
+    ["on", "Announcements", "Say each plane as it comes within " + num("announce", 25) + " km of the map centre"],
+    ["com", "Airlines & cargo", "", 1], ["mil", "Military", "", 1], ["res", "Rescue & police", "", 1],
+    ["light", "Light aircraft", "Private, trainers, topdressing, gliders", 1], ["heli", "Helicopters", "", 1],
+    ["overhead", "Overhead soon", "“Passing over " + PLACE + " in about 2 minutes”"],
+    ["rare", "Rare planes", "Military visitors, vintage & unusual types (with a special chime)"],
+    ["iss", "Space station", "Announce passes over " + PLACE + " 5 minutes ahead"],
+    ["hourly", "Hourly summary", "How many planes passed in the last hour"],
+    ["chime", "Chime first", "Ding-dong before each announcement"]
+  ];
+  var VOICE = Object.assign({ on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
+    iss: true, hourly: true, chime: true }, store.get("voice", {}));
+  if (P.get("voice") === "0") VOICE.on = false;
+  var ANNOUNCE_KM = num("announce", 25);
+  function groupOf(a) {
+    if (a.cat === "res" || a.cat === "pol") return "res";
+    if (a.heli) return "heli";
+    if (a.cat === "com" || a.cat === "cgo") return "com";
+    if (a.cat === "mil" || a.cat === "mtr") return "mil";
+    return "light";
+  }
+  function drawVoicePanel() {
+    $("voicerows").innerHTML = VOICE_ROWS.map(function (r) {
+      return '<button type="button" class="tg' + (VOICE[r[0]] ? " on" : "") + (r[3] ? " sub" : "") + '" data-k="' + r[0] + '"><span><b>' + esc(r[1]) + "</b>" +
+        (r[2] ? "<small>" + esc(r[2]) + "</small>" : "") + "</span><i></i></button>";
+    }).join("") + '<button type="button" class="act" id="voicetest">Test the voice</button>' +
+      '<div class="note">Voice: Molly (New Zealand English). Tap a plane, then the speaker button, to hear it any time.</div>';
+    $("voicebtn").classList.toggle("off", !VOICE.on);
+  }
+  $("voicerows").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button") : null;
+    if (!b) return;
+    if (b.id === "voicetest") { unlockAudio(); say({ text: "Kia ora. This is how plane announcements will sound." }); return; }
+    var k = b.getAttribute("data-k");
+    VOICE[k] = !VOICE[k];
+    store.set("voice", VOICE);
+    if (k === "on" && !VOICE.on) stopSpeaking();
+    drawVoicePanel();
+  });
+
+  // Panels on the right (voice settings, rare list): only one open at a time
+  function showPop(id) {
+    ["voicepanel", "rarepanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
+    if (id === "rarepanel" && !$(id).hidden) drawRareList();
+  }
+  [["voicebtn", "voicepanel"], ["rarebtn", "rarepanel"]].forEach(function (b) {
+    $(b[0]).addEventListener("click", function (e) { e.stopPropagation(); showPop(b[1]); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
+    b.addEventListener("click", function (e) { e.stopPropagation(); showPop(null); });
+  });
+  ["mapbtns2", "voicepanel", "rarepanel", "card", "issbadge"].forEach(function (id) {
+    ["mousedown", "touchstart", "pointerdown", "dblclick", "wheel", "click"].forEach(function (ev) {
+      $(id).addEventListener(ev, function (e) { e.stopPropagation(); });
+    });
+  });
+
+  // ---------- sound: chimes (Web Audio) and the voice (api/tts.js, else the device's own voice) ----------
+  var actx = null, player = new Audio(), audioOk = false;
+  player.preload = "auto";
+  function ctx() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
+    if (actx && actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  // Some browsers only allow sound after a tap: the first tap anywhere unlocks it
+  function unlockAudio() {
+    ctx();
+    if (!audioOk) {
+      player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+      var p = player.play();
+      if (p && p.then) p.then(function () { audioOk = true; $("voicehint").hidden = true; }).catch(function () {});
+    }
+  }
+  document.addEventListener("pointerdown", unlockAudio, true);
+  document.addEventListener("touchstart", unlockAudio, true);
+  // kind: "ding" (normal), "rare" (rising three notes), "alarm" (emergency), "space"
+  var CHIMES = {
+    ding: [[880, 0, .45], [698.5, .42, .7]],
+    rare: [[784, 0, .25], [988, .2, .25], [1319, .4, .6]],
+    alarm: [[960, 0, .22], [640, .25, .22], [960, .5, .22], [640, .75, .22], [960, 1, .22], [640, 1.25, .4]],
+    space: [[523, 0, .35], [784, .3, .35], [1047, .6, .7]]
+  };
+  function chime(kind) {
+    var c = ctx(), notes = CHIMES[kind] || CHIMES.ding;
+    if (!c || c.state !== "running") return Promise.resolve();
+    var t0 = c.currentTime + 0.05, end = 0;
+    notes.forEach(function (n) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = kind === "alarm" ? "square" : "sine";
+      o.frequency.value = n[0];
+      g.gain.setValueAtTime(0.0001, t0 + n[1]);
+      g.gain.exponentialRampToValueAtTime(kind === "alarm" ? 0.18 : 0.35, t0 + n[1] + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + n[1] + n[2]);
+      o.connect(g).connect(c.destination);
+      o.start(t0 + n[1]); o.stop(t0 + n[1] + n[2] + 0.05);
+      end = Math.max(end, n[1] + n[2]);
+    });
+    return new Promise(function (ok) { setTimeout(ok, (end + 0.15) * 1000); });
+  }
+  var TTS = (P.get("feed") || "/api/feed").replace(/feed$/, "tts");
+  function speakDevice(text) {   // backup: the browser's own voice, a female NZ / AU / UK one if it has one
+    return new Promise(function (ok) {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return ok();
+      var u = new SpeechSynthesisUtterance(text), vs = speechSynthesis.getVoices() || [];
+      var pick = function (re) { for (var i = 0; i < vs.length; i++) if (re.test(vs[i].lang + " " + vs[i].name)) return vs[i]; return null; };
+      u.voice = pick(/en[-_]NZ/i) || pick(/en[-_]AU.*(female|karen|catherine)/i) || pick(/en[-_]AU/i) || pick(/en[-_]GB.*female/i) || null;
+      u.lang = u.voice ? u.voice.lang : "en-NZ";
+      u.onend = u.onerror = function () { ok(); };
+      speechSynthesis.speak(u);
+      setTimeout(ok, 20000);
+    });
+  }
+  function speakText(text) {
+    return new Promise(function (ok) {
+      var done = false, finish = function () { if (!done) { done = true; clearTimeout(guard); ok(); } };
+      var guard = setTimeout(finish, 30000);
+      player.onended = finish;
+      player.onerror = function () { if (!done) { done = true; clearTimeout(guard); speakDevice(text).then(ok); } };
+      player.src = TTS + "?text=" + encodeURIComponent(text);
+      var p = player.play();
+      if (p && p.catch) p.catch(function (e) {
+        if (e && e.name === "NotAllowedError") { $("voicehint").hidden = false; finish(); }   // needs a tap first
+        else if (!done) { done = true; clearTimeout(guard); speakDevice(text).then(ok); }
+      });
+    });
+  }
+  function stopSpeaking() {
+    sayQ.length = 0;
+    try { player.pause(); } catch (e) {}
+    if (window.speechSynthesis) speechSynthesis.cancel();
+  }
+  // Announcements queue: one at a time, never over each other.
+  // Item: { text | make(): text, chime, hex, card: {cs, tag, kind}, wait(): true while not ready (e.g. route lookup) }
+  var sayQ = [], saying = false;
+  function say(item) {
+    if (item.urgent) sayQ.unshift(item); else sayQ.push(item);
+    while (sayQ.length > 6) sayQ.splice(sayQ.length - 2, 1);   // backlog: drop older ordinary ones, keep the newest
+    item.at = Date.now();
+    nextSay();
+  }
+  function nextSay() {
+    if (saying || !sayQ.length) return;
+    var item = sayQ[0];
+    if (item.wait && item.wait() && Date.now() - item.at < 8000) { setTimeout(nextSay, 500); return; }
+    sayQ.shift();
+    var text = item.make ? item.make() : item.text;
+    if (!text) { nextSay(); return; }
+    saying = true;
+    if (item.card) showCard(item, text);
+    if (item.hex) { flashUntil[item.hex] = Date.now() + 12000; render(); }
+    (VOICE.chime || item.chime === "alarm" ? chime(item.chime || "ding") : Promise.resolve())
+      .then(function () { return speakText(text); })
+      .then(function () { saying = false; setTimeout(nextSay, 600); });
+  }
+
+  // ---------- what to say ----------
+  // Airline names by ICAO callsign prefix (backup when the route database doesn't name the airline)
+  var AIRLINES = { ANZ: "Air New Zealand", QFA: "Qantas", JST: "Jetstar", VOZ: "Virgin Australia", SDA: "Sounds Air",
+    CVA: "Air Chathams", OGN: "Origin Air", FJI: "Fiji Airways", SIA: "Singapore Airlines", CPA: "Cathay Pacific",
+    UAE: "Emirates", QTR: "Qatar Airways", CES: "China Eastern", CSN: "China Southern", CCA: "Air China", AAL: "American",
+    UAL: "United", DAL: "Delta", HAL: "Hawaiian", LAN: "LATAM", KAL: "Korean Air", JAL: "Japan Airlines", ANA: "A N A",
+    MAS: "Malaysia Airlines", THA: "Thai", AIC: "Air India", TGW: "Scoot", AVN: "Air Vanuatu", RON: "Nauru Airlines",
+    ACA: "Air Canada", EVA: "EVA Air", CAL: "China Airlines", ACI: "Aircalin", TPC: "Air Calédonie", SBI: "S7",
+    AFN: "Air Freight New Zealand", APK: "Parcelair", AWK: "Airwork", PST: "Airwork", TNZ: "Texel Air", FDX: "FedEx",
+    UPS: "UPS", DHL: "DHL", DHK: "DHL", EFA: "Express Freighters", TFX: "Toll", KIW: "Air Force", ASY: "Australian Air Force" };
+  var COMPASS8 = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+  function dir8(d) { return COMPASS8[Math.round(((d % 360) + 360) % 360 / 45) % 8]; }
+  function plainNum(n) { return Math.round(n).toLocaleString("en-NZ"); }
+  function spokenType(a, hasOperator) {
+    var t = a.type && TYPES[a.type] ? TYPES[a.type][0] : a.desc ? titleCase(a.desc) : "";
+    if (hasOperator) t = t.replace(/^(Airbus|Boeing) /, "");
+    t = t.replace(/(\d)-(\d)/g, "$1 $2").replace(/\s*\(.*?\)/g, "");
+    if (a.heli && !/heli|copter/i.test(t)) t = (t ? t + " " : "") + "helicopter";
+    return t || (a.heli ? "helicopter" : "plane");
+  }
+  function whoSays(a) {
+    var cs = (a.flight || "").toUpperCase(), pre = cs.slice(0, 3), r = ADHOC[a.cat] ? null : routeCache[a.flight];
+    var airline = r && r !== "pending" && r.airline ? r.airline : (a.cat === "com" || a.cat === "cgo" || a.cat === "mil" || a.cat === "mtr") ? AIRLINES[pre] || "" : "";
+    var co = csOp(cs), lead = "";
+    if (a.cat === "res") lead = co ? co.name : a.heli ? "Rescue" : "Air ambulance";
+    else if (a.cat === "pol") lead = "Police";
+    else if (airline) lead = airline;
+    else if (a.cat === "mil") lead = "Military";
+    else if (a.cat === "mtr") lead = "Military trainer";
+    else if (a.cat === "trn") lead = "Training";
+    else if (a.cat === "ag") lead = "Topdressing";
+    else if (a.cat === "gld") lead = "";
+    else if (a.cat === "cgo") lead = "Cargo";
+    else if (a.cat === "com") lead = cs.replace(/(\D)(\d)/, "$1 $2");
+    else lead = "Private";
+    var ty = spokenType(a, !!airline || a.cat === "res" || a.cat === "pol");
+    if (a.cat === "res" && !a.heli && ty === "plane") ty = "";
+    return (lead + " " + ty).trim();
+  }
+  function whereTo(a) {
+    var st = airportStatus(a);
+    if (st && st.text === "Arriving") return "landing at " + shortApt(st.ap.name);
+    var r = ADHOC[a.cat] ? null : routeCache[a.flight];
+    if (r && r !== "pending" && r.to && routeFits(a, r, st)) return "to " + (r.to.city || shortApt(r.to.name || r.to.iata || ""));
+    return "";
+  }
+  function shortApt(n) { return String(n || "").replace(/\s*(International|Intl\.?|Domestic|Regional)?\s*(Airport|Aerodrome|Airfield|Air Base|Airbase)\b.*$/i, "").trim(); }
+  function whereNow(a, c) {
+    c = c || [cLat, cLon];
+    var t = nearestTown(c[0], c[1]);
+    if (!t) return Math.round(a.dist) + " kilometres " + dir8(a.brg) + " of the map centre";
+    var d = distKm(t.lat, t.lon, a.lat, a.lon);
+    if (d < 1.5) return "over " + t.name;
+    return Math.round(d) + " kilometres " + dir8(bearing(t.lat, t.lon, a.lat, a.lon)) + " of " + t.name;
+  }
+  function heightSpeed(a) {
+    if (a.alt === "ground") return "on the ground";
+    var out = [];
+    if (typeof a.alt === "number") out.push(plainNum(Math.max(0, Math.round(a.alt * 0.3048 / 50) * 50)) + " metres");
+    if (a.gs != null) out.push(plainNum(Math.round(a.gs * 1.852 / 10) * 10) + " kilometres per hour");
+    return out.join(", ");
+  }
+  // "Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, 1,500 metres, 250 kilometres per hour."
+  function sentence(a, c) {
+    var parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), whereNow(a, c), heightSpeed(a)].filter(Boolean);
+    return parts.join(", ") + ".";
+  }
+  function latest(hex, fallback) {
+    for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === hex) return aircraft[i];
+    return fallback;
+  }
+  function routeWait(a) {
+    return function () { if (!ADHOC[a.cat] && a.flight && routeFor(latest(a.hex, a)) === "pending") return true; return false; };
+  }
+  function sayPlane(a, opts) {
+    opts = opts || {};
+    var c = [cLat, cLon];   // the map centre when it was noticed (the map may move before it's spoken)
+    say({
+      hex: a.hex, chime: opts.chime || "ding", urgent: opts.urgent,
+      card: { kind: opts.kind || "", tag: opts.tag || "" },
+      wait: routeWait(a),
+      make: function () { var b = latest(a.hex, a); return (opts.prefix || "") + (opts.body ? opts.body(b) : sentence(b, c)); }
+    });
+    photoFor(a);   // start loading the photo for the pop-up card
+  }
+  $("hear").addEventListener("click", function (e) {
+    e.stopPropagation(); unlockAudio();
+    if (selLast) sayPlane(selLast, { urgent: true });
+  });
+
+  // ---------- pop-up card ----------
+  var cardT = null, cardHex = null;
+  function showCard(item, text) {
+    var a = item.hex ? latest(item.hex, null) : null;
+    cardHex = item.hex || null;
+    $("card").className = item.card.kind || "";
+    $("card").hidden = false;
+    $("cardcs").innerHTML = esc(a ? a.callsign : item.card.title || "") + (item.card.tag ? "<small>" + esc(item.card.tag) + "</small>" : "");
+    $("cardsay").textContent = text;
+    var ph = a ? photoFor(a) : null;
+    $("cardph").innerHTML = ph ? '<img alt="" referrerpolicy="no-referrer" src="' + esc(ph.src) + '">' :
+      item.card.icon || ('<svg viewBox="0 0 24 24" fill="currentColor">' + (a && a.heli ? HELI_SHAPE : '<path d="' + PLANE_PATH + '"/>') + "</svg>");
+    clearTimeout(cardT);
+    cardT = setTimeout(function () { $("card").hidden = true; }, 10000);
+  }
+  $("card").addEventListener("click", function () {
+    $("card").hidden = true;
+    if (cardHex && latest(cardHex, null)) select(cardHex);
+  });
+
+  // ---------- rare planes ----------
+  // Ohakea's everyday aircraft (T-6C trainers, NH90 / A109 helicopters, King Airs, P-8s, Hercules) aren't rare;
+  // any other military aircraft is, and so are these types.
+  var COMMON_MIL = { TEX2: 1, NH90: 1, A109: 1, B350: 1, BE20: 1, P8: 1, C30J: 1, C130: 1 };
+  var RARE_TYPES = {
+    DC3: "Vintage", C47: "Vintage", DC3T: "Vintage", DC4: "Vintage", DC6: "Vintage", SPIT: "Warbird", P51: "Warbird",
+    HURI: "Warbird", P40: "Warbird", T6: "Vintage Harvard", T28: "Warbird", CORS: "Warbird", F4U: "Warbird",
+    YK52: "Vintage", YAK3: "Warbird", YK11: "Warbird", AN2: "Vintage", B17: "Warbird", B25: "Warbird", CAT: "Vintage flying boat",
+    DH82: "Vintage Tiger Moth", DH83: "Vintage", DH84: "Vintage", DH89: "Vintage", DH60: "Vintage", DHC1: "Vintage Chipmunk",
+    MOSQ: "Warbird", VAMP: "Vintage jet", L39: "Jet trainer", L29: "Jet trainer", JPRO: "Vintage jet", MIG: "Warbird",
+    HUNT: "Vintage jet", STRK: "Vintage jet", A4: "Vintage jet", PITS: "Aerobatic", EXTR: "Aerobatic", E300: "Aerobatic",
+    A388: "Giant", B748: "Giant", B744: "Jumbo", B74S: "Jumbo", A124: "Giant", A225: "Giant", AN12: "Unusual", IL76: "Unusual",
+    C5M: "Giant", C17: "Big military", A400: "Big military", B52: "Bomber", K35R: "Tanker", KC2: "Tanker", A332M: "Tanker",
+    E3TF: "Radar plane", E7WW: "Radar plane", BLCF: "Dreamlifter", BELF: "Beluga", A3ST: "Beluga", A337: "Beluga XL",
+    CONC: "Concorde", GLF6: "Business jet", GL7T: "Business jet", BBJ: "Business jet", ZEPP: "Airship", SHIP: "Airship"
+  };
+  function rareWhy(a) {
+    if (a.cat === "emg") return "Emergency";
+    if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
+    if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type])) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
+    return "";
+  }
+  function isRare(a) { return !!rareWhy(a); }
+  var rareList = store.get("rare", []);   // [{hex, cs, ty, reg, why, t}], newest first
+  var RARE_KEEP = 200, RARE_SAME_MS = 6 * 3600000;
+  function rareCount() {   // today's rare planes on the button
+    var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    var n = rareList.filter(function (r) { return r.t >= d0.getTime(); }).length;
+    $("rarecount").textContent = n ? n : "";
+  }
+  function noteRare(a, why) {   // returns true if it's new (not seen in the last 6 hours)
+    for (var i = 0; i < rareList.length; i++) {
+      if (rareList[i].hex === a.hex && Date.now() - rareList[i].t < RARE_SAME_MS) { rareList[i].last = Date.now(); return false; }
+    }
+    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: Date.now(), last: Date.now() });
+    if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
+    store.set("rare", rareList);
+    rareCount();
+    if (!$("rarepanel").hidden) drawRareList();
+    return true;
+  }
+  function when(t) {
+    var d = new Date(t), now = new Date(), opt = { timeZone: TZ, hour: "2-digit", minute: "2-digit" };
+    var time; try { time = d.toLocaleTimeString("en-NZ", opt); } catch (e) { time = d.toLocaleTimeString(); }
+    if (d.toDateString() === now.toDateString()) return time;
+    try { return d.toLocaleDateString("en-NZ", { timeZone: TZ, day: "numeric", month: "short" }) + " " + time; } catch (e) { return d.toLocaleDateString() + " " + time; }
+  }
+  function drawRareList() {
+    $("rarerows").innerHTML = rareList.length ? rareList.map(function (r) {
+      var here = latest(r.hex, null);
+      return '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+        '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+        esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+    }).join("") : '<div class="note">No rare planes yet. Military visitors, vintage aircraft, warbirds and unusual types will show up here.</div>';
+  }
+  $("rarerows").addEventListener("click", function (e) {
+    var r = e.target.closest ? e.target.closest(".rr") : null;
+    if (r && latest(r.getAttribute("data-hex"), null)) { showPop(null); select(r.getAttribute("data-hex")); }
+  });
+
+  // ---------- deciding what to announce (runs after every feed update) ----------
+  var flashUntil = {};
+  var zoneSeen = {}, zoneKey = null, ZONE_QUIET_MS = 30 * 60000;   // hex -> last time inside the announce circle
+  var emgSeen = {}, overSeen = {};
+  var passLog = store.get("passes", []);   // [time, rare] for the hourly summary
+  function logPass(rare) {
+    var cut = Date.now() - 2 * 3600000;
+    passLog = passLog.filter(function (p) { return p[0] > cut; });
+    passLog.push([Date.now(), rare ? 1 : 0]);
+    store.set("passes", passLog);
+  }
+  // Will it pass within 2 km of home in the next 5 minutes? Returns minutes, or 0.
+  function overheadIn(a) {
+    if (a.alt === "ground" || a.gs == null || a.gs < 50 || a.track == null || a.homeDist < 3) return 0;
+    var x = (a.lon - LON) * 111.32 * Math.cos(rad(LAT)), y = (a.lat - LAT) * 110.57;
+    var v = a.gs * 1.852 / 60, vx = v * Math.sin(rad(a.track)), vy = v * Math.cos(rad(a.track));
+    var t = -(x * vx + y * vy) / (v * v);
+    if (t < 0.3 || t > 5) return 0;
+    var miss = Math.hypot(x + vx * t, y + vy * t);
+    return miss < 2 ? t : 0;
+  }
+  function voiceCheck(list) {
+    var now = Date.now(), following = !!(selHex && selLast);
+    // A new search area (map moved, or following a plane) starts quietly: planes already there aren't "new"
+    var key = following ? "follow" : cLat.toFixed(3) + "," + cLon.toFixed(3);
+    var fresh = key !== zoneKey;
+    zoneKey = key;
+    list.forEach(function (a) {
+      // Emergencies: alarm, announce and select the plane, wherever it is
+      if (a.cat === "emg") {
+        if (!emgSeen[a.hex] || now - emgSeen[a.hex] > ZONE_QUIET_MS) {
+          if (VOICE.on) sayPlane(a, { chime: "alarm", urgent: true, kind: "emg", tag: "Emergency", prefix: "Emergency! " });
+          if (!selHex) select(a.hex);
+        }
+        emgSeen[a.hex] = now;
+      }
+      // Rare planes: added to the list, announced once
+      var why = rareWhy(a), rareNew = false;
+      if (why && noteRare(a, why)) {
+        rareNew = true;
+        if (VOICE.on && VOICE.rare && why !== "Emergency") sayPlane(a, { chime: "rare", kind: "rare", tag: why, prefix: "Rare plane. " + why + ". " });
+      }
+      // Overhead soon
+      var mins = overheadIn(a);
+      if (mins && !fresh && (!overSeen[a.hex] || now - overSeen[a.hex] > ZONE_QUIET_MS)) {
+        overSeen[a.hex] = now;
+        if (VOICE.on && VOICE.overhead && VOICE[groupOf(a)]) sayPlane(a, { tag: "Overhead soon", body: function (b) {
+          var m = Math.max(1, Math.round(overheadIn(b) || mins));
+          return whoSays(b) + ", passing over " + PLACE + " in about " + (m === 1 ? "a minute" : m + " minutes") +
+            (typeof b.alt === "number" ? ", at " + plainNum(Math.round(b.alt * 0.3048 / 50) * 50) + " metres." : ".");
+        } });
+      }
+      // Coming within ANNOUNCE_KM of the map centre
+      if (a.dist > ANNOUNCE_KM) return;
+      var back = !zoneSeen[a.hex] || now - zoneSeen[a.hex] > ZONE_QUIET_MS;
+      zoneSeen[a.hex] = now;
+      if (!back || fresh || following || a.alt === "ground") return;
+      logPass(why);
+      if (rareNew || a.cat === "emg") return;   // already announced
+      if (VOICE.on && VOICE[groupOf(a)]) sayPlane(a);
+    });
+    Object.keys(zoneSeen).forEach(function (h) { if (now - zoneSeen[h] > 2 * ZONE_QUIET_MS) delete zoneSeen[h]; });
+  }
+
+  // ---------- hourly summary ----------
+  var lastHour = store.get("hourSaid", "");
+  function hourly() {
+    var parts;
+    try { parts = new Intl.DateTimeFormat("en-NZ", { timeZone: TZ, hour: "numeric", minute: "numeric", hour12: false }).formatToParts(new Date()); }
+    catch (e) { return; }
+    var h = +parts.find(function (p) { return p.type === "hour"; }).value, m = +parts.find(function (p) { return p.type === "minute"; }).value;
+    var key = new Date().toDateString() + " " + h;
+    if (m !== 0 || key === lastHour) return;
+    lastHour = key; store.set("hourSaid", key);
+    if (!VOICE.on || !VOICE.hourly) return;
+    var cut = Date.now() - 3600000, n = 0, r = 0;
+    passLog.forEach(function (p) { if (p[0] > cut) { n++; r += p[1]; } });
+    var h12 = h % 12 || 12;
+    var text = "It's " + h12 + " o'clock. " + (n === 0 ? "No planes passed by in the last hour." :
+      "In the last hour, " + n + (n === 1 ? " plane" : " planes") + " passed by" + (r ? ", including " + r + " rare " + (r === 1 ? "one" : "ones") : "") + ".");
+    say({ text: text, chime: "ding" });
+  }
+
+  // ---------- rain radar (RainViewer, free) ----------
+  var rainLayer = null, rainOn = store.get("rain", true);
+  function loadRain() {
+    if (!map) return;
+    fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var past = j && j.radar && j.radar.past, f = past && past[past.length - 1];
+        if (!f) return;
+        var url = j.host + f.path + "/256/{z}/{x}/{y}/2/1_1.png";
+        if (!rainLayer) rainLayer = L.tileLayer(url, { opacity: 0.55, maxNativeZoom: 7, maxZoom: 18, zIndex: 5,
+          attribution: "Rain radar © RainViewer" });
+        else rainLayer.setUrl(url);
+        if (rainOn && !map.hasLayer(rainLayer)) rainLayer.addTo(map);
+      })
+      .catch(function () { /* radar is optional */ });
+  }
+  function drawRainBtn() { $("rainbtn").classList.toggle("off", !rainOn); }
+  $("rainbtn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    rainOn = !rainOn; store.set("rain", rainOn); drawRainBtn();
+    if (rainLayer) { if (rainOn) rainLayer.addTo(map); else map.removeLayer(rainLayer); }
+    else if (rainOn) loadRain();
+  });
+
+  // ---------- International Space Station (satellite.js + orbit from api/iss.js) ----------
+  var issRec = null, issMarker = null, issTrack = null, issPasses = [], issSaid = store.get("issSaid", 0);
+  var ISS_ICON = '<svg viewBox="0 0 34 34"><rect x="1" y="11" width="9" height="12" fill="#2f6fd6" stroke="#fff" stroke-width="1"/>' +
+    '<rect x="24" y="11" width="9" height="12" fill="#2f6fd6" stroke="#fff" stroke-width="1"/><rect x="10" y="16" width="14" height="2" fill="#fff"/>' +
+    '<rect x="13" y="12" width="8" height="10" rx="2" fill="#e8e8e8" stroke="#333" stroke-width="1"/></svg>';
+  function loadIss() {
+    getJSON((P.get("feed") || "/api/feed").replace(/feed$/, "iss")).then(function (j) {
+      if (window.satellite && j && j.tle1) { issRec = satellite.twoline2satrec(j.tle1, j.tle2); findPasses(); issTick(); }
+      else if (!window.satellite) setTimeout(loadIss, 30000);
+    }).catch(function () { setTimeout(loadIss, 600000); });
+  }
+  function issAt(date) {
+    var pv = satellite.propagate(issRec, date);
+    if (!pv || !pv.position) return null;
+    var gmst = satellite.gstime(date), geo = satellite.eciToGeodetic(pv.position, gmst);
+    var look = satellite.ecfToLookAngles({ longitude: rad(LON), latitude: rad(LAT), height: 0.1 }, satellite.eciToEcf(pv.position, gmst));
+    return { lat: satellite.degreesLat(geo.latitude), lon: satellite.degreesLong(geo.longitude), km: geo.height,
+      el: look.elevation * 180 / Math.PI, az: (look.azimuth * 180 / Math.PI + 360) % 360 };
+  }
+  // Passes over home in the next 12 hours that climb at least 10° above the horizon
+  function findPasses() {
+    if (!issRec) return;
+    var out = [], cur = null, t0 = Date.now();
+    for (var s = 0; s < 12 * 3600; s += 20) {
+      var p = issAt(new Date(t0 + s * 1000));
+      if (!p) continue;
+      if (p.el > 0) {
+        if (!cur) cur = { start: t0 + s * 1000, az: p.az, max: p.el, maxAz: p.az };
+        if (p.el > cur.max) { cur.max = p.el; cur.maxAz = p.az; }
+        cur.end = t0 + s * 1000;
+      } else if (cur) { if (cur.max >= 10) out.push(cur); cur = null; }
+    }
+    issPasses = out;
+  }
+  function issTick() {
+    if (!issRec || !map) return;
+    var now = new Date(), p = issAt(now);
+    if (!p) return;
+    if (!issMarker) {
+      issMarker = L.marker([p.lat, p.lon], { interactive: false, keyboard: false, zIndexOffset: 2000,
+        icon: L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="iss">' + ISS_ICON + "<span>Space station</span></div>" }) });
+      issTrack = L.polyline([], { color: "#2f6fd6", weight: 2, opacity: 0.8, dashArray: "6 6", interactive: false });
+    }
+    var inView = map.getBounds().pad(0.5).contains([p.lat, p.lon]);
+    if (inView) {
+      issMarker.setLatLng([p.lat, p.lon]).addTo(map);
+      var line = [];
+      for (var m = -8; m <= 8; m++) { var q = issAt(new Date(now.getTime() + m * 60000)); if (q) line.push([q.lat, q.lon]); }
+      issTrack.setLatLngs(line).addTo(map);
+    } else { map.removeLayer(issMarker); map.removeLayer(issTrack); }
+    // Badge while it's above the horizon here
+    $("issbadge").hidden = p.el <= 0;
+    if (p.el > 0) $("issbadge").textContent = "Space station overhead · look " + dir8(p.az) + " · " + Math.round(p.el) + "° up";
+    // Announce 5 minutes before it rises
+    issPasses.forEach(function (ps) {
+      var lead = ps.start - now.getTime();
+      if (lead > 0 && lead <= 5 * 60000 && issSaid !== ps.start) {
+        issSaid = ps.start; store.set("issSaid", ps.start);
+        if (VOICE.on && VOICE.iss) {
+          var mins = Math.max(1, Math.round(lead / 60000));
+          say({ chime: "space", card: { title: "Space station", tag: "Coming over", icon: ISS_ICON },
+            text: "The International Space Station will pass over " + PLACE + " in " + (mins === 1 ? "about a minute" : mins + " minutes") +
+              ". Look " + dir8(ps.az) + ". It will climb to " + Math.round(ps.max) + " degrees, highest in the " + dir8(ps.maxAz) + "." });
+        }
+      }
+    });
+  }
+
+  drawVoicePanel();
+  drawRainBtn();
+  rareCount();
+
   // ---------- clock / timers ----------
   function tick() {
     try {
@@ -1167,6 +1790,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   setInterval(poll, REFRESH_MS);
   tick();
   setInterval(tick, 1000);
+  setInterval(hourly, 15000);
+  setInterval(nextSay, 2000);
+  loadRain();
+  setInterval(loadRain, 10 * 60000);
+  loadIss();
+  setInterval(issTick, 5000);
+  setInterval(findPasses, 10 * 60000);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
   setTimeout(function () { location.reload(); }, 3600000);
 })();

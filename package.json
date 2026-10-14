@@ -1,0 +1,8 @@
+{
+  "name": "planes",
+  "private": true,
+  "description": "Nest Hub plane map. No build step: index.html is the app, api/ are Vercel functions.",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
