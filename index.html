@@ -185,6 +185,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .tag.gld{background:#0f9488;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
 .rc .tag{font-size:1.5vh}
+.csn{font-size:2.2vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csn:empty{display:none}
 .aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
 .rt .apsl{color:#9fd8ff}
 .row .ri svg{width:100%;height:100%}
@@ -240,6 +242,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div></div>
       <div class="ty" id="ty">&nbsp;</div>
       <div class="rte" id="rte"></div>
+      <div class="csn" id="csn"></div>
       <div class="aps" id="aps"></div>
       <div class="stats">
         <div class="st"><span>Altitude</span><b id="sAlt">—</b></div>
@@ -580,14 +583,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     "SPTR|BDOG|FBIR|BMBR|HLTK|FSCN|FBD|BOM|HTK|BDG)\\d" +
     "|LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|MEDIVAC|HEMS|WESTPAC|HELIMED|CAREFLIGHT|AIRMED|LIFEFLT|RFDS|" +
     "COASTGUARD|FIREBIRD|BOMBER|HELITAK|FIRESPOT|BIRDOG)");
-  // Operator shown when the databases don't know the aircraft (telephony names from the same register)
-  var RESCUE_OPS = { AMD: "Airmed", CFL: "Care Flight", CGD: "Coastguard", CGS: "Coastguard", NLD: "Coastguard",
-    FDC: "Flydoc", GIS: "Gismed", HLM: "Helimed", HLR: "Helilink Rescue", KRC: "RNZAF Kiwi Rescue", LFT: "Life Flight",
-    MDK: "Medicare", MDL: "Medilift", NAR: "North Air Rescue", PHL: "Philips Search & Rescue", WPR: "Westpac Rescue",
-    CFH: "CareFlight", RFD: "Royal Flying Doctor", FD: "Royal Flying Doctor", PLC: "NZ Police", EAGLE: "NZ Police Eagle" };
-  function operatorOf(cs) {
+  // What rescue / police call signs mean: [telephony name, operator] from CAA NZ's call sign register.
+  // Shown on a line under the route.
+  var CS_OPS = {
+    AMD: ["Airmed", "Garden City Helicopters"], CFL: ["Care Flight", "Helicopter Services (BOP)"],
+    CGD: ["Coastguard", "Coastguard Northern Region"], CGS: ["Coastguard South", "Southern Wings"],
+    NLD: ["Air Patrol", "Northland Coastguard Air Patrol"], FDC: ["Flydoc", "GCH Aviation"],
+    GIS: ["Gismed", "Air Gisborne"], HLM: ["Helimed", "Northland Emergency Services Trust"],
+    HLR: ["Helilink Rescue", "Helilink"], KRC: ["Kiwi Rescue", "NZ Defence Force"],
+    LFT: ["Life Flight", "Air Freight NZ"], MDK: ["Medicare", "Air Wanganui Commuter"],
+    MDL: ["Medilift", "Air Freight NZ"], NAR: ["North Air Rescue", "Airwork"],
+    PHL: ["Philips", "Search and Rescue Ltd"], WPR: ["Westpac Rescue", "Auckland Regional Rescue Helicopter Trust"],
+    PLC: ["Police", "New Zealand Police"], EAGLE: ["Eagle", "NZ Police helicopter"],
+    CFH: ["CareFlight", "CareFlight (Australia)"], RFD: ["Flying Doctor", "Royal Flying Doctor Service"],
+    FD: ["Flying Doctor", "Royal Flying Doctor Service"]
+  };
+  function csOp(cs) {
     var m = /^([A-Z]{2,5})\d/.exec(cs || "") || /^(EAGLE)/.exec(cs || "");
-    return m && RESCUE_OPS[m[1]] || "";
+    return m && CS_OPS[m[1]] ? { code: m[1], name: CS_OPS[m[1]][0], op: CS_OPS[m[1]][1] } : null;
   }
   // Police: NZ PLC / EAGLE; AU POLAIR (POL, POLR) and Federal Police (FPL, FPLR)
   var POLICE_CS = /^((PLC|POL|POLR|FPL|FPLR)\d|EAGLE|POLICE|POLAIR|FEDPOL)/;
@@ -1014,7 +1027,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             reg: a.r || "",
             type: a.t || "",
             desc: a.desc || "",
-            owner: a.owner || operatorOf((a.flight || "").trim().toUpperCase()),
+            owner: a.owner || "",
             country: countryOf(a.hex),
             lat: a.lat, lon: a.lon,
             alt: typeof alt === "number" || alt === "ground" ? alt : null,
@@ -1084,6 +1097,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     $("ty").textContent = line;
     var st = airportStatus(f);
     showRoute(f, st);
+    var co = csOp(f.flight.toUpperCase());
+    $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
     $("aps").textContent = st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
