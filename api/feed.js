@@ -1,12 +1,17 @@
 // Vercel serverless relay: fetches nearby aircraft for the Nest Hub page.
-// Tries adsb.lol first, then adsb.fi. Answers are edge-cached for 5 s.
+// Tries adsb.lol first, then adsb.fi. With ?hex= it looks up one aircraft instead. Answers are edge-cached for 5 s.
 module.exports = async (req, res) => {
   const num = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
   const lat = num(req.query.lat, -40.07);
   const lon = num(req.query.lon, 175.38);
   const r = Math.min(num(req.query.r, 60), 250);
 
-  const sources = [
+  // ?hex=c81234 finds one aircraft anywhere (used to jump to a plane from the rare plane list)
+  const hex = /^[0-9a-f]{6}$/i.test(req.query.hex || "") ? req.query.hex.toLowerCase() : null;
+  const sources = hex ? [
+    { url: `https://api.adsb.lol/v2/hex/${hex}`, list: "ac" },
+    { url: `https://opendata.adsb.fi/api/v2/hex/${hex}`, list: "aircraft" }
+  ] : [
     { url: `https://api.adsb.lol/v2/point/${lat}/${lon}/${r}`, list: "ac" },
     { url: `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`, list: "aircraft" }
   ];
