@@ -1392,7 +1392,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var VOICE_ROWS = [
     ["on", "Announcements", "Say each plane as it comes within " + num("announce", 25) + " km of the map centre"],
     ["com", "Airlines & cargo", "", 1], ["mil", "Military", "", 1], ["res", "Rescue & police", "", 1],
-    ["light", "Light aircraft", "Private, trainers, topdressing, gliders", 1], ["heli", "Helicopters", "", 1],
+    ["trn", "Trainers", "Flight schools and military trainers (T-6 Texan II …)", 1],
+    ["light", "Light aircraft", "Private, topdressing, gliders, vintage, business jets", 1], ["heli", "Helicopters", "", 1],
     ["overhead", "Overhead soon", "“Passing over " + PLACE + " in about 2 minutes”"],
     ["rare", "Rare planes", "Military visitors, vintage & unusual types (with a special chime)"],
     ["iss", "Space station", "Announce passes over " + PLACE + " 5 minutes ahead"],
@@ -1401,13 +1402,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   ];
   var VOICE = Object.assign({ voice: "sonia", on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
     iss: true, hourly: true, chime: true }, store.get("voice", {}));
+  if (VOICE.trn === undefined) VOICE.trn = VOICE.light;   // new switch: start where "Light aircraft" was
   if (P.get("voice") === "0") VOICE.on = false;
   var ANNOUNCE_KM = num("announce", 25);
   function groupOf(a) {
     if (a.cat === "res" || a.cat === "pol") return "res";
     if (a.heli) return "heli";
+    if (a.cat === "trn" || a.cat === "mtr") return "trn";
     if (a.cat === "com" || a.cat === "cgo") return "com";
-    if (a.cat === "mil" || a.cat === "mtr") return "mil";
+    if (a.cat === "mil") return "mil";
     return "light";
   }
   // Free Microsoft neural voices (api/tts.js); the first is the default
