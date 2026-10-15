@@ -759,6 +759,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Charter / air-ambulance companies with an airline-style callsign that aren't airlines: shown as private.
   //   SKL Skyline Aviation (Napier King Airs)
   var CHARTER_CS = /^SKL\d/;
+  // Small planes and business jets: an airline-style callsign on one of these is a charter or company flight,
+  // not an airline - unless it's one of the airlines below that really fly small planes.
+  var SMALL_TYPES = { BE20:1, BE9L:1, BE9T:1, BE10:1, BE30:1, B350:1, BE40:1, BE58:1, BE55:1, BE36:1, BE35:1, BE33:1,
+    C208:1, C206:1, C207:1, C210:1, C182:1, C185:1, C172:1, C177:1, C337:1, C340:1, C310:1, C402:1, C404:1, C414:1, C421:1,
+    C425:1, C441:1, PC12:1, PC24:1, P68:1, BN2P:1, BN2T:1, TRIS:1, PA31:1, PA34:1, PA32:1, PA46:1, P46T:1, PA44:1, PA23:1,
+    PA27:1, PAY1:1, PAY2:1, PAY3:1, PAY4:1, AC50:1, AC90:1, AC95:1, M600:1, TBM7:1, TBM8:1, TBM9:1, P180:1, SR20:1, SR22:1,
+    S22T:1, DA42:1, DA62:1, GA8:1, KODI:1, DHC2:1, DHC3:1, DHC6:1, N22:1, N24:1, MU2:1,
+    C500:1, C501:1, C510:1, C525:1, C25A:1, C25B:1, C25C:1, C25M:1, C550:1, C560:1, C56X:1, C650:1, C680:1, C68A:1,
+    C700:1, C750:1, E50P:1, E55P:1, E545:1, E550:1, LJ35:1, LJ45:1, LJ60:1, LJ75:1, CL30:1, CL35:1, CL60:1, GLF4:1,
+    GLF5:1, GLF6:1, G280:1, GLEX:1, GL5T:1, GL7T:1, F2TH:1, F900:1, FA7X:1, FA8X:1, FA50:1, H25B:1, PRM1:1, HDJT:1,
+    SF50:1, EA50:1 };
+  // Sounds Air, Barrier Air, Golden Bay Air, Stewart Island Flights (Rakiura), Sunair, Air Safaris
+  var SMALL_AIRLINE_CS = /^(SDA|GBA|GBY|RKU|SAV|SRI)\d/;
+  // Airliners: shown as an airline even when flying under the registration (ferry, test or positioning flights)
+  var AIRLINER_TYPES = { A19N:1, A20N:1, A21N:1, A318:1, A319:1, A320:1, A321:1, A332:1, A333:1, A338:1, A339:1, A359:1,
+    A35K:1, A388:1, B737:1, B738:1, B739:1, B38M:1, B39M:1, B744:1, B748:1, B763:1, B772:1, B77L:1, B77W:1, B788:1,
+    B789:1, B78X:1, AT72:1, AT75:1, AT76:1, DH8A:1, DH8B:1, DH8C:1, DH8D:1, SF34:1, SB20:1, E190:1, E195:1, BCS3:1 };
   function category(raw) {
     var cs = (raw.flight || "").trim().toUpperCase();
     var mil = (raw.dbFlags & 1) || MIL_CS.test(cs);   // feed's military flag, or a military callsign
@@ -773,7 +790,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (raw.category === "B1" || raw.category === "B2" || raw.category === "B4" || (raw.t && GLIDER_TYPES[raw.t])) return "gld";
     if (mil) return "mil";
     if (CARGO_CS.test(cs)) return "cgo";
-    if (AIRLINE_CS.test(cs) && !CHARTER_CS.test(cs) && cs !== (raw.r || "").replace(/-/g, "")) return "com";
+    var regoCs = !cs || cs.replace(/-/g, "") === (raw.r || "").replace(/-/g, "");
+    if (AIRLINE_CS.test(cs) && !regoCs && !CHARTER_CS.test(cs) && (!(raw.t && SMALL_TYPES[raw.t]) || SMALL_AIRLINE_CS.test(cs))) return "com";
+    if (regoCs && raw.t && AIRLINER_TYPES[raw.t]) return "com";
     return "pvt";
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
@@ -1494,7 +1513,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 
   // ---------- what to say ----------
   // Airline names by ICAO callsign prefix (backup when the route database doesn't name the airline)
-  var AIRLINES = { ANZ: "Air New Zealand", QFA: "Qantas", JST: "Jetstar", VOZ: "Virgin Australia", SDA: "Sounds Air",
+  var AIRLINES = { ANZ: "Air New Zealand", QFA: "Qantas", JST: "Jetstar", VOZ: "Virgin Australia", SDA: "Sounds Air", GBA: "Barrier Air", GBY: "Golden Bay Air", RKU: "Stewart Island Flights", SAV: "Sunair",
     CVA: "Air Chathams", OGN: "Origin Air", FJI: "Fiji Airways", SIA: "Singapore Airlines", CPA: "Cathay Pacific",
     UAE: "Emirates", QTR: "Qatar Airways", CES: "China Eastern", CSN: "China Southern", CCA: "Air China", AAL: "American",
     UAL: "United", DAL: "Delta", HAL: "Hawaiian", LAN: "LATAM", KAL: "Korean Air", JAL: "Japan Airlines", ANA: "A N A",
