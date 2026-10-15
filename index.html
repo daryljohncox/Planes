@@ -1460,11 +1460,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["overhead", "Overhead soon", "“Passing over " + PLACE + " in about 2 minutes”"],
     ["rare", "Rare planes", "Military visitors, vintage & unusual types (with a special chime)"],
     ["iss", "Space station", "Announce passes over " + PLACE + " 5 minutes ahead"],
+    ["chc", "Christchurch watch", "US Air Force C-17s landing at or leaving Christchurch, and flights to Antarctica (the map follows those)"],
     ["hourly", "Hourly summary", "How many planes passed in the last hour"],
     ["chime", "Chime first", "Ding-dong before each announcement"]
   ];
   var VOICE = Object.assign({ voice: "sonia", on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
-    iss: true, hourly: true, chime: true }, store.get("voice", {}));
+    iss: true, hourly: true, chime: true, chc: true }, store.get("voice", {}));
   if (VOICE.trn === undefined) VOICE.trn = VOICE.light;   // new switch: start where "Light aircraft" was
   if (P.get("voice") === "0") VOICE.on = false;
   var ANNOUNCE_KM = num("announce", 25);
@@ -1738,6 +1739,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   $("card").addEventListener("click", function () {
     $("card").hidden = true;
     if (cardHex && latest(cardHex, null)) select(cardHex);
+    else if (cardHex && chcLast[cardHex]) trackPlane(cardHex, chcLast[cardHex].lat, chcLast[cardHex].lon);   // a Christchurch alert
   });
 
   // ---------- rare planes ----------
@@ -1929,6 +1931,124 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     Object.keys(zoneSeen).forEach(function (h) { if (now - zoneSeen[h] > 2 * ZONE_QUIET_MS) delete zoneSeen[h]; });
   }
 
+  // ---------- Christchurch watch (runs in the background, wherever the map is) ----------
+  // US Air Force C-17s taking off from / landing at Christchurch get an alert. Any plane leaving Christchurch for
+  // Antarctica gets an alert too, and the map jumps to it and follows it.
+  var CHC = { lat: -43.4894, lon: 172.5322 }, CHC_R_NM = 40, CHC_MS = 15000, CHC_QUIET_MS = 45 * 60000;
+  var chcSt = {};   // hex -> { gnd, near, dep, arr, ice, t } (times of the alerts already given)
+  // Planes that fly to Antarctica from Christchurch when their route isn't in the databases
+  var ICE_TYPES = { C17: 1, C130: 1, C30J: 1, B752: 1, IL76: 1, A319: 1, A332: 1 };
+  var ICE_CS = /^(RCH|REACH|ICE|SKIER|KBA|NSF|IAM)\d/;   // USAF Reach, Deep Freeze, LC-130 Skier, Kenn Borek, NSF, Italian AF
+  function chcAngle(a, b) { var d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; }
+  function usafC17(a) {
+    return a.type === "C17" && (a.country === "United States" || /^(RCH|REACH|PAT|SAM)/.test(a.flight.toUpperCase()) ||
+      /united states air force|usaf/i.test(a.owner || ""));
+  }
+  function iceBound(a) {
+    var r = a.flight ? routeFor(a) : null;
+    if (r && r !== "pending" && r.to) return iceApt(r.to) ? r.to : false;   // a known route decides it
+    if (r === "pending") return null;   // ask again on the next check
+    if (a.track == null || a.track < 120 || a.track > 240) return false;   // heading south
+    if (a.dist < 15) return null;   // wait until it's clear of the airport and on its way
+    var t = a.type;
+    if (t === "C17" || t === "C130" || t === "C30J") return true;
+    if (ICE_TYPES[t] && (a.cat === "mil" || a.cat === "ant")) return true;
+    return ICE_CS.test(a.flight.toUpperCase()) || a.cat === "ant";
+  }
+  function chcName(a) {
+    var cs = a.flight ? ", " + a.flight.toUpperCase().replace(/^RCH/, "Reach ").replace(/(\D)(\d)/, "$1 $2") : "";
+    return (usafC17(a) ? "US Air Force C 17 Globemaster" : whoSays(a)) + cs;
+  }
+  function chcAlert(a, opts) {
+    // The plane may be outside the map's own feed, so the card and the speech use this copy of it
+    say({ hex: a.hex, chime: "rare", urgent: !!opts.ice,
+      card: { kind: "rare", tag: opts.tag, title: a.callsign },
+      make: function () { return opts.text(latest(a.hex, chcLast[a.hex] || a)); } });
+  }
+  var chcLast = {};
+  // Jump to a plane and follow it (the map's feed picks it up once the map is over it)
+  function trackPlane(hex, lat, lon) {
+    if (!map) return;
+    if (selHex === hex) return;
+    showPop(null);
+    if (selHex) unselect();
+    if (latest(hex, null)) { select(hex, true); return; }
+    pendingHex = hex;
+    map.setView([lat, lon], homeZoom || map.getZoom(), { animate: false });
+    setTimeout(function () { if (pendingHex === hex) pendingHex = null; }, 30000);
+  }
+  function chcCheck() {
+    if (VOICE.chc === false) return;
+    fetch(FEED + "?lat=" + CHC.lat.toFixed(2) + "&lon=" + CHC.lon.toFixed(2) + "&r=" + CHC_R_NM, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var now = Date.now();
+        (j.ac || []).filter(function (x) {
+          return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 60) && !isTestTarget(x);
+        }).map(withInfo).forEach(function (x) {
+          var alt = x.alt_baro === "ground" ? "ground" : first(x.alt_baro, x.alt_geom);
+          var a = { hex: x.hex, flight: (x.flight || "").trim(), callsign: ((x.flight || "").trim()) || x.r || (x.hex || "").toUpperCase(),
+            reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || "", country: countryOf(x.hex),
+            lat: x.lat, lon: x.lon, alt: typeof alt === "number" || alt === "ground" ? alt : null,
+            vr: first(x.baro_rate, x.geom_rate, 0), track: first(x.track, x.true_heading, x.mag_heading), gs: x.gs,
+            cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
+            dist: distKm(CHC.lat, CHC.lon, x.lat, x.lon), brg: bearing(CHC.lat, CHC.lon, x.lat, x.lon) };
+          chcLast[a.hex] = a;
+          var s = chcSt[a.hex] || (chcSt[a.hex] = {});
+          var gnd = a.alt === "ground" || (typeof a.alt === "number" && a.alt < 400 && (a.gs == null || a.gs < 50));
+          var near = a.dist < 6, low = typeof a.alt === "number" && a.alt < 3000;
+          var away = a.track != null && chcAngle(a.track, a.brg) < 60;             // flying away from the airport
+          var toward = a.track != null && chcAngle(a.track, (a.brg + 180) % 360) < 40;   // flying at the airport
+          // Took off: was on the ground there and now airborne, or seen climbing out low just after
+          var tookOff = !gnd && ((s.gnd && s.near) || (a.dist < 12 && low && a.vr > 300 && away));
+          // Landing: low, descending towards the runway, or just touched down
+          var landing = (gnd && near && s.gnd === false && s.near) || (!gnd && a.dist < 10 && low && a.vr < -300 && toward);
+          if (tookOff && (!s.dep || now - s.dep > CHC_QUIET_MS)) {
+            s.dep = now;
+            if (usafC17(a)) chcAlert(a, { tag: "Leaving Christchurch", text: function (b) {
+              return chcName(b) + ", has taken off from Christchurch" + (b.track != null ? ", heading " + dir8(b.track) : "") + ".";
+            } });
+          }
+          if (landing && (!s.arr || now - s.arr > CHC_QUIET_MS)) {
+            s.arr = now;
+            if (usafC17(a)) chcAlert(a, { tag: "Landing at Christchurch", text: function (b) {
+              return chcName(b) + (b.alt === "ground" ? ", has landed at Christchurch." : ", coming in to land at Christchurch.");
+            } });
+          }
+          // Off to Antarctica: left Christchurch in the last 45 minutes and bound for the ice
+          if (s.dep && now - s.dep < CHC_QUIET_MS && !gnd && (!s.ice || now - s.ice > 6 * 3600000)) {
+            var to = iceBound(a);
+            if (to) {
+              s.ice = now;
+              var where = to === true ? "Antarctica" : (to.city || shortApt(to.name) || "Antarctica");
+              chcAlert(a, { ice: true, tag: "Off to Antarctica", text: function (b) {
+                return "Antarctic flight. " + chcName(b) + ", has left Christchurch for " + where + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
+              } });
+              try { sessionStorage.setItem("planes.ice", JSON.stringify({ hex: a.hex, t: now })); } catch (e) { /* not saved */ }
+              trackPlane(a.hex, a.lat, a.lon);
+            }
+          }
+          s.gnd = gnd; s.near = near; s.t = now;
+        });
+        Object.keys(chcSt).forEach(function (h) { if (now - chcSt[h].t > 6 * 3600000) { delete chcSt[h]; delete chcLast[h]; } });
+      })
+      .catch(function () { /* try again next time */ });
+  }
+  // After the hourly reload, carry on following an Antarctic flight that's still in the air
+  function resumeIce() {
+    var rec = null;
+    try { rec = JSON.parse(sessionStorage.getItem("planes.ice") || "null"); } catch (e) { /* none */ }
+    if (!rec || Date.now() - rec.t > 8 * 3600000) return;
+    fetch(FEED + "?hex=" + encodeURIComponent(rec.hex), { cache: "no-store" })
+      .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
+      .then(function (j) {
+        var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && p.alt_baro !== "ground" && (p.seen_pos == null || p.seen_pos < 300); })[0];
+        if (a) trackPlane(rec.hex, a.lat, a.lon);
+        else try { sessionStorage.removeItem("planes.ice"); } catch (e) { /* none */ }
+      })
+      .catch(function () { /* not found */ });
+  }
+
   // ---------- hourly summary ----------
   var lastHour = store.get("hourSaid", "");
   function hourly() {
@@ -2069,6 +2189,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   loadIss();
   setInterval(issTick, 5000);
   setInterval(findPasses, 10 * 60000);
+  setTimeout(chcCheck, 3000);
+  setInterval(chcCheck, CHC_MS);
+  setTimeout(resumeIce, 2000);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
   setTimeout(function () { location.reload(); }, 3600000);
 })();
