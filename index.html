@@ -54,6 +54,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   line-height:1;white-space:nowrap;color:#fff;background:#13284a;border:0;border-radius:1.2vh;cursor:pointer;
   box-shadow:0 0 0 2px rgba(255,255,255,.5),0 .6vh 1.6vh rgba(0,0,0,.6)}
 #keybtn:active{background:#24406b}
+#zoombtns{position:absolute;top:calc(2.6vh + max(7vh,44px));left:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-start}
 #keybtn .dots{display:flex;gap:.4vh}
 #keybtn .dots i{width:1.4vh;height:1.4vh;border-radius:50%;background:#ffd400}
 #keybtn .dots i:nth-child(2){background:#1fa24a}
@@ -298,6 +299,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     <div id="mapbtns">
       <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
       <button id="keybtn" type="button"><span class="dots"><i></i><i></i><i></i></span><span>Colour key</span></button>
+    </div>
+    <div id="zoombtns">
+      <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
+      <button id="zoom3" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
     </div>
     <div id="mapbtns2">
       <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
@@ -597,11 +602,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     function atHome() {
       return map.getZoom() === home.z && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
     }
+    // Chosen view: 0 = home zoom, else km to the map edge from a zoom-out button (kept after reloads)
+    var viewKm = 0;
+    try { viewKm = +localStorage.getItem("planes.viewKm") || 0; } catch (e) { /* not saved */ }
+    function edgeZoom(km) { return map.getBoundsZoom(L.latLng(LAT, LON).toBounds(km * 1000 * 2), false, L.point(12, 12)); }
+    function viewZoom() { return viewKm ? edgeZoom(viewKm) : home.z; }
+    function atView() {
+      return Math.abs(map.getZoom() - viewZoom()) < 0.01 && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
+    }
+    function setView(km) {
+      viewKm = km;
+      try { localStorage.setItem("planes.viewKm", String(km)); } catch (e) { /* not saved */ }
+    }
     function goHome() {
       clearTimeout(idleT);
       if (selHex) { selHex = null; selLast = null; render(); }   // stop following a plane
       fixSize();
-      map.flyTo(home.c, home.z, { duration: 0.8 });
+      map.flyTo(home.c, viewZoom(), { duration: 0.8 });
     }
     // Search area: centred on the plane you're following, otherwise on the map view.
     // Radius is big enough to cover what's on screen.
@@ -619,7 +636,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     function touched(refetch) {
       clearTimeout(idleT);
       homeBtn.style.display = !selHex && atHome() ? "none" : "flex";
-      if (!selHex && !atHome()) idleT = setTimeout(goHome, HOME_IDLE_MS);   // no auto-return while following
+      if (!selHex && !atView()) idleT = setTimeout(goHome, HOME_IDLE_MS);   // back to the chosen view; none while following
       followView();
       if (refetch) {
         clearTimeout(refetchT);
@@ -641,8 +658,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
     map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
-    L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); goHome(); });
+    L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); setView(0); goHome(); });
     L.DomEvent.disableClickPropagation(homeBtn);
+    // Zoom-out buttons: Marton in the middle with 2x / 3x the home distance to the map edge
+    [["zoom2", 2], ["zoom3", 3]].forEach(function (z) {
+      var btn = $(z[0]), km = HOME_EDGE_KM * z[1];
+      btn.querySelector("span").textContent = km + " km";
+      L.DomEvent.on(btn, "click", function (e) {
+        L.DomEvent.stop(e);
+        setView(km);
+        goHome();
+      });
+      L.DomEvent.disableClickPropagation(btn);
+    });
+    if (viewKm && !(ZOOM > 0)) map.setView(home.c, viewZoom(), { animate: false });   // reopen at the chosen zoom-out view
   }
 
   // Trainer types (RNZAF T-6C / CT-4 plus common flight-school aircraft). Trainers win over military.
