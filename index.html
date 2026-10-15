@@ -1729,11 +1729,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     V22: "Osprey", H47: "Chinook", H53: "Big helicopter", H53S: "Big helicopter", S61: "Big helicopter", MI8: "Big helicopter",
     C27J: "Military", C295: "Military", CN35: "Military", AN22: "Giant", AN26: "Unusual", AN30: "Unusual", AN72: "Unusual",
     IL18: "Unusual", IL62: "Unusual", IL96: "Unusual", T154: "Unusual", T204: "Unusual", SGUP: "Super Guppy",
-    A342: "Rare airliner", A343: "Rare airliner", A345: "Rare airliner", A346: "Rare airliner", MD11: "Rare airliner",
-    DC10: "Rare airliner", L101: "Classic", B742: "Jumbo", B743: "Jumbo", B703: "Classic", B722: "Classic", B732: "Classic",
-    DC85: "Classic", DC86: "Classic", DC87: "Classic", A306: "Rare airliner", A30B: "Rare airliner", A310: "Rare airliner",
-    B752: "Rare airliner", B753: "Rare airliner", C919: "Chinese airliner", AJ27: "Chinese airliner", SU95: "Rare airliner",
-    GA7C: "Business jet", DHC7: "Classic", LANC: "Warbird", P38: "Warbird", B24: "Warbird", B29: "Warbird", TBM: "Warbird",
+    L101: "Classic", B742: "Jumbo", B743: "Jumbo", B703: "Classic", B722: "Classic",
+    DC85: "Classic", DC86: "Classic", DC87: "Classic", GA7C: "Business jet", LANC: "Warbird", P38: "Warbird", B24: "Warbird", B29: "Warbird", TBM: "Warbird",
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica"
   };
   function rareWhy(a) {
@@ -1750,15 +1747,22 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var n = rareList.filter(function (r) { return r.t >= d0.getTime(); }).length;
     $("rarecount").textContent = n ? n : "";
   }
-  function noteRare(a, why) {   // returns true if it's new (not seen in the last 6 hours)
+  var RARE_GAP_MS = 2 * 3600000;   // gone this long, then back in the air = a new flight
+  function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
+    var now = Date.now(), gnd = a.alt === "ground";
     for (var i = 0; i < rareList.length; i++) {
-      if (rareList[i].hex === a.hex && Date.now() - rareList[i].t < RARE_SAME_MS) {
-        rareList[i].last = Date.now(); rareList[i].lat = a.lat; rareList[i].lon = a.lon;
-        store.set("rare", rareList);
-        return false;
-      }
+      var r = rareList[i];
+      if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
+      // Another flight: landed and took off again, new callsign, or back after a long gap
+      var again = !gnd && ((r.air && r.gnd) || (a.callsign && r.cs && a.callsign !== r.cs) || now - (r.last || r.t) > RARE_GAP_MS);
+      if (again) break;
+      r.last = now; r.lat = a.lat; r.lon = a.lon;
+      if (gnd) r.gnd = true; else { r.air = true; r.gnd = false; }
+      if (!r.cs && a.callsign) r.cs = a.callsign;
+      store.set("rare", rareList);
+      return false;
     }
-    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: Date.now(), last: Date.now(), lat: a.lat, lon: a.lon });
+    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
     store.set("rare", rareList);
     rareCount();
@@ -1860,7 +1864,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         }
         emgSeen[a.hex] = now;
       }
-      // Rare planes: added to the list, announced once
+      // Rare planes: added to the list, announced once per flight
       var why = rareWhy(a), rareNew = false;
       if (why && noteRare(a, why)) {
         rareNew = true;
