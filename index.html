@@ -267,6 +267,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .rr .rt{display:block;font-size:1.9vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rr .rw{font-size:1.9vh;color:var(--dim);text-align:right;white-space:nowrap;line-height:1.35}
 .rr .rw .now{color:var(--good);font-weight:700}
+.rr .rw .gone{color:#ffb35c;font-weight:700}
 .rr .star{color:#ffd400;font-size:3vh}
 /* pop-up card for the plane being announced */
 #card{position:absolute;left:1.4vh;right:1.4vh;bottom:3vh;z-index:1002;display:flex;gap:1.6vh;align-items:center;
@@ -614,6 +615,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     // Home view + return-to-home after the map has been left alone
     var HOME_IDLE_MS = 60000;
     var home = { c: L.latLng(LAT, LON), z: map.getZoom() };   // always the real home point, not the current view
+    homeZoom = home.z;
     // Keep Leaflet's idea of the map size right (the Hub can lay the page out after the map starts),
     // otherwise "centre" is off and home ends up away from the middle of the circle.
     function fixSize() {
@@ -1181,9 +1183,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (mapFollow) mapFollow(a, now);
     else { cLat = a.lat; cLon = a.lon; away = true; }
   }
-  function select(hex) {
+  // zoom: from the plane / rare lists – also zoom to the same distance as the home view
+  var homeZoom;   // set when the map starts
+  function select(hex, zoom) {
     selHex = hex; selLast = null;
     for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === hex) selLast = aircraft[i];
+    if (selLast && zoom && map && homeZoom) map.setView([selLast.lat, selLast.lon], homeZoom, { animate: false });
     if (selLast) { follow(selLast, false); poll(); }
     render();
   }
@@ -1275,6 +1280,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         if (selHex) {
           for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) { selLast = aircraft[i]; follow(selLast, false); }
         }
+        if (pendingHex && !selHex && latest(pendingHex, null)) { var ph = pendingHex; pendingHex = null; select(ph, true); return; }
         render();
         voiceCheck(aircraft);
       })
@@ -1384,7 +1390,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   $("rows").addEventListener("click", function (e) {
     var row = e.target.closest ? e.target.closest(".row") : null;
-    if (row) select(row.getAttribute("data-hex"));
+    if (row) select(row.getAttribute("data-hex"), true);
   });
   $("back").addEventListener("click", unselect);
 
@@ -1752,9 +1758,32 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
     }).join("") : '<div class="note">No rare planes yet. Military visitors, vintage aircraft, warbirds and unusual types will show up here.</div>';
   }
+  // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
+  // select it once the feed for that area has it
+  var pendingHex = null;
   $("rarerows").addEventListener("click", function (e) {
     var r = e.target.closest ? e.target.closest(".rr") : null;
-    if (r && latest(r.getAttribute("data-hex"), null)) { showPop(null); select(r.getAttribute("data-hex")); }
+    if (!r) return;
+    var hex = r.getAttribute("data-hex"), rw = r.querySelector(".rw");
+    if (latest(hex, null)) { showPop(null); select(hex, true); return; }
+    function note(cls, txt) {
+      var old = rw.querySelector(".now, .gone");
+      if (old) old.parentNode.removeChild(old);
+      rw.insertAdjacentHTML("beforeend", '<span class="' + cls + '"><br>' + txt + "</span>");
+    }
+    note("now", "Finding…");
+    fetch(FEED + "?hex=" + encodeURIComponent(hex), { cache: "no-store" })
+      .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
+      .then(function (j) {
+        var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 120); })[0];
+        if (!a || !map) { note("gone", "Not flying now"); return; }
+        showPop(null);
+        if (selHex) unselect();
+        pendingHex = hex;
+        map.setView([a.lat, a.lon], homeZoom || map.getZoom(), { animate: false });
+        setTimeout(function () { pendingHex = null; }, 30000);   // give up if the area feed never shows it
+      })
+      .catch(function () { note("gone", "Couldn't look it up"); });
   });
 
   // ---------- deciding what to announce (runs after every feed update) ----------
