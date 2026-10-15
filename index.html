@@ -869,10 +869,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["drn", "#111111", 0, "Drone", ""],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
-    ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
-    ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
     ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
     ["trn", "#d9a300", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
+    ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
+    ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
     ["ag", "#1fa24a", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
@@ -1369,8 +1369,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // "All planes" list: grouped in this order, closest first within each. Headings with counts only on the NZ view.
   var headView;   // set by setView() before this line runs, so no initial value here
   var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["vin", "Vintage"], ["res", "Rescue"], ["mil", "Military"],
-    ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["com", "Airline"], ["cgo", "Cargo"], ["mtr", "Military trainer"],
-    ["trn", "Trainer"], ["ag", "Topdressing"]];
+    ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["mtr", "Military trainer"], ["trn", "Trainer"],
+    ["com", "Airline"], ["cgo", "Cargo"], ["ag", "Topdressing"]];
   function listGroup(a) { return a.heli && !a.cat ? "heli" : a.cat || "pvt"; }
   function renderList() {
     var top = $("rows").scrollTop;
