@@ -122,11 +122,11 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .pl.gld:not(.on) span{background:#0f9488;color:#fff}
 .pl.cgo:not(.on) svg{color:#c4c9cf;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.cgo:not(.on) span{background:#c4c9cf;color:#13284a}
-/* vintage / warbird = purple, business jet = royal blue, drone = black */
+/* vintage / warbird = purple, business jet = bright yellow, drone = black */
 .pl.vin:not(.on) svg{color:#a066ff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
 .pl.vin:not(.on) span{background:#7a3fe0;color:#fff}
-.pl.biz:not(.on) svg{color:#3d6bff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
-.pl.biz:not(.on) span{background:#2a4fd6;color:#fff}
+.pl.biz:not(.on) svg{color:#fff200;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.biz:not(.on) span{background:#fff200;color:#000}
 .pl.drn:not(.on) svg{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
 .pl.drn:not(.on) span{background:#111;color:#fff}
 /* airports */
@@ -198,7 +198,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row .ri.gld{color:#2fd8c5}
 .row .ri.cgo{color:#c4c9cf}
 .row .ri.vin{color:#b385ff}
-.row .ri.biz{color:#6b8cff}
+.row .ri.biz{color:#fff200}
 .row .ri.drn{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
 .tag.mil{background:#5a3310;color:#fff}
@@ -211,7 +211,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .tag.gld{background:#0f9488;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
 .tag.vin{background:#7a3fe0;color:#fff}
-.tag.biz{background:#2a4fd6;color:#fff}
+.tag.biz{background:#fff200;color:#000}
 .tag.drn{background:#000;color:#fff;box-shadow:0 0 0 1px #fff}
 .rc .tag{font-size:1.5vh}
 .csn{font-size:2.2vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -268,6 +268,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .rr .rw{font-size:1.9vh;color:var(--dim);text-align:right;white-space:nowrap;line-height:1.35}
 .rr .rw .now{color:var(--good);font-weight:700}
 .rr .rw .gone{color:#ffb35c;font-weight:700}
+.lastseen{position:relative}
+.lastseen i{position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;border:3px solid #ff6a00;box-shadow:0 0 0 2px #fff}
+.lastseen span{position:absolute;left:18px;top:-12px;white-space:nowrap;background:#ff6a00;color:#fff;font:700 13px system-ui,sans-serif;padding:2px 6px;border-radius:4px}
 .rr .star{color:#ffd400;font-size:3vh}
 /* pop-up card for the plane being announced */
 #card{position:absolute;left:1.4vh;right:1.4vh;bottom:3vh;z-index:1002;display:flex;gap:1.6vh;align-items:center;
@@ -749,7 +752,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   //   emergency (flashing red) > rescue / air ambulance pink > police light blue > helicopters (brown if
   //   military, otherwise navy) > military trainer light brown > trainer yellow > topdressing / ag green >
   //   glider / balloon / microlight turquoise > military brown > cargo light grey > airline red > private white
-  //   (drones black and vintage purple come straight after police; business jets royal blue come after military)
+  //   (drones black and vintage purple come straight after police; business jets bright yellow come after military)
   // Types only flown as military trainers (counted as military even if the feed's flag is missing)
   var MIL_TRAINER_TYPES = { TEX2:1, PC21:1, PC9:1, HAWK:1, T38:1, M346:1 };
   // Topdressing / agricultural / utility: Fletcher, Cresco, PAC 750XL, Air Tractors, Pawnee, Dromader, Thrush
@@ -862,7 +865,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
     ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
     ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
-    ["biz", "#3d6bff", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
+    ["biz", "#fff200", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
     ["drn", "#111111", 0, "Drone", ""],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
@@ -874,7 +877,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
-    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
+    var dark = /^#(fff|fff200|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
     return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
       (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
@@ -1735,9 +1738,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   function noteRare(a, why) {   // returns true if it's new (not seen in the last 6 hours)
     for (var i = 0; i < rareList.length; i++) {
-      if (rareList[i].hex === a.hex && Date.now() - rareList[i].t < RARE_SAME_MS) { rareList[i].last = Date.now(); return false; }
+      if (rareList[i].hex === a.hex && Date.now() - rareList[i].t < RARE_SAME_MS) {
+        rareList[i].last = Date.now(); rareList[i].lat = a.lat; rareList[i].lon = a.lon;
+        store.set("rare", rareList);
+        return false;
+      }
     }
-    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: Date.now(), last: Date.now() });
+    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: Date.now(), last: Date.now(), lat: a.lat, lon: a.lon });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
     store.set("rare", rareList);
     rareCount();
@@ -1760,7 +1767,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
   // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
   // select it once the feed for that area has it
-  var pendingHex = null;
+  var pendingHex = null, lastSeenLayer = null;
+  // Orange ring + label where a rare plane was last seen, shown for a minute
+  function lastSeenMark(rec) {
+    if (lastSeenLayer) map.removeLayer(lastSeenLayer);
+    lastSeenLayer = L.marker([rec.lat, rec.lon], { interactive: false, icon: L.divIcon({ className: "", iconSize: [0, 0],
+      html: '<div class="lastseen"><i></i><span>' + esc(rec.cs) + " last seen " + esc(when(rec.last || rec.t)) + "</span></div>" }) }).addTo(map);
+    setTimeout(function () { if (lastSeenLayer) { map.removeLayer(lastSeenLayer); lastSeenLayer = null; } }, 60000);
+  }
   $("rarerows").addEventListener("click", function (e) {
     var r = e.target.closest ? e.target.closest(".rr") : null;
     if (!r) return;
@@ -1776,7 +1790,17 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
       .then(function (j) {
         var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 120); })[0];
-        if (!a || !map) { note("gone", "Not flying now"); return; }
+        if (!a || !map) {
+          // Not in the air (or out of receiver range): show where it was last seen, if we know
+          var rec = rareList.filter(function (x) { return x.hex === hex; })[0];
+          if (!rec || rec.lat == null || !map) { note("gone", "Not flying now"); return; }
+          showPop(null);
+          if (selHex) unselect();
+          map.setView([rec.lat, rec.lon], homeZoom || map.getZoom(), { animate: false });
+          setStatus("");
+          lastSeenMark(rec);
+          return;
+        }
         showPop(null);
         if (selHex) unselect();
         pendingHex = hex;
