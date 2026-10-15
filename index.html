@@ -643,7 +643,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       nz: { btn: "zoomnz", label: "NZ", b: function () { return L.latLngBounds([-47.3, 166.4], [-34.4, 178.6]); } }
     };
     var viewKey = "";
-    try { viewKey = localStorage.getItem("planes.view") || ""; } catch (e) { /* not saved */ }
+    // The chosen view survives the hourly reload (same tab) but a fresh cast always opens at home
+    try { localStorage.removeItem("planes.view"); viewKey = sessionStorage.getItem("planes.view") || ""; } catch (e) { /* not saved */ }
     if (!VIEWS[viewKey]) viewKey = "";
     headView = viewKey;
     function viewTarget() {
@@ -658,7 +659,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     function setView(k) {
       viewKey = headView = k;
       renderList();
-      try { localStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
+      try { sessionStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
     }
     function goHome() {
       clearTimeout(idleT);
