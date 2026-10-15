@@ -120,6 +120,13 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .pl.gld:not(.on) span{background:#0f9488;color:#fff}
 .pl.cgo:not(.on) svg{color:#c4c9cf;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.cgo:not(.on) span{background:#c4c9cf;color:#13284a}
+/* vintage / warbird = purple, business jet = royal blue, drone = black */
+.pl.vin:not(.on) svg{color:#a066ff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.vin:not(.on) span{background:#7a3fe0;color:#fff}
+.pl.biz:not(.on) svg{color:#3d6bff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.biz:not(.on) span{background:#2a4fd6;color:#fff}
+.pl.drn:not(.on) svg{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
+.pl.drn:not(.on) span{background:#111;color:#fff}
 /* airports */
 .apt{position:relative;width:12px;height:12px}
 .apt i{position:absolute;inset:0;border-radius:50%;background:#fff;border:3px solid #6a1b9a;box-shadow:0 0 0 1px rgba(255,255,255,.8)}
@@ -188,6 +195,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row .ri.ag{color:#3fd06a}
 .row .ri.gld{color:#2fd8c5}
 .row .ri.cgo{color:#c4c9cf}
+.row .ri.vin{color:#b385ff}
+.row .ri.biz{color:#6b8cff}
+.row .ri.drn{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
 .tag.mil{background:#5a3310;color:#fff}
 .tag.trn{background:#ffd400;color:#000}
@@ -198,6 +208,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .tag.ag{background:#137a35;color:#fff}
 .tag.gld{background:#0f9488;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
+.tag.vin{background:#7a3fe0;color:#fff}
+.tag.biz{background:#2a4fd6;color:#fff}
+.tag.drn{background:#000;color:#fff;box-shadow:0 0 0 1px #fff}
 .rc .tag{font-size:1.5vh}
 .csn{font-size:2.2vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .csn:empty{display:none}
@@ -616,6 +629,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var viewKey = "";
     try { viewKey = localStorage.getItem("planes.view") || ""; } catch (e) { /* not saved */ }
     if (!VIEWS[viewKey]) viewKey = "";
+    headView = viewKey;
     function viewTarget() {
       if (!viewKey) return { c: home.c, z: home.z };
       var b = VIEWS[viewKey].b(), c = viewKey === "50" ? home.c : b.getCenter();
@@ -626,7 +640,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       return Math.abs(map.getZoom() - t.z) < 0.01 && map.latLngToContainerPoint(t.c).distanceTo(map.getSize().divideBy(2)) < 3;
     }
     function setView(k) {
-      viewKey = k;
+      viewKey = headView = k;
+      renderList();
       try { localStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
     }
     function goHome() {
@@ -711,11 +726,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   //   emergency (flashing red) > rescue / air ambulance pink > police light blue > helicopters (brown if
   //   military, otherwise navy) > military trainer light brown > trainer yellow > topdressing / ag green >
   //   glider / balloon / microlight turquoise > military brown > cargo light grey > airline red > private white
+  //   (drones black and vintage purple come straight after police; business jets royal blue come after military)
   // Types only flown as military trainers (counted as military even if the feed's flag is missing)
   var MIL_TRAINER_TYPES = { TEX2:1, PC21:1, PC9:1, HAWK:1, T38:1, M346:1 };
   // Topdressing / agricultural / utility: Fletcher, Cresco, PAC 750XL, Air Tractors, Pawnee, Dromader, Thrush
   var AG_TYPES = { FU24:1, CRES:1, P750:1, AT3T:1, AT4T:1, AT5T:1, AT6T:1, AT8T:1, PA25:1, PA36:1, M18:1, T34T:1, S2R:1, S2RT:1 };
   var GLIDER_TYPES = { GLID:1, BALL:1, ULAC:1 };
+  // Vintage & warbirds: DC-3, Harvard, Tiger Moth, Mustang, Spitfire, Chipmunk, Yaks, Auster, Cub …
+  var VINTAGE_TYPES = { DC3:1, C47:1, DC3T:1, DC4:1, DC6:1, SPIT:1, P51:1, HURI:1, P40:1, T6:1, T28:1, CORS:1, F4U:1,
+    YK52:1, YAK3:1, YK11:1, AN2:1, B17:1, B25:1, CAT:1, DH82:1, DH83:1, DH84:1, DH87:1, DH89:1, DH60:1, DH94:1, DHC1:1,
+    MOSQ:1, VAMP:1, JPRO:1, HUNT:1, STRK:1, A4:1, L29:1, AUS3:1, AUS4:1, AUS5:1, AUS6:1, J3:1, ST75:1, WACO:1, NAVI:1, P47:1, FURY:1 };
+  // Business jets & charter turboprops (King Airs, PC-12, Citations, Learjets, Gulfstreams, Falcons …)
+  var BIZ_TYPES = { BE20:1, BE9L:1, BE9T:1, BE10:1, BE30:1, B350:1, BE40:1, PC12:1, PC24:1, MU2:1, P180:1,
+    C500:1, C501:1, C510:1, C525:1, C25A:1, C25B:1, C25C:1, C25M:1, C550:1, C560:1, C56X:1, C650:1, C680:1, C68A:1,
+    C700:1, C750:1, E50P:1, E55P:1, E545:1, E550:1, LJ35:1, LJ45:1, LJ60:1, LJ75:1, CL30:1, CL35:1, CL60:1, GLF4:1,
+    GLF5:1, GLF6:1, G280:1, GLEX:1, GL5T:1, GL7T:1, F2TH:1, F900:1, FA7X:1, FA8X:1, FA50:1, H25B:1, PRM1:1, HDJT:1,
+    SF50:1, EA50:1, BBJ:1 };
+  // Drones (the feed's UAV category, B6)
+  var DRONE_TYPES = { UAV:1, DRON:1, Q9:1, Q4:1, MQ9:1, HRON:1 };
   var EMERG_SQUAWK = { "7500":1, "7600":1, "7700":1 };
   // Callsign lists. NZ designators are from CAA NZ's operator call sign register; Australian special-task
   // designators from AIP / NAFC OPS 007 (POL, AM, RSCU, BMBR …). A designator matches when digits follow it.
@@ -786,6 +814,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (EMERG_SQUAWK[raw.squawk] || em) return "emg";
     if (RESCUE_CS.test(cs) || raw.emergency === "lifeguard") return "res";
     if (POLICE_CS.test(cs)) return "pol";
+    if (raw.category === "B6" || (raw.t && DRONE_TYPES[raw.t])) return "drn";
+    if (raw.t && VINTAGE_TYPES[raw.t]) return "vin";
     if (isHeli(raw)) return mil ? "mil" : "";
     if (raw.t && MIL_TRAINER_TYPES[raw.t]) return "mtr";
     if ((raw.t && TRAINER_TYPES[raw.t]) || TRAINER_CS.test(cs)) return mil ? "mtr" : "trn";
@@ -793,20 +823,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (raw.category === "B1" || raw.category === "B2" || raw.category === "B4" || (raw.t && GLIDER_TYPES[raw.t])) return "gld";
     if (mil) return "mil";
     if (CARGO_CS.test(cs)) return "cgo";
+    if ((raw.t && BIZ_TYPES[raw.t] && !SMALL_AIRLINE_CS.test(cs)) || CHARTER_CS.test(cs)) return "biz";
     var regoCs = !cs || cs.replace(/-/g, "") === (raw.r || "").replace(/-/g, "");
     if (AIRLINE_CS.test(cs) && !regoCs && !CHARTER_CS.test(cs) && (!(raw.t && SMALL_TYPES[raw.t]) || SMALL_AIRLINE_CS.test(cs))) return "com";
     if (regoCs && raw.t && AIRLINER_TYPES[raw.t]) return "com";
     return "pvt";
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
-    ag: "Topdressing", gld: "Glider", cgo: "Cargo" };   // only these get a tag; colour shows the rest
+    ag: "Topdressing", gld: "Glider", cgo: "Cargo", vin: "Vintage", biz: "Business jet", drn: "Drone" };   // only these get a tag; colour shows the rest
   // Colour key (opened by the button next to "Return to …")
   var KEY = [
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
     ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, POLAIR, police callsigns"],
+    ["vin", "#a066ff", 0, "Vintage / warbird", "DC-3, Harvard, Tiger Moth, Mustang, Spitfire …"],
     ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
     ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
     ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
+    ["biz", "#3d6bff", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
+    ["drn", "#111111", 0, "Drone", ""],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
     ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
@@ -817,7 +851,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
-    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]);   // light colours get a dark outline
+    var dark = /^#(fff|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
     return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
       (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
@@ -1302,16 +1336,18 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.alt === null) return "—";
     return metres(a.alt).toLocaleString("en-NZ") + " m" + (a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "");
   }
-  // "All planes" list: one section per group, in this order, closest first within each
-  var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["res", "Rescue"], ["mil", "Military"], ["heli", "Helicopter"],
-    ["gld", "Glider / balloon"], ["pvt", "Private"], ["com", "Airline"], ["cgo", "Cargo"], ["mtr", "Military trainer"],
+  // "All planes" list: grouped in this order, closest first within each. Headings with counts only on the NZ view.
+  var headView;   // set by setView() before this line runs, so no initial value here
+  var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["vin", "Vintage"], ["res", "Rescue"], ["mil", "Military"],
+    ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["com", "Airline"], ["cgo", "Cargo"], ["mtr", "Military trainer"],
     ["trn", "Trainer"], ["ag", "Topdressing"]];
   function listGroup(a) { return a.heli && !a.cat ? "heli" : a.cat || "pvt"; }
   function renderList() {
     var top = $("rows").scrollTop;
     $("rows").innerHTML = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
-      return inGroup.length ? '<div class="grp"><b>' + g[1] + "</b><span>" + inGroup.length + "</span></div>" + inGroup.map(rowHtml).join("") : "";
+      if (!inGroup.length) return "";
+      return headView !== "nz" ? inGroup.map(rowHtml).join("") : '<div class="grp"><b>' + g[1] + "</b><span>" + inGroup.length + "</span></div>" + inGroup.map(rowHtml).join("");
     }).join("");
     $("rows").scrollTop = top;
   }
@@ -1555,6 +1591,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     else if (a.cat === "trn") lead = "Training";
     else if (a.cat === "ag") lead = "Topdressing";
     else if (a.cat === "gld") lead = "";
+    else if (a.cat === "vin") lead = "Vintage";
+    else if (a.cat === "drn") lead = "Drone";
     else if (a.cat === "cgo") lead = "Cargo";
     else if (a.cat === "com") lead = cs.replace(/(\D)(\d)/, "$1 $2");
     else lead = "Private";
