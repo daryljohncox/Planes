@@ -756,6 +756,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Cargo: FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, ...; NZ: AFN Air Freight NZ, APK Parcelair, AWK Airwork,
   // PST Airwork NZ Post, TNZ Texel Air; AU: EFA Express Freighters Australia, TFX Toll
   var CARGO_CS = /^(FDX|UPS|DHK|DHL|DHX|BCS|GTI|CKS|CLX|ABW|NCA|PAC|ATN|AWK|PCA|TAY|BOX|MPH|SQC|CAO|CKK|ABD|AFN|APK|PST|TNZ|EFA|TFX)\d/;
+  // Charter / air-ambulance companies with an airline-style callsign that aren't airlines: shown as private.
+  //   SKL Skyline Aviation (Napier King Airs)
+  var CHARTER_CS = /^SKL\d/;
   function category(raw) {
     var cs = (raw.flight || "").trim().toUpperCase();
     var mil = (raw.dbFlags & 1) || MIL_CS.test(cs);   // feed's military flag, or a military callsign
@@ -770,7 +773,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (raw.category === "B1" || raw.category === "B2" || raw.category === "B4" || (raw.t && GLIDER_TYPES[raw.t])) return "gld";
     if (mil) return "mil";
     if (CARGO_CS.test(cs)) return "cgo";
-    if (AIRLINE_CS.test(cs) && cs !== (raw.r || "").replace(/-/g, "")) return "com";
+    if (AIRLINE_CS.test(cs) && !CHARTER_CS.test(cs) && cs !== (raw.r || "").replace(/-/g, "")) return "com";
     return "pvt";
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
