@@ -817,6 +817,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Antarctic and research flights: NASA, NOAA, LC-130 ski planes (SKIER), Kenn Borek; research types
   var RESEARCH_CS = /^(NASA\d|NOAA\d|SKIER|KBA\d)/;
   var RESEARCH_TYPES = { B57: 1, ER2: 1, DC85: 1, DC86: 1, DC87: 1, DC3T: 1 };
+  // Flights to or from Antarctica: route to an Antarctic airfield, already over the Southern Ocean heading south,
+  // or a C-17 in the South Island (Operation Deep Freeze flies them out of Christchurch)
+  var ICE_APTS = { NZIR: 1, NZFX: 1, NZPG: 1, NZWD: 1, NZSP: 1, YWKS: 1, AQBC: 1, AT03: 1 };
+  function iceApt(ap) {
+    if (!ap) return false;
+    if (ICE_APTS[ap.icao]) return true;
+    var c = aptCoords(ap);
+    return !!(c && c[2] < -60);
+  }
+  function antarcticFlight(raw) {
+    if (typeof raw.lat !== "number") return false;
+    if (raw.lat < -60) return true;
+    var trk = first(raw.track, raw.true_heading, raw.mag_heading);
+    if (raw.lat < -47.5 && raw.alt_baro !== "ground" && typeof trk === "number" && trk > 135 && trk < 225) return true;
+    if (raw.t === "C17" && raw.lat < -41.5) return true;
+    var r = routeCache[(raw.flight || "").trim()];
+    return !!(r && r !== "pending" && (iceApt(r.to) || iceApt(r.from)));
+  }
   var MIL_CS = /^((KIW|ASY)\d|KIWI\d)/;
   // Cargo: FedEx, UPS, DHL, Atlas, Kalitta, Cargolux, Polar, ...; NZ: AFN Air Freight NZ, APK Parcelair, AWK Airwork,
   // PST Airwork NZ Post, TNZ Texel Air; AU: EFA Express Freighters Australia, TFX Toll
@@ -848,7 +866,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (EMERG_SQUAWK[raw.squawk] || em) return "emg";
     if (RESCUE_CS.test(cs) || raw.emergency === "lifeguard") return "res";
     if (POLICE_CS.test(cs)) return "pol";
-    if (RESEARCH_CS.test(cs) || (raw.t && RESEARCH_TYPES[raw.t])) return "ant";
+    if (RESEARCH_CS.test(cs) || (raw.t && RESEARCH_TYPES[raw.t]) || antarcticFlight(raw)) return "ant";
     if (raw.category === "B6" || (raw.t && DRONE_TYPES[raw.t])) return "drn";
     if (raw.t && VINTAGE_TYPES[raw.t]) return "vin";
     if (isHeli(raw)) return mil ? "mil" : "";
@@ -865,7 +883,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     return "pvt";
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
-    ag: "Topdressing", ant: "Research", gld: "Glider", cgo: "Cargo", vin: "Vintage", biz: "Business jet", drn: "Drone" };   // only these get a tag; colour shows the rest
+    ag: "Topdressing", ant: "Antarctic / research", gld: "Glider", cgo: "Cargo", vin: "Vintage", biz: "Business jet", drn: "Drone" };   // only these get a tag; colour shows the rest
   // Colour key (opened by the button next to "Return to …")
   var KEY = [
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
@@ -878,7 +896,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["drn", "#111111", 0, "Drone", ""],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
-    ["ant", "#39ff14", 0, "Antarctic / research", "NASA, NOAA, LC-130 ski planes, Basler BT-67 …"],
+    ["ant", "#39ff14", 0, "Antarctic / research", "Flights to Antarctica, Deep Freeze C-17s, NASA, NOAA, LC-130s …"],
     ["ag", "#0b5d1e", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
     ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
     ["trn", "#d9a300", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
@@ -1280,6 +1298,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             track: first(a.track, a.true_heading, a.mag_heading),
             gs: a.gs,
             cat: category(a),
+            ice: antarcticFlight(a),
             heli: isHeli(a),
             dist: distKm(pLat, pLon, a.lat, a.lon),
             brg: bearing(pLat, pLon, a.lat, a.lon),
@@ -1633,7 +1652,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     else if (a.cat === "mtr") lead = "Military trainer";
     else if (a.cat === "trn") lead = "Training";
     else if (a.cat === "ag") lead = "Topdressing";
-    else if (a.cat === "ant") lead = "Research";
+    else if (a.cat === "ant") lead = a.ice ? "Antarctic flight" : "Research";
     else if (a.cat === "gld") lead = "";
     else if (a.cat === "vin") lead = "Vintage";
     else if (a.cat === "drn") lead = "Drone";
@@ -1749,7 +1768,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function rareWhy(a) {
     if (a.cat === "emg") return "Emergency";
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
-    if (a.cat === "ant") return "Antarctic / research";
+    if (a.cat === "ant") return a.ice ? "Antarctic flight" : "Research";
     if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type])) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
     return "";
   }
