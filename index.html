@@ -302,7 +302,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     </div>
     <div id="zoombtns">
       <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
-      <button id="zoom3" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
+      <button id="zoomni" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
+      <button id="zoomnz" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
     </div>
     <div id="mapbtns2">
       <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
@@ -378,7 +379,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var FEED = P.get("feed") || "/api/feed";
   // Current search area – starts at home, follows the map when it's panned/zoomed
   var cLat = LAT, cLon = LON, cR = RADIUS_NM, away = false;
-  function apiUrl() { return FEED + "?lat=" + cLat.toFixed(2) + "&lon=" + cLon.toFixed(2) + "&r=" + Math.round(cR); }
+  function apiUrl(p) { p = p || [cLat, cLon, cR]; return FEED + "?lat=" + p[0].toFixed(2) + "&lon=" + p[1].toFixed(2) + "&r=" + Math.round(p[2]); }
+  var cParts = null;   // views too big for one 250 nm search (all of NZ): searched as a north and a south half
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
   var TYPES = {
@@ -602,33 +604,52 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     function atHome() {
       return map.getZoom() === home.z && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
     }
-    // Chosen view: 0 = home zoom, else km to the map edge from a zoom-out button (kept after reloads)
-    var viewKm = 0;
-    try { viewKm = +localStorage.getItem("planes.viewKm") || 0; } catch (e) { /* not saved */ }
-    function edgeZoom(km) { return map.getBoundsZoom(L.latLng(LAT, LON).toBounds(km * 1000 * 2), false, L.point(12, 12)); }
-    function viewZoom() { return viewKm ? edgeZoom(viewKm) : home.z; }
-    function atView() {
-      return Math.abs(map.getZoom() - viewZoom()) < 0.01 && map.latLngToContainerPoint(home.c).distanceTo(map.getSize().divideBy(2)) < 3;
+    // Chosen view from a zoom-out button, kept after reloads: "" = home zoom
+    var VIEWS = {
+      "50": { btn: "zoom2", label: HOME_EDGE_KM * 2 + " km", b: function () { return L.latLng(LAT, LON).toBounds(HOME_EDGE_KM * 2 * 1000 * 2); } },
+      ni: { btn: "zoomni", label: "N-I", b: function () { return L.latLngBounds([-41.65, 172.6], [-34.4, 178.6]); } },
+      nz: { btn: "zoomnz", label: "NZ", b: function () { return L.latLngBounds([-47.3, 166.4], [-34.4, 178.6]); } }
+    };
+    var viewKey = "";
+    try { viewKey = localStorage.getItem("planes.view") || ""; } catch (e) { /* not saved */ }
+    if (!VIEWS[viewKey]) viewKey = "";
+    function viewTarget() {
+      if (!viewKey) return { c: home.c, z: home.z };
+      var b = VIEWS[viewKey].b(), c = viewKey === "50" ? home.c : b.getCenter();
+      return { c: c, z: map.getBoundsZoom(b, false, L.point(12, 12)) };
     }
-    function setView(km) {
-      viewKm = km;
-      try { localStorage.setItem("planes.viewKm", String(km)); } catch (e) { /* not saved */ }
+    function atView() {
+      var t = viewTarget();
+      return Math.abs(map.getZoom() - t.z) < 0.01 && map.latLngToContainerPoint(t.c).distanceTo(map.getSize().divideBy(2)) < 3;
+    }
+    function setView(k) {
+      viewKey = k;
+      try { localStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
     }
     function goHome() {
       clearTimeout(idleT);
       if (selHex) { selHex = null; selLast = null; render(); }   // stop following a plane
       fixSize();
-      map.flyTo(home.c, viewZoom(), { duration: 0.8 });
+      var t = viewTarget();
+      map.flyTo(t.c, t.z, { duration: 0.8 });
     }
     // Search area: centred on the plane you're following, otherwise on the map view.
     // Radius is big enough to cover what's on screen.
     function followView() {
       var following = selHex && selLast;
-      if (!following && atHome()) { cLat = LAT; cLon = LON; cR = RADIUS_NM; away = false; }
+      if (!following && atHome()) { cLat = LAT; cLon = LON; cR = RADIUS_NM; away = false; cParts = null; }
       else {
         var c = following ? L.latLng(selLast.lat, selLast.lon) : map.getCenter(), b = map.getBounds();
         var halfDiagNm = Math.max(c.distanceTo(b.getNorthEast()), c.distanceTo(b.getSouthWest())) / 1852;
         cLat = c.lat; cLon = c.lng; cR = Math.max(10, Math.min(250, halfDiagNm)); away = true;
+        cParts = null;
+        if (!following && halfDiagNm > 250) {
+          var n = b.getNorth(), sth = b.getSouth(), mid = (n + sth) / 2;
+          cParts = [L.latLngBounds([mid, b.getWest()], [n, b.getEast()]), L.latLngBounds([sth, b.getWest()], [mid, b.getEast()])].map(function (h) {
+            var hc = h.getCenter();
+            return [hc.lat, hc.lng, Math.min(250, hc.distanceTo(h.getNorthEast()) / 1852)];
+          });
+        }
       }
       ring.setLatLng([cLat, cLon]).setRadius(cR * 1852);
       ring25.setLatLng([cLat, cLon]);
@@ -658,20 +679,16 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
     map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
-    L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); setView(0); goHome(); });
+    L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); setView(""); goHome(); });
     L.DomEvent.disableClickPropagation(homeBtn);
-    // Zoom-out buttons: Marton in the middle with 2x / 3x the home distance to the map edge
-    [["zoom2", 2], ["zoom3", 3]].forEach(function (z) {
-      var btn = $(z[0]), km = HOME_EDGE_KM * z[1];
-      btn.querySelector("span").textContent = km + " km";
-      L.DomEvent.on(btn, "click", function (e) {
-        L.DomEvent.stop(e);
-        setView(km);
-        goHome();
-      });
+    // Zoom-out buttons: Marton with 2x the home distance to the edge, the North Island, all of New Zealand
+    Object.keys(VIEWS).forEach(function (k) {
+      var btn = $(VIEWS[k].btn);
+      btn.querySelector("span").textContent = VIEWS[k].label;
+      L.DomEvent.on(btn, "click", function (e) { L.DomEvent.stop(e); setView(k); goHome(); });
       L.DomEvent.disableClickPropagation(btn);
     });
-    if (viewKm && !(ZOOM > 0)) map.setView(home.c, viewZoom(), { animate: false });   // reopen at the chosen zoom-out view
+    if (viewKey && !(ZOOM > 0)) { var t0 = viewTarget(); map.setView(t0.c, t0.z, { animate: false }); }   // reopen at the chosen view
   }
 
   // Trainer types (RNZAF T-6C / CT-4 plus common flight-school aircraft). Trainers win over military.
@@ -1139,9 +1156,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   var pollSeq = 0;
   function poll() {
     var seq = ++pollSeq, pLat = cLat, pLon = cLon;
-    fetch(apiUrl(), { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (j) {
+    Promise.all((cParts || [null]).map(function (p) {
+      return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    }))
+      .then(function (js) {
+        var seen = {}, j = { ac: [] };
+        js.forEach(function (x) { (x.ac || []).forEach(function (a) { if (!seen[a.hex]) { seen[a.hex] = 1; j.ac.push(a); } }); });
         if (seq !== pollSeq) return;   // a newer request (map moved) has replaced this one
         aircraft = (j.ac || []).filter(function (a) {
           return a.lat != null && a.lon != null && (a.seen_pos == null || a.seen_pos < 60) && !isTestTarget(a);
