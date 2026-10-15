@@ -99,8 +99,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 /* categories: military = brown, trainer = yellow (the selected plane stays orange) */
 .pl.mil:not(.on) svg{color:#6b3e14;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
 .pl.mil:not(.on) span{background:#5a3310;color:#fff}
-.pl.trn:not(.on) svg{color:#ffd400;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
-.pl.trn:not(.on) span{background:#ffd400;color:#000}
+.pl.trn:not(.on) svg{color:#d9a300;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.trn:not(.on) span{background:#d9a300;color:#000}
 /* military trainer = light brown, airline = red, private = white */
 .pl.mtr:not(.on) svg{color:#d2a46b;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
 .pl.mtr:not(.on) span{background:#d2a46b;color:#2b1a08}
@@ -125,8 +125,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 /* vintage / warbird = purple, business jet = bright yellow, drone = black */
 .pl.vin:not(.on) svg{color:#a066ff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
 .pl.vin:not(.on) span{background:#7a3fe0;color:#fff}
-.pl.biz:not(.on) svg{color:#fff200;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
-.pl.biz:not(.on) span{background:#fff200;color:#000}
+.pl.biz:not(.on) svg{color:#ffff00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 5px #ffff66)}
+.pl.biz:not(.on) span{background:#ffff00;color:#000}
 .pl.drn:not(.on) svg{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
 .pl.drn:not(.on) span{background:#111;color:#fff}
 /* airports */
@@ -187,7 +187,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .grp b{color:var(--txt)}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
-.row .ri.trn{color:#ffd400}
+.row .ri.trn{color:#d9a300}
 .row .ri.mtr{color:#e6c08f}
 .row .ri.com{color:#ff4b4e}
 .row .ri.pvt{color:#fff}
@@ -198,11 +198,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row .ri.gld{color:#2fd8c5}
 .row .ri.cgo{color:#c4c9cf}
 .row .ri.vin{color:#b385ff}
-.row .ri.biz{color:#fff200}
+.row .ri.biz{color:#ffff00}
 .row .ri.drn{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)}
 .tag{display:inline-block;margin-left:1vh;padding:.2vh .8vh;border-radius:.6vh;font-size:1.7vh;font-weight:700;vertical-align:.4vh;letter-spacing:.04em;text-transform:uppercase}
 .tag.mil{background:#5a3310;color:#fff}
-.tag.trn{background:#ffd400;color:#000}
+.tag.trn{background:#d9a300;color:#000}
 .tag.mtr{background:#d2a46b;color:#2b1a08}
 .tag.emg{background:#ff0000;color:#fff}
 .tag.res{background:#d6267e;color:#fff}
@@ -211,7 +211,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .tag.gld{background:#0f9488;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
 .tag.vin{background:#7a3fe0;color:#fff}
-.tag.biz{background:#fff200;color:#000}
+.tag.biz{background:#ffff00;color:#000}
 .tag.drn{background:#000;color:#fff;box-shadow:0 0 0 1px #fff}
 .rc .tag{font-size:1.5vh}
 .csn{font-size:2.2vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -865,19 +865,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
     ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
     ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
-    ["biz", "#fff200", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
+    ["biz", "#ffff00", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
     ["drn", "#111111", 0, "Drone", ""],
     ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
     ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
     ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
     ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
-    ["trn", "#ffd400", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
+    ["trn", "#d9a300", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
     ["ag", "#1fa24a", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
-    var dark = /^#(fff|fff200|c4c9cf|ffd400|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
+    var dark = /^#(fff|fff200|c4c9cf|ffd400|d9a300|ffff00|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
     return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
       (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
