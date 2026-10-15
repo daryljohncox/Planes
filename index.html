@@ -173,6 +173,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .row{display:flex;align-items:center;gap:1.4vh;width:100%;padding:1.2vh 1.8vh;border:0;border-bottom:1px solid #1d2632;
   background:none;color:var(--txt);text-align:left;font:inherit;cursor:pointer}
 .row:active{background:#1c2633}
+.grp{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;padding:.8vh 1.8vh;background:var(--deep);
+  border-bottom:1px solid #1d2632;font-size:1.9vh;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.grp b{color:var(--txt)}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#ffd400}
@@ -800,17 +803,17 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Colour key (opened by the button next to "Return to …")
   var KEY = [
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
-    ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
     ["pol", "#8ecbff", 1, "Police", "Eagle helicopter, POLAIR, police callsigns"],
+    ["res", "#ff4fa3", 1, "Rescue / air ambulance / fire", "Rescue, ambulance, coastguard & firefighting callsigns"],
     ["mil", "#6b3e14", 0, "Military", "Air force, army & navy aircraft"],
+    ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
+    ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
+    ["pvt", "#ffffff", 0, "Private", "Everything else"],
+    ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
+    ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
     ["mtr", "#d2a46b", 0, "Military trainer", "T-6 Texan II, PC-21, Hawk …"],
     ["trn", "#ffd400", 0, "Trainer", "Flight-school types: Tecnam, Cessna 152/172, Diamond …"],
     ["ag", "#1fa24a", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
-    ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
-    ["cgo", "#c4c9cf", 0, "Cargo", "FedEx, DHL, UPS, Airwork, Parcelair …"],
-    ["com", "#d7191c", 0, "Airline", "Passenger flights with an airline flight number"],
-    ["pvt", "#ffffff", 0, "Private", "Everything else"],
-    ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
     ["on", "#ff6a00", 0, "Selected", "The plane you tapped"]
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
@@ -1299,9 +1302,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.alt === null) return "—";
     return metres(a.alt).toLocaleString("en-NZ") + " m" + (a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "");
   }
+  // "All planes" list: one section per group, in this order, closest first within each
+  var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["res", "Rescue"], ["mil", "Military"], ["heli", "Helicopter"],
+    ["gld", "Glider / balloon"], ["pvt", "Private"], ["com", "Airline"], ["cgo", "Cargo"], ["mtr", "Military trainer"],
+    ["trn", "Trainer"], ["ag", "Topdressing"]];
+  function listGroup(a) { return a.heli && !a.cat ? "heli" : a.cat || "pvt"; }
   function renderList() {
     var top = $("rows").scrollTop;
-    $("rows").innerHTML = aircraft.map(function (a) {
+    $("rows").innerHTML = LIST_GROUPS.map(function (g) {
+      var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
+      return inGroup.length ? '<div class="grp"><b>' + g[1] + "</b><span>" + inGroup.length + "</span></div>" + inGroup.map(rowHtml).join("") : "";
+    }).join("");
+    $("rows").scrollTop = top;
+  }
+  function rowHtml(a) {
       var ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
       var st = airportStatus(a);
       if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
@@ -1310,8 +1324,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span></span>' +
         '<span class="rs"><b>' + esc(altText(a)) + '</b><br>' + a.dist.toFixed(1) + ' km · ' +
         (a.gs == null ? "—" : Math.round(a.gs * 1.852) + " km/h") + '</span></button>';
-    }).join("");
-    $("rows").scrollTop = top;
   }
   $("rows").addEventListener("click", function (e) {
     var row = e.target.closest ? e.target.closest(".row") : null;
