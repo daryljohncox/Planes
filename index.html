@@ -54,6 +54,8 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   line-height:1;white-space:nowrap;color:#fff;background:#13284a;border:0;border-radius:1.2vh;cursor:pointer;
   box-shadow:0 0 0 2px rgba(255,255,255,.5),0 .6vh 1.6vh rgba(0,0,0,.6)}
 #keybtn:active{background:#24406b}
+#stepbtns{position:absolute;left:1.4vh;bottom:1.4vh;z-index:1000;display:flex;gap:1.2vh}
+#stepbtns .mbtn{width:max(7vh,44px);justify-content:center;padding:0;font-size:4.4vh;line-height:1}
 #zoombtns{position:absolute;top:calc(2.6vh + max(7vh,44px));left:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-start}
 #keybtn .dots{display:flex;gap:.4vh}
 #keybtn .dots i{width:1.4vh;height:1.4vh;border-radius:50%;background:#ffd400}
@@ -321,6 +323,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       <button id="zoomni" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
       <button id="zoomnz" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
     </div>
+    <div id="stepbtns">
+      <button id="stepin" class="mbtn" type="button" aria-label="Zoom in 25 km">+</button>
+      <button id="stepout" class="mbtn" type="button" aria-label="Zoom out 25 km">−</button>
+    </div>
     <div id="mapbtns2">
       <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
       <button id="rarebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="#ffd400"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><span>Rare planes</span><b id="rarecount"></b></button>
@@ -572,7 +578,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     // Touch: drag to pan, pinch / double-tap to zoom. Snaps back home after HOME_IDLE_MS untouched.
     map = L.map("map", {
       zoomControl: false, dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
-      touchZoom: true, boxZoom: false, keyboard: false, zoomSnap: 0.25, inertia: true
+      touchZoom: true, boxZoom: false, keyboard: false, zoomSnap: 0.05, inertia: true
     });
     // Basemap (all free, no API key). ?map=natgeo (default) | topo | dark
     var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
@@ -705,6 +711,21 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       btn.querySelector("span").textContent = VIEWS[k].label;
       L.DomEvent.on(btn, "click", function (e) { L.DomEvent.stop(e); setView(k); goHome(); });
       L.DomEvent.disableClickPropagation(btn);
+    });
+    // + / − buttons: move the map edge in or out by 25 km from the centre (nearest edge), never closer than 25 km
+    var STEP_KM = 25;
+    function stepZoom(dir) {
+      var c = map.getCenter(), b = map.getBounds();
+      var edgeKm = Math.min(c.distanceTo(L.latLng(b.getNorth(), c.lng)), c.distanceTo(L.latLng(c.lat, b.getEast()))) / 1000;
+      var n = Math.max(1, Math.round(edgeKm / STEP_KM) + dir);
+      if (dir < 0 && n * STEP_KM >= edgeKm - 1) n = Math.max(1, n - 1);   // always actually move in
+      if (dir > 0 && n * STEP_KM <= edgeKm + 1) n++;                       // and out
+      n = Math.min(n, 60);
+      map.setView(c, map.getBoundsZoom(c.toBounds(n * STEP_KM * 1000 * 2), false, L.point(12, 12)), { animate: true });
+    }
+    [["stepin", -1], ["stepout", 1]].forEach(function (s) {
+      L.DomEvent.on($(s[0]), "click", function (e) { L.DomEvent.stop(e); stepZoom(s[1]); });
+      L.DomEvent.disableClickPropagation($(s[0]));
     });
     if (viewKey && !(ZOOM > 0)) { var t0 = viewTarget(); map.setView(t0.c, t0.z, { animate: false }); }   // reopen at the chosen view
   }
