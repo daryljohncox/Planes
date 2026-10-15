@@ -529,11 +529,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.heli) return a.cat === "res" ? "Rescue helicopter" : a.cat === "pol" ? "Police helicopter" : "Helicopter";
     return a.cat === "res" ? "Air ambulance" : "Unknown type";
   }
+  // Feed altitudes are in feet; everything shown or spoken is metres (nearest 10 m)
+  function metres(ft) { return Math.max(0, Math.round(ft * 0.3048 / 10) * 10); }
   function altHtml(a) {
     if (a.alt === "ground") return "Ground";
     if (a.alt === null) return "—";
     var trend = a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "";
-    return Math.round(a.alt).toLocaleString("en-NZ") + "<small>ft" + trend + "</small>";
+    return metres(a.alt).toLocaleString("en-NZ") + "<small>m" + trend + "</small>";
   }
   function setStatus(msg) { $("status").textContent = msg || ""; $("status").className = msg ? "err" : ""; }
 
@@ -1224,7 +1226,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function altText(a) {
     if (a.alt === "ground") return "Ground";
     if (a.alt === null) return "—";
-    return Math.round(a.alt).toLocaleString("en-NZ") + " ft" + (a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "");
+    return metres(a.alt).toLocaleString("en-NZ") + " m" + (a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "");
   }
   function renderList() {
     var top = $("rows").scrollTop;
@@ -1496,11 +1498,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   function heightSpeed(a) {
     if (a.alt === "ground") return "on the ground";
     var out = [];
-    if (typeof a.alt === "number") out.push(plainNum(Math.max(0, Math.round(a.alt * 0.3048 / 50) * 50)) + " metres");
+    if (typeof a.alt === "number") out.push("altitude " + plainNum(Math.max(0, Math.round(a.alt * 0.3048 / 50) * 50)) + " metres");
+    if (a.track != null) out.push("heading " + dir8(a.track));
     if (a.gs != null) out.push(plainNum(Math.round(a.gs * 1.852 / 10) * 10) + " kilometres per hour");
     return out.join(", ");
   }
-  // "Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, 1,500 metres, 250 kilometres per hour."
+  // "Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, altitude 1,500 metres, heading north-east,
+  //  250 kilometres per hour."
   function sentence(a, c) {
     var parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), whereNow(a, c), heightSpeed(a)].filter(Boolean);
     return parts.join(", ") + ".";
@@ -1657,7 +1661,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         if (VOICE.on && VOICE.overhead && VOICE[groupOf(a)]) sayPlane(a, { tag: "Overhead soon", body: function (b) {
           var m = Math.max(1, Math.round(overheadIn(b) || mins));
           return whoSays(b) + ", passing over " + PLACE + " in about " + (m === 1 ? "a minute" : m + " minutes") +
-            (typeof b.alt === "number" ? ", at " + plainNum(Math.round(b.alt * 0.3048 / 50) * 50) + " metres." : ".");
+            (typeof b.alt === "number" ? ", altitude " + plainNum(Math.round(b.alt * 0.3048 / 50) * 50) + " metres." : ".");
         } });
       }
       // Coming within ANNOUNCE_KM of the map centre
