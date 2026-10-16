@@ -603,8 +603,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         attribution: "© OpenStreetMap contributors, SRTM · Map style © OpenTopoMap (CC-BY-SA)"
       }).addTo(map);
     } else {
+      // NatGeo only has detail to tile zoom 12 outside the US ("Map data not yet available" beyond),
+      // so closer in it hands over to Esri World Topo, which has street/farm detail for NZ
       L.tileLayer(ESRI + "NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 16, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+        maxZoom: 12, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+      }).addTo(map);
+      L.tileLayer(ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+        minZoom: 13, maxZoom: 18, attribution: "Tiles © Esri — Esri, HERE, Garmin, LINZ, OpenStreetMap contributors"
       }).addTo(map);
     }
     // Centre the map first – Leaflet can't draw shapes until it has a view
