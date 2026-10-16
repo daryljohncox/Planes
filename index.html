@@ -1455,7 +1455,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   // Groups you can switch on/off. Emergencies and rare planes are always announced while the voice is on.
   var VOICE_ROWS = [
     ["on", "Announcements", "Say each plane as it comes within " + num("announce", 25) + " km of the map centre"],
-    ["com", "Airlines & cargo", "", 1], ["mil", "Military", "", 1], ["res", "Rescue & police", "", 1],
+    ["com", "Airlines & cargo", "Only when flying low, under 2,000 metres", 1], ["mil", "Military", "", 1], ["res", "Rescue & police", "", 1],
     ["trn", "Trainers", "Flight schools and military trainers (T-6 Texan II …)", 1],
     ["light", "Light aircraft", "Private, topdressing, gliders, vintage, business jets", 1], ["heli", "Helicopters", "", 1],
     ["overhead", "Overhead soon", "“Passing over " + PLACE + " in about 2 minutes”"],
@@ -1470,6 +1470,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   if (VOICE.trn === undefined) VOICE.trn = VOICE.light;   // new switch: start where "Light aircraft" was
   if (P.get("voice") === "0") VOICE.on = false;
   var ANNOUNCE_KM = num("announce", 25);
+  // Airlines and cargo are only announced when flying low (rare ones still get their rare alert)
+  var AIRLINE_LOW_FT = 2000 / 0.3048;
+  function wantVoice(a) {
+    var g = groupOf(a);
+    if (!VOICE[g]) return false;
+    return g !== "com" || (typeof a.alt === "number" && a.alt < AIRLINE_LOW_FT);
+  }
   function groupOf(a) {
     if (a.cat === "res" || a.cat === "pol") return "res";
     if (a.heli) return "heli";
@@ -1930,7 +1937,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       var mins = overheadIn(a);
       if (mins && !fresh && (!overSeen[a.hex] || now - overSeen[a.hex] > ZONE_QUIET_MS)) {
         overSeen[a.hex] = now;
-        if (VOICE.on && VOICE.overhead && VOICE[groupOf(a)]) sayPlane(a, { tag: "Overhead soon", body: function (b) {
+        if (VOICE.on && VOICE.overhead && wantVoice(a)) sayPlane(a, { tag: "Overhead soon", body: function (b) {
           var m = Math.max(1, Math.round(overheadIn(b) || mins));
           return whoSays(b) + ", passing over " + PLACE + " in about " + (m === 1 ? "a minute" : m + " minutes") +
             (typeof b.alt === "number" ? ", altitude " + plainNum(Math.round(b.alt * 0.3048 / 50) * 50) + " metres." : ".");
@@ -1943,7 +1950,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       if (!back || fresh || following || a.alt === "ground") return;
       logPass(why);
       if (rareNew || a.cat === "emg") return;   // already announced
-      if (VOICE.on && VOICE[groupOf(a)]) sayPlane(a);
+      if (VOICE.on && wantVoice(a)) sayPlane(a);
     });
     Object.keys(zoneSeen).forEach(function (h) { if (now - zoneSeen[h] > 2 * ZONE_QUIET_MS) delete zoneSeen[h]; });
   }
