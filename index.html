@@ -277,6 +277,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 .lastseen i{position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;border:3px solid #ff6a00;box-shadow:0 0 0 2px #fff}
 .lastseen span{position:absolute;left:18px;top:-12px;white-space:nowrap;background:#ff6a00;color:#fff;font:700 13px system-ui,sans-serif;padding:2px 6px;border-radius:4px}
 .rr .star{color:#ffd400;font-size:3vh}
+.rday{padding:1vh 1.8vh .6vh;font-size:1.9vh;font-weight:700;color:#ffd400;border-bottom:1px solid #1d2632}
 /* pop-up card for the plane being announced */
 #card{position:absolute;left:1.4vh;right:1.4vh;bottom:3vh;z-index:1002;display:flex;gap:1.6vh;align-items:center;
   max-width:min(92%,640px);margin:0 auto;padding:1.2vh;background:rgba(14,20,28,.94);color:var(--txt);border-radius:1.4vh;
@@ -1775,12 +1776,18 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     if (a.cat === "emg") return "Emergency";
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
     if (a.cat === "ant") return a.ice ? "Antarctic flight" : "Research";
+    if (southOfNZ(a)) return "South of NZ";
     if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type])) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
     return "";
   }
+  // Anything in the air south of Stewart Island counts as rare
+  var SOUTH_LAT = -47.4;
+  function southOfNZ(a) { return typeof a.lat === "number" && a.lat < SOUTH_LAT && a.alt !== "ground"; }
   function isRare(a) { return !!rareWhy(a); }
-  var rareList = store.get("rare", []);   // [{hex, cs, ty, reg, why, t}], newest first
-  var RARE_KEEP = 200, RARE_SAME_MS = 6 * 3600000;
+  // Kept for 7 days so missed ones can be checked; the list on the map starts afresh each day (older days below it)
+  var RARE_DAYS_MS = 7 * 86400000;
+  var rareList = store.get("rare", []).filter(function (r) { return Date.now() - r.t < RARE_DAYS_MS; });   // [{hex, cs, ty, reg, why, t}], newest first
+  var RARE_KEEP = 500, RARE_SAME_MS = 6 * 3600000;
   function rareCount() {   // today's rare planes on the button
     var d0 = new Date(); d0.setHours(0, 0, 0, 0);
     var n = rareList.filter(function (r) { return r.t >= d0.getTime(); }).length;
@@ -1802,6 +1809,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       return false;
     }
     rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd });
+    rareList = rareList.filter(function (r) { return now - r.t < RARE_DAYS_MS; });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
     store.set("rare", rareList);
     rareCount();
@@ -1815,12 +1823,21 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     try { return d.toLocaleDateString("en-NZ", { timeZone: TZ, day: "numeric", month: "short" }) + " " + time; } catch (e) { return d.toLocaleDateString() + " " + time; }
   }
   function drawRareList() {
+    var day = null;
     $("rarerows").innerHTML = rareList.length ? rareList.map(function (r) {
-      var here = latest(r.hex, null);
-      return '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
+      if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
+      return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
         '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
         esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
-    }).join("") : '<div class="note">No rare planes yet. Military visitors, vintage aircraft, warbirds and unusual types will show up here.</div>';
+    }).join("") : '<div class="note">No rare planes in the last 7 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>';
+  }
+  function dayLabel(t) {
+    var key = function (x) { try { return new Date(x).toLocaleDateString("en-NZ", { timeZone: TZ }); } catch (e) { return new Date(x).toDateString(); } };
+    var k = key(t);
+    if (k === key(Date.now())) return "Today";
+    if (k === key(Date.now() - 86400000)) return "Yesterday";
+    try { return new Date(t).toLocaleDateString("en-NZ", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" }); } catch (e) { return k; }
   }
   // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
   // select it once the feed for that area has it
@@ -1977,6 +1994,32 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     map.setView([lat, lon], homeZoom || map.getZoom(), { animate: false });
     setTimeout(function () { if (pendingHex === hex) pendingHex = null; }, 30000);
   }
+  // A plane from a background feed (Christchurch watch, south scan), measured from ref
+  function bgPlane(x, ref) {
+    var alt = x.alt_baro === "ground" ? "ground" : first(x.alt_baro, x.alt_geom);
+    return { hex: x.hex, flight: (x.flight || "").trim(), callsign: ((x.flight || "").trim()) || x.r || (x.hex || "").toUpperCase(),
+      reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || "", country: countryOf(x.hex),
+      lat: x.lat, lon: x.lon, alt: typeof alt === "number" || alt === "ground" ? alt : null,
+      vr: first(x.baro_rate, x.geom_rate, 0), track: first(x.track, x.true_heading, x.mag_heading), gs: x.gs,
+      cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
+      dist: distKm(ref.lat, ref.lon, x.lat, x.lon), brg: bearing(ref.lat, ref.lon, x.lat, x.lon) };
+  }
+  // ---------- south scan: anything flying south of NZ goes on the rare list (quietly) ----------
+  var SOUTH = { lat: -50.5, lon: 169 }, SOUTH_R_NM = 250, SOUTH_MS = 60000;
+  function southCheck() {
+    fetch(FEED + "?lat=" + SOUTH.lat + "&lon=" + SOUTH.lon + "&r=" + SOUTH_R_NM, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        (j.ac || []).filter(function (x) {
+          return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 60) && !isTestTarget(x);
+        }).map(withInfo).forEach(function (x) {
+          var a = bgPlane(x, SOUTH);
+          if (a.alt === "ground" || !(a.ice || southOfNZ(a))) return;
+          noteRare(a, a.ice ? "Antarctic flight" : "South of NZ");
+        });
+      })
+      .catch(function () { /* try again next time */ });
+  }
   function chcCheck() {
     if (VOICE.chc === false) return;
     fetch(FEED + "?lat=" + CHC.lat.toFixed(2) + "&lon=" + CHC.lon.toFixed(2) + "&r=" + CHC_R_NM, { cache: "no-store" })
@@ -1986,13 +2029,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         (j.ac || []).filter(function (x) {
           return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 60) && !isTestTarget(x);
         }).map(withInfo).forEach(function (x) {
-          var alt = x.alt_baro === "ground" ? "ground" : first(x.alt_baro, x.alt_geom);
-          var a = { hex: x.hex, flight: (x.flight || "").trim(), callsign: ((x.flight || "").trim()) || x.r || (x.hex || "").toUpperCase(),
-            reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || "", country: countryOf(x.hex),
-            lat: x.lat, lon: x.lon, alt: typeof alt === "number" || alt === "ground" ? alt : null,
-            vr: first(x.baro_rate, x.geom_rate, 0), track: first(x.track, x.true_heading, x.mag_heading), gs: x.gs,
-            cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
-            dist: distKm(CHC.lat, CHC.lon, x.lat, x.lon), brg: bearing(CHC.lat, CHC.lon, x.lat, x.lon) };
+          var a = bgPlane(x, CHC);
           chcLast[a.hex] = a;
           var s = chcSt[a.hex] || (chcSt[a.hex] = {});
           var gnd = a.alt === "ground" || (typeof a.alt === "number" && a.alt < 400 && (a.gs == null || a.gs < 50));
@@ -2020,6 +2057,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
             var to = iceBound(a);
             if (to) {
               s.ice = now;
+              noteRare(a, "Antarctic flight");
               var where = to === true ? "Antarctica" : (to.city || shortApt(to.name) || "Antarctica");
               chcAlert(a, { ice: true, tag: "Off to Antarctica", text: function (b) {
                 return "Antarctic flight. " + chcName(b) + ", has left Christchurch for " + where + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
@@ -2191,6 +2229,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   setInterval(findPasses, 10 * 60000);
   setTimeout(chcCheck, 3000);
   setInterval(chcCheck, CHC_MS);
+  setTimeout(southCheck, 5000);
+  setInterval(southCheck, SOUTH_MS);
   setTimeout(resumeIce, 2000);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
   setTimeout(function () { location.reload(); }, 3600000);
