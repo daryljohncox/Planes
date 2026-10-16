@@ -604,9 +604,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       }).addTo(map);
     } else {
       // NatGeo only has detail to tile zoom 12 outside the US ("Map data not yet available" beyond),
-      // so closer in it hands over to Esri World Topo, which has street/farm detail for NZ
+      // so closer in it hands over to Esri World Topo, which has street/farm detail for NZ.
+      // NatGeo stays underneath (stretched) so the map never goes white while Topo tiles load
       L.tileLayer(ESRI + "NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 12, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+        maxNativeZoom: 12, maxZoom: 18, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
       }).addTo(map);
       L.tileLayer(ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
         minZoom: 13, maxZoom: 18, attribution: "Tiles © Esri — Esri, HERE, Garmin, LINZ, OpenStreetMap contributors"
@@ -729,11 +730,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       L.DomEvent.on(btn, "click", function (e) { L.DomEvent.stop(e); setView(k); goHome(); });
       L.DomEvent.disableClickPropagation(btn);
     });
-    // + / − buttons: move the map edge in or out by 25 km from the centre (nearest edge), never closer than 25 km
+    // + / − buttons: move the map edge in or out by 25 km from the centre (nearest edge);
+    // inside 25 km each press halves / doubles the distance, all the way to the map's closest zoom
     var STEP_KM = 25;
     function stepZoom(dir) {
       var c = map.getCenter(), b = map.getBounds();
       var edgeKm = Math.min(c.distanceTo(L.latLng(b.getNorth(), c.lng)), c.distanceTo(L.latLng(c.lat, b.getEast()))) / 1000;
+      var z25 = map.getBoundsZoom(c.toBounds(STEP_KM * 1000 * 2), false, L.point(12, 12));
+      if (dir < 0 && edgeKm <= STEP_KM + 1) { map.setView(c, Math.min(Math.max(map.getZoom(), z25) + 1, map.getMaxZoom()), { animate: true }); return; }
+      if (dir > 0 && edgeKm < STEP_KM - 1) { map.setView(c, Math.max(map.getZoom() - 1, z25), { animate: true }); return; }
       var n = Math.max(1, Math.round(edgeKm / STEP_KM) + dir);
       if (dir < 0 && n * STEP_KM >= edgeKm - 1) n = Math.max(1, n - 1);   // always actually move in
       if (dir > 0 && n * STEP_KM <= edgeKm + 1) n++;                       // and out
