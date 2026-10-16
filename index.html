@@ -2004,8 +2004,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
       dist: distKm(ref.lat, ref.lon, x.lat, x.lon), brg: bearing(ref.lat, ref.lon, x.lat, x.lon) };
   }
-  // ---------- south scan: anything flying south of NZ goes on the rare list (quietly) ----------
+  // ---------- south scan: anything flying south of NZ goes on the rare list and is announced ----------
   var SOUTH = { lat: -50.5, lon: 169 }, SOUTH_R_NM = 250, SOUTH_MS = 60000;
+  var STEWART = { lat: -47.0, lon: 167.9 };
   function southCheck() {
     fetch(FEED + "?lat=" + SOUTH.lat + "&lon=" + SOUTH.lon + "&r=" + SOUTH_R_NM, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -2015,7 +2016,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
         }).map(withInfo).forEach(function (x) {
           var a = bgPlane(x, SOUTH);
           if (a.alt === "ground" || !(a.ice || southOfNZ(a))) return;
-          noteRare(a, a.ice ? "Antarctic flight" : "South of NZ");
+          var why = a.ice ? "Antarctic flight" : "South of NZ";
+          if (!noteRare(a, why) || !VOICE.on || !VOICE.rare) return;
+          chcLast[a.hex] = a;   // tapping the card follows it
+          chcAlert(a, { tag: why, text: function (b) {
+            var km = Math.round(distKm(STEWART.lat, STEWART.lon, b.lat, b.lon) / 10) * 10;
+            return "Plane south of New Zealand. " + chcName(b) + ", " + plainNum(km) + " kilometres " +
+              dir8(bearing(STEWART.lat, STEWART.lon, b.lat, b.lon)) + " of Stewart Island" + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
+          } });
         });
       })
       .catch(function () { /* try again next time */ });
