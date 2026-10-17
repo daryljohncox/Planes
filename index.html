@@ -80,8 +80,6 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 #home:active{background:#ffb14f}
 #home .ic{font-size:3.6vh}
 .leaflet-container{background:#0d1117;font-family:inherit}
-.leaflet-control-attribution{font-size:9px!important;background:rgba(0,0,0,.55)!important;color:#9aa!important}
-.leaflet-control-attribution a{color:#bcc!important}
 
 /* plane markers */
 .homepin{position:relative;width:30px;height:38px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
@@ -610,7 +608,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   } else {
     // Touch: drag to pan, pinch / double-tap to zoom. Snaps back home after HOME_IDLE_MS untouched.
     map = L.map("map", {
-      zoomControl: false, dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
+      zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
       touchZoom: true, boxZoom: false, keyboard: false, zoomSnap: 0.05, inertia: true
     });
     // Basemap (all free, no API key). ?map=natgeo (default) | topo | dark
