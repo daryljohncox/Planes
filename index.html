@@ -1163,18 +1163,31 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Looked up only for the plane you tap, and only when it was first picked up already flying or
   // is registered overseas. If the lookup gets no answer, guess from the direction it flew in.
   var histCache = {};   // registration -> {flights, ok} | "pending"
-  function histFor(f) {
+  function regOf(f) {
     var cs = (f.flight || "").toUpperCase();
-    var reg = f.reg || (/^ZK[A-Z0-9]{3}$/.test(cs) ? "ZK-" + cs.slice(2) : "");
+    return f.reg || (/^ZK[A-Z0-9]{3}$/.test(cs) ? "ZK-" + cs.slice(2) : "");
+  }
+  // One Flightradar24 flight-list request per registration, shared by the history lines and the photo
+  // (the same answer carries JetPhotos pictures of the aircraft)
+  var fr24Req = {};   // registration -> promise of Flightradar24's JSON
+  function fr24(reg) {
+    if (!fr24Req[reg]) {
+      // Flightradar24 straight from the Hub first (it may refuse cloud servers), then the relay
+      var q = "?query=" + encodeURIComponent(reg.toLowerCase()) + "&fetchBy=reg&page=1&limit=5";
+      var ok = function (j) { if (!parseHistory(j)) throw new Error("no data"); return j; };
+      fr24Req[reg] = getJSON("https://api.flightradar24.com/common/v1/flight/list.json" + q).then(ok)
+        .catch(function () { return getJSON("/api/history?reg=" + encodeURIComponent(reg)).then(ok); })
+        .catch(function (e) { setTimeout(function () { delete fr24Req[reg]; }, 120000); throw e; });
+    }
+    return fr24Req[reg];
+  }
+  function histFor(f) {
+    var reg = regOf(f);
     if (!reg) return null;
     var h = histCache[reg];
     if (h === undefined) {
       histCache[reg] = "pending";
-      // Flightradar24 straight from the Hub first (it may refuse cloud servers), then the relay
-      var q = "?query=" + encodeURIComponent(reg.toLowerCase()) + "&fetchBy=reg&page=1&limit=5";
-      var got = function (j) { var x = parseHistory(j); if (!x) throw new Error("no data"); return x; };
-      getJSON("https://api.flightradar24.com/common/v1/flight/list.json" + q).then(got)
-        .catch(function () { return getJSON("/api/history?reg=" + encodeURIComponent(reg)).then(got); })
+      fr24(reg).then(parseHistory)
         .then(function (fl) { histCache[reg] = { flights: fl, ok: true }; render(); })
         .catch(function () {
           histCache[reg] = { flights: [], ok: false }; render();
@@ -1269,6 +1282,21 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       };
     });
   }
+  // Flightradar24's JetPhotos pictures of one registration (for planes Planespotters has none of)
+  function fetchJetPhotos(reg, example) {
+    return fr24(reg).then(function (j) {
+      var imgs = j.result.response.aircraftImages;
+      imgs = Array.isArray(imgs) ? imgs[0] : imgs;
+      var set = imgs && imgs.images, p = null;
+      if (set) ["large", "medium", "thumbnails"].forEach(function (k) { if (!p && set[k] && set[k][0] && set[k][0].src) p = set[k][0]; });
+      if (!p) return null;
+      return {
+        src: p.src,
+        credit: (example ? example + " · " : "") + "© " + (p.copyright || "unknown") + " · " + (p.source || "JetPhotos"),
+        kind: example ? "generic" : "actual"
+      };
+    });
+  }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
   function fetchGeneric(type, desc, heli, searchOnly) {
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
@@ -1295,12 +1323,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     fn().then(function (p) { cache[key] = p; render(); })
         .catch(function () { cache[key] = null; setTimeout(function () { delete cache[key]; }, 300000); render(); });
   }
-  function photoFor(a) {
+  var regCache = {};   // registration -> JetPhotos photo | null | "pending"
+  // prefetch: only the free Planespotters / Wikipedia lookups (Flightradar24 is asked for planes you see close up)
+  function photoFor(a, prefetch) {
     if (a.hex && a.hex.charAt(0) !== "~") {
       var h = hexCache[a.hex];
       if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
       if (h === "pending") return null;
       if (h) return h;
+    }
+    // No Planespotters photo: a real one of this registration from JetPhotos (via Flightradar24).
+    // A police helicopter that hides its registration gets one of NZ Police's three Eagle Bell 429s.
+    var reg = regOf(a), example = "";
+    if (!reg && a.heli && a.cat === "pol") { reg = "ZK-IPC"; example = "NZ Police Eagle"; }
+    if (reg && prefetch !== true) {
+      var r = regCache[reg];
+      if (r === undefined) { load(regCache, reg, function () { return fetchJetPhotos(reg, example); }); return null; }
+      if (r === "pending") return null;
+      if (r) return r;
     }
     var key = a.type || a.desc ? (a.type || "") + "|" + (a.desc || "") : "", type = a.type;
     // Unknown type: show a typical one of what it is (NZ rescue helicopters are mostly BK 117 / H145,
@@ -1495,7 +1535,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     drawTrail(f);
 
     // pre-load photos for the nearest few so a tap shows one straight away
-    aircraft.slice(0, PREFETCH_N).forEach(photoFor);
+    aircraft.slice(0, PREFETCH_N).forEach(function (a) { photoFor(a, true); });
 
     if (!f) {
       $("detail").style.display = "none";
