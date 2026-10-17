@@ -1164,13 +1164,35 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var h = histCache[reg];
     if (h === undefined) {
       histCache[reg] = "pending";
-      getJSON("/api/history?reg=" + encodeURIComponent(reg))
-        .then(function (j) { histCache[reg] = { flights: (j && j.flights) || [], ok: !!(j && j.ok) }; render(); })
-        .catch(function () { histCache[reg] = { flights: [], ok: false }; })
-        .then(function () { if (!histCache[reg].ok) setTimeout(function () { delete histCache[reg]; }, 120000); });
+      // Flightradar24 straight from the Hub first (it may refuse cloud servers), then the relay
+      var q = "?query=" + encodeURIComponent(reg.toLowerCase()) + "&fetchBy=reg&page=1&limit=5";
+      var got = function (j) { var x = parseHistory(j); if (!x) throw new Error("no data"); return x; };
+      getJSON("https://api.flightradar24.com/common/v1/flight/list.json" + q).then(got)
+        .catch(function () { return getJSON("/api/history?reg=" + encodeURIComponent(reg)).then(got); })
+        .then(function (fl) { histCache[reg] = { flights: fl, ok: true }; render(); })
+        .catch(function () {
+          histCache[reg] = { flights: [], ok: false }; render();
+          setTimeout(function () { delete histCache[reg]; }, 120000);
+        });
       return null;
     }
     return h === "pending" ? null : h;
+  }
+  // Flightradar24 flight list -> [{from, to, dep, arr, live}], newest first; null if it isn't one
+  function parseHistory(j) {
+    var data = j && j.result && j.result.response && j.result.response.data;
+    if (!Array.isArray(data)) return null;
+    var ap = function (a) {
+      if (!a || !a.code) return null;
+      var pos = a.position || {};
+      return { iata: a.code.iata || "", icao: a.code.icao || "", name: a.name || "",
+        city: (pos.region && pos.region.city) || "", country: (pos.country && pos.country.name) || "" };
+    };
+    return data.map(function (f) {
+      var a = f.airport || {}, t = f.time || {}, real = t.real || {}, est = t.estimated || {}, from = ap(a.origin);
+      return from && { from: from, to: ap(a.destination), dep: real.departure || null, arr: real.arrival || est.arrival || null,
+        live: !!(f.status && f.status.live) };
+    }).filter(Boolean).slice(0, 4);
   }
   function inNZ(lat, lon) { return lat < -33.8 && lat > -47.6 && lon > 166 && lon < 179; }
   function histWhen(ts, withTime) {
