@@ -174,6 +174,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .rte.none{color:var(--dim);font-size:2.2vh}
 .rte .unk{color:var(--dim)}
 .rte .ft{color:var(--dim);font-size:2.2vh;margin-left:.6vh;flex-shrink:0}
+.hist{font-size:2.2vh;color:#ffd27a}
+.hist div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist .dim{color:var(--dim)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
 .st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
 .st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
@@ -376,6 +379,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div><button id="hear" type="button" aria-label="Read out"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button></div>
       <div class="ty" id="ty">&nbsp;</div>
       <div class="rte" id="rte"></div>
+      <div class="hist" id="hist"></div>
       <div class="csn" id="csn"></div>
       <div class="aps" id="aps"></div>
       <div class="stats">
@@ -1149,6 +1153,84 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     el.innerHTML = apHtml(r.from) + '<span class="ar">→</span>' + apHtml(r.to);
   }
 
+  // ---------- where a plane came from before NZ coverage (api/history.js, Flightradar24) ----------
+  // Looked up only for the plane you tap, and only when it was first picked up already flying or
+  // is registered overseas. If the lookup gets no answer, guess from the direction it flew in.
+  var histCache = {};   // registration -> {flights, ok} | "pending"
+  function histFor(f) {
+    var cs = (f.flight || "").toUpperCase();
+    var reg = f.reg || (/^ZK[A-Z0-9]{3}$/.test(cs) ? "ZK-" + cs.slice(2) : "");
+    if (!reg) return null;
+    var h = histCache[reg];
+    if (h === undefined) {
+      histCache[reg] = "pending";
+      getJSON("/api/history?reg=" + encodeURIComponent(reg))
+        .then(function (j) { histCache[reg] = { flights: (j && j.flights) || [], ok: !!(j && j.ok) }; render(); })
+        .catch(function () { histCache[reg] = { flights: [], ok: false }; })
+        .then(function () { if (!histCache[reg].ok) setTimeout(function () { delete histCache[reg]; }, 120000); });
+      return null;
+    }
+    return h === "pending" ? null : h;
+  }
+  function inNZ(lat, lon) { return lat < -33.8 && lat > -47.6 && lon > 166 && lon < 179; }
+  function histWhen(ts, withTime) {
+    var d = new Date(ts * 1000), o = { timeZone: TZ };
+    var day = function (x) { try { return x.toLocaleDateString("en-NZ", Object.assign({ day: "numeric", month: "short" }, o)); } catch (e) { return x.toLocaleDateString(); } };
+    var time; try { time = d.toLocaleTimeString("en-NZ", Object.assign({ hour: "numeric", minute: "2-digit" }, o)); } catch (e) { time = d.toLocaleTimeString(); }
+    var today = day(d) === day(new Date());
+    return withTime ? (today ? "" : day(d) + " ") + time : day(d);
+  }
+  function histPlace(ap) { return (ap.city || ap.name || ap.iata || ap.icao) + (ap.country ? ", " + ap.country : ""); }
+  // Back along the direction it first flew in, the nearest big airport outside NZ
+  function guessOrigin(pts) {
+    var p0 = pts[0], p1 = pts[Math.min(6, pts.length - 1)];
+    if (!AIRPORTS.length || distKm(p0[0], p0[1], p1[0], p1[1]) < 5) return null;
+    var back = bearing(p1[0], p1[1], p0[0], p0[1]), best = null, bestScore = 1e9;
+    AIRPORTS.forEach(function (r) {
+      if (r[5] !== 1 || inNZ(r[2], r[3])) return;
+      var d = distKm(p0[0], p0[1], r[2], r[3]);
+      if (d < 150 || d > 6000) return;
+      var off = Math.abs(((bearing(p0[0], p0[1], r[2], r[3]) - back + 540) % 360) - 180);
+      if (off > 8) return;
+      var score = off + d / 500;
+      if (score < bestScore) { bestScore = score; best = r; }
+    });
+    return best;
+  }
+  function cameFromHtml(f) {
+    var pts = traceFor(f.hex);
+    var airStart = !!(pts && pts.length && pts[0][2] !== "ground");
+    var foreign = !!f.country && f.country !== "New Zealand";
+    if (!airStart && !foreign) return "";
+    var h = histFor(f), now = Date.now() / 1000, NZ = "New Zealand", lines = [], i, fl = h && h.flights;
+    if (h && h.ok) {
+      var shown = -1, c = 0;
+      while (fl[c] && !fl[c].dep && !fl[c].live) c++;   // skip flights it hasn't started yet
+      var cur = fl[c];
+      if (cur && cur.from.country !== NZ && (cur.live || cur.dep > now - 86400)) {
+        shown = c;
+        lines.push(esc("Came from " + histPlace(cur.from) + (cur.dep ? " · left " + histWhen(cur.dep, true) : "")));
+      } else {
+        for (i = 0; i < fl.length; i++) {
+          if (fl[i].from.country !== NZ && fl[i].to && fl[i].to.country === NZ && fl[i].dep && fl[i].dep > now - 7 * 86400) {
+            shown = i;
+            lines.push(esc("Arrived in NZ from " + histPlace(fl[i].from) + " · " + histWhen(fl[i].arr || fl[i].dep, false)));
+            break;
+          }
+        }
+      }
+      var prev = shown >= 0 && fl[shown + 1];
+      if (prev && prev.to && prev.dep && prev.dep > now - 14 * 86400) {
+        lines.push('<span class="dim">Before that: ' + esc(prev.from.city || prev.from.name) + " → " + esc(prev.to.city || prev.to.name) +
+          ", " + esc(histWhen(prev.dep, false)) + "</span>");
+      }
+    } else if (h && airStart && !inNZ(pts[0][0], pts[0][1])) {
+      var g = guessOrigin(pts);
+      if (g) lines.push(esc("Probably from " + g[1] + " (" + g[0] + ")"));
+    }
+    return lines.map(function (l) { return "<div>" + l + "</div>"; }).join("");
+  }
+
   var hexCache = {};   // hex -> photo | null | "pending"
   var typeCache = {};  // type/desc -> photo | null | "pending"
 
@@ -1417,6 +1499,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     $("ty").textContent = line;
     var st = airportStatus(f);
     showRoute(f, st);
+    $("hist").innerHTML = cameFromHtml(f);
     var co = csOp(f.flight.toUpperCase());
     $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
     $("aps").textContent = st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
