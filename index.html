@@ -1300,7 +1300,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (x === undefined && acBusy < 3) {
       acInfo[a.hex] = "pending"; acBusy++;
       var base = (P.get("feed") || "/api/feed").replace(/feed$/, "aircraft");
-      getJSON(base + "?hex=" + a.hex + "&reg=" + encodeURIComponent(a.r || ""))
+      // NZ planes often fly with no registration in the feed but use it as the callsign (ZKNYO = ZK-NYO)
+      var cs = (a.flight || "").trim().toUpperCase(), reg = a.r || (/^ZK[A-Z0-9]{3}$/.test(cs) ? "ZK-" + cs.slice(2) : "");
+      getJSON(base + "?hex=" + a.hex + "&reg=" + encodeURIComponent(reg))
         .then(function (j) { acInfo[a.hex] = (j && j.ac) || null; })
         .catch(function () { delete acInfo[a.hex]; })   // try again on a later poll
         .then(function () { acBusy--; });
