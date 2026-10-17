@@ -472,6 +472,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     PC6T:["Pilatus Porter","Pilatus PC-6 Porter"], SR22:["Cirrus SR22","Cirrus SR22"], SR20:["Cirrus SR20","Cirrus SR20"],
     BE58:["Beechcraft Baron","Beechcraft Baron"], BE36:["Beechcraft Bonanza","Beechcraft Bonanza"],
     PA34:["Piper Seneca","Piper PA-34 Seneca"], PA44:["Piper Seminole","Piper PA-44 Seminole"],
+    P32R:["Piper Saratoga","Piper PA-32R"], PA32:["Piper Cherokee Six","Piper PA-32"], P28R:["Piper Arrow","Piper PA-28 Cherokee"],
+    PA18:["Piper Super Cub","Piper PA-18 Super Cub"], PA38:["Piper Tomahawk","Piper PA-38 Tomahawk"],
+    C180:["Cessna 180","Cessna 180 Skywagon"], C185:["Cessna 185","Cessna 185 Skywagon"], C210:["Cessna 210","Cessna 210 Centurion"],
+    CL64:["Challenger 604","Bombardier Challenger 600 series"], DA20:["Diamond DA20","Diamond DA20"],
     C310:["Cessna 310","Cessna 310"], C421:["Cessna 421","Cessna 421"], C150:["Cessna 150","Cessna 150"],
     C25A:["Citation CJ2","Cessna CitationJet/M2"], C17:["C-17 Globemaster III","Boeing C-17 Globemaster III"],
     A400:["A400M Atlas","Airbus A400M Atlas"],
@@ -584,7 +588,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     for (var i = 0; i < ICAO_BLOCKS.length; i++) if (n >= ICAO_BLOCKS[i][0] && n <= ICAO_BLOCKS[i][1]) return ICAO_BLOCKS[i][2];
     return "";
   }
-  function titleCase(s) { return s.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }); }
+  function titleCase(s) {
+    return s.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); })
+      .replace(/[^\s]*\d[^\s]*/g, function (w) { return w.toUpperCase(); });   // model numbers: "PA-32R-301", "172S"
+  }
   function typeName(a) {
     if (a.type && TYPES[a.type]) return TYPES[a.type][0];
     if (a.desc) return titleCase(a.desc);
@@ -1271,9 +1278,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     });
   }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
-  function fetchGeneric(type, desc, heli) {
+  function fetchGeneric(type, desc, heli, searchOnly) {
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
-    var known = type && TYPES[type];
+    var known = !searchOnly && type && TYPES[type];
     // Unknown types: search, then take the first result whose Wikipedia short description says it's an aircraft
     // (a bare type code like "P208" can otherwise match a ship or anything else)
     var url = known
@@ -1287,6 +1294,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       var pg = null;
       for (var i = 0; i < list.length && !pg; i++)
         if (list[i].thumbnail && (known || AIRCRAFT_DESC.test(list[i].description || ""))) pg = list[i];
+      if (!pg && known) return fetchGeneric(type, desc || TYPES[type][0], heli, true);   // that page has no picture: search instead
       return pg ? { src: pg.thumbnail.source, credit: "Example photo · Wikipedia", kind: "generic" } : null;
     });
   }
@@ -1302,10 +1310,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (h === "pending") return null;
       if (h) return h;
     }
-    var key = a.type || a.desc, type = a.type;
+    var key = a.type || a.desc ? (a.type || "") + "|" + (a.desc || "") : "", type = a.type;
     // Unknown type: show a typical one of what it is (NZ rescue helicopters are mostly BK 117 / H145,
     // NZ Police's Eagle is a Bell 429)
     if (!key && a.heli) key = type = a.cat === "res" ? "BK17" : a.cat === "pol" ? "B429" : "";
+    if (type && !TYPES[type] && !a.desc && acInfo[a.hex] === "pending") return null;   // its description is on the way
     if (!key) return null;
     var t = typeCache[key];
     if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(type, a.desc, a.heli); }); return null; }
@@ -1405,7 +1414,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // ---------- backup aircraft details (api/aircraft.js) for planes the feed has no type for ----------
   var acInfo = {}, acBusy = 0;   // hex -> {t, desc, r, owner} | null | "pending"
   function infoFor(a) {
-    if (a.t || !a.hex || !/^[0-9a-f]{6}$/i.test(a.hex)) return null;
+    // Also for a type code the map has no name for and the feed sent no description (e.g. P32R alone)
+    if ((a.t && (a.desc || TYPES[a.t])) || !a.hex || !/^[0-9a-f]{6}$/i.test(a.hex)) return null;
     var x = acInfo[a.hex];
     if (x === undefined && acBusy < 3) {
       acInfo[a.hex] = "pending"; acBusy++;
