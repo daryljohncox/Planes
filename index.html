@@ -1839,6 +1839,27 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   var RARE_DAYS_MS = 7 * 86400000;
   var rareList = store.get("rare", []).filter(function (r) { return Date.now() - r.t < RARE_DAYS_MS; });   // [{hex, cs, ty, reg, why, t}], newest first
   var RARE_KEEP = 500, RARE_SAME_MS = 6 * 3600000;
+  var RARE_FLIP_MS = 20 * 60000;   // a new callsign only means a new flight if the plane was out of sight this long
+  // Tidy the saved list: drop types no longer counted as rare (e.g. the A380) and merge the repeats left by
+  // planes whose callsign flipped back and forth (YAK83 / ANZ648M)
+  (function () {
+    var NOT_TYPE = /^(Emergency|Antarctic flight|Research|South of NZ|.*Military)$/i, kept = [];
+    rareList.slice().reverse().forEach(function (r) {
+      var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || "");
+      if (m && !RARE_TYPES[m[1]] && !NOT_TYPE.test(r.why || "")) return;
+      for (var i = kept.length - 1; i >= 0; i--) {
+        var k = kept[i];
+        if (k.hex !== r.hex) continue;
+        if (!k.gnd && r.t - (k.last || k.t) < RARE_FLIP_MS) {
+          k.last = Math.max(k.last || k.t, r.last || r.t); k.lat = r.lat; k.lon = r.lon; k.gnd = r.gnd; k.air = k.air || r.air;
+          return;
+        }
+        break;
+      }
+      kept.push(r);
+    });
+    if (kept.length !== rareList.length) { rareList = kept.reverse(); store.set("rare", rareList); }
+  })();
   function rareCount() {   // today's rare planes on the button
     var d0 = new Date(); d0.setHours(0, 0, 0, 0);
     var n = rareList.filter(function (r) { return r.t >= d0.getTime(); }).length;
@@ -1855,8 +1876,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
-      // Another flight: landed and took off again, new callsign, or back after a long gap
-      var again = !gnd && ((r.air && r.gnd) || (fk && r.fk && fk !== r.fk) || now - (r.last || r.t) > RARE_GAP_MS);
+      // Another flight: landed and took off again, back after a long gap, or a new callsign after being out of sight
+      // for a while (the feed can flip between two callsigns for the same flight, e.g. YAK83 / ANZ648M)
+      var away = now - (r.last || r.t);
+      var again = !gnd && ((r.air && r.gnd) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
       if (again) break;
       r.last = now; r.lat = a.lat; r.lon = a.lon;
       if (gnd) r.gnd = true; else { r.air = true; r.gnd = false; }
