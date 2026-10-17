@@ -26,7 +26,7 @@
   Voice: announcements are spoken by api/tts.js (Microsoft's free neural voices, British "Sonia" by default,
   chosen in the Voice panel; Google's as backup),
   with the device's own voice as a last resort. Settings, rare plane list and hourly counts are kept in
-  localStorage on the device. Rain radar: RainViewer. Space station: orbit from api/iss.js + satellite.js.
+  localStorage on the device. Space station: orbit from api/iss.js + satellite.js.
 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -90,47 +90,51 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 4px #fff}
 body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #000}
 .pl{position:relative;width:28px;height:28px}
-.pl svg{width:28px;height:28px;color:var(--plane);filter:drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);transition:transform .6s}
+.pl svg{width:28px;height:28px;color:var(--plane);--ol:#000;filter:none;transition:transform .6s}
+/* outline drawn as a stroke behind the fill – far cheaper for the Hub to repaint while panning/zooming than stacked drop-shadow blurs */
+.pl svg{overflow:visible}
+.pl svg g>*{stroke:var(--ol);stroke-width:2.2px;stroke-linejoin:round;paint-order:stroke fill}
+.pl svg g.sh>*{stroke:rgba(0,0,0,.45);stroke-width:4.4px}   /* soft dark edge under the outline, like the old shadow */
 .pl span{position:absolute;top:27px;left:50%;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:0 4px;border-radius:3px;white-space:nowrap}
 .pl.on svg{color:var(--acc);transform-origin:center}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
-.lightmap .pl svg{color:#13284a;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
+.lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
 /* categories: military = brown, trainer = yellow (the selected plane stays orange) */
-.pl.mil:not(.on) svg{color:#6b3e14;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.mil:not(.on) svg{color:#6b3e14;--ol:#fff;filter:none}
 .pl.mil:not(.on) span{background:#5a3310;color:#fff}
-.pl.trn:not(.on) svg{color:#d9a300;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.trn:not(.on) svg{color:#d9a300;--ol:#000;filter:none}
 .pl.trn:not(.on) span{background:#d9a300;color:#000}
 /* military trainer = light brown, airline = red, private = white */
-.pl.mtr:not(.on) svg{color:#d2a46b;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.mtr:not(.on) svg{color:#d2a46b;--ol:#000;filter:none}
 .pl.mtr:not(.on) span{background:#d2a46b;color:#2b1a08}
-.pl.pvt:not(.on) svg{color:#fff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.pvt:not(.on) svg{color:#fff;--ol:#000;filter:none}
 .pl.pvt:not(.on) span{background:#fff;color:#13284a;box-shadow:0 0 0 1px #13284a}
-.pl.com:not(.on) svg{color:#d7191c;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.com:not(.on) svg{color:#d7191c;--ol:#fff;filter:none}
 .pl.com:not(.on) span{background:#b01418;color:#fff}
 /* emergency = flashing red/white, rescue = pink, police = light blue, ag = green, glider = turquoise, cargo = light grey */
 @keyframes emg{0%,100%{color:#ff0000}50%{color:#fff}}
-.pl.emg:not(.on) svg{animation:emg 1s steps(1) infinite;color:#ff0000;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 4px #ff0000)}
+.pl.emg:not(.on) svg{animation:emg 1s steps(1) infinite;color:#ff0000;--ol:#000;filter:drop-shadow(0 0 4px #ff0000)}
 .pl.emg span{background:#ff0000!important;color:#fff!important}
-.pl.res:not(.on) svg{color:#ff4fa3;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.res:not(.on) svg{color:#ff4fa3;--ol:#fff;filter:none}
 .pl.res:not(.on) span{background:#d6267e;color:#fff}
-.pl.pol:not(.on) svg{color:#8ecbff;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.pol:not(.on) svg{color:#8ecbff;--ol:#000;filter:none}
 .pl.pol:not(.on) span{background:#8ecbff;color:#0b2545}
-.pl.ag:not(.on) svg{color:#0b5d1e;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.ag:not(.on) svg{color:#0b5d1e;--ol:#fff;filter:none}
 .pl.ag:not(.on) span{background:#0b5d1e;color:#fff}
 /* Antarctic / research = glowing bright green */
-.pl.ant:not(.on) svg{color:#39ff14;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #39ff14) drop-shadow(0 0 8px #7dff5c)}
+.pl.ant:not(.on) svg{color:#39ff14;--ol:#000;filter:drop-shadow(0 0 8px #7dff5c)}
 .pl.ant:not(.on) span{background:#39ff14;color:#000;box-shadow:0 0 6px #39ff14}
-.pl.gld:not(.on) svg{color:#14c2b0;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.gld:not(.on) svg{color:#14c2b0;--ol:#000;filter:none}
 .pl.gld:not(.on) span{background:#0f9488;color:#fff}
-.pl.cgo:not(.on) svg{color:#c4c9cf;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000)}
+.pl.cgo:not(.on) svg{color:#c4c9cf;--ol:#000;filter:none}
 .pl.cgo:not(.on) span{background:#c4c9cf;color:#13284a}
 /* vintage / warbird = purple, business jet = bright yellow, drone = black */
-.pl.vin:not(.on) svg{color:#a066ff;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #000)}
+.pl.vin:not(.on) svg{color:#a066ff;--ol:#fff;filter:none}
 .pl.vin:not(.on) span{background:#7a3fe0;color:#fff}
-.pl.biz:not(.on) svg{color:#ffff00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 5px #ffff66)}
+.pl.biz:not(.on) svg{color:#ffff00;--ol:#000;filter:drop-shadow(0 0 5px #ffff66)}
 .pl.biz:not(.on) span{background:#ffff00;color:#000}
-.pl.drn:not(.on) svg{color:#111;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff)}
+.pl.drn:not(.on) svg{color:#111;--ol:#fff;filter:none}
 .pl.drn:not(.on) span{background:#111;color:#fff}
 /* airports */
 .apt{position:relative;width:12px;height:12px}
@@ -138,11 +142,11 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .apt.t1 i{border-width:4px}
 .apt.mil i{border-color:#6b3e14}
 .apt b{position:absolute;left:15px;top:-2px;font:700 11px system-ui,sans-serif;color:#4a1170;white-space:nowrap;
-  text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff}
+  text-shadow:0 0 2px #fff,0 0 2px #fff}
 .apt.mil b{color:#5a3310}
 .apt b small{font-weight:500;margin-left:4px}
-body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
-.lightmap .pl.on svg{color:#ff6a00;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 3px rgba(0,0,0,.6))}
+body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
+.lightmap .pl.on svg{color:#ff6a00;--ol:#000;filter:none}
 .lightmap .pl span{background:rgba(19,40,74,.85)}
 .lightmap .pl.on span{background:#ff6a00;color:#000}
 .pl.on{width:36px;height:36px}
@@ -237,7 +241,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
 #back:active{background:#1c2633}
 .empty{display:none;flex:1;align-items:center;justify-content:center;text-align:center;padding:2vh;color:var(--dim);font-size:3vh}
 
-/* right-hand map buttons: voice settings, rare plane list, rain radar */
+/* right-hand map buttons: voice settings, rare plane list */
 #mapbtns2{position:absolute;top:1.4vh;right:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-end}
 .mbtn{display:flex;height:7vh;min-height:44px;padding:0 1.8vh;gap:1vh;align-items:center;font:700 2.6vh system-ui,sans-serif;
   line-height:1;white-space:nowrap;color:#fff;background:#13284a;border:0;border-radius:1.2vh;cursor:pointer;
@@ -340,7 +344,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     <div id="mapbtns2">
       <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
       <button id="rarebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="#ffd400"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><span>Rare planes</span><b id="rarecount"></b></button>
-      <button id="rainbtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 10.5A6.5 6.5 0 0 0 6.6 8.2 5 5 0 0 0 7 18h11a4 4 0 0 0 1-7.5z" opacity=".9"/><path d="M8 19.5l-1 3M12 19.5l-1 3M16 19.5l-1 3" stroke="#7fd0ff" stroke-width="1.8" stroke-linecap="round"/></svg><span>Rain</span></button>
     </div>
     <div id="voicepanel" class="pop" hidden>
       <div class="kh"><span>Voice announcements</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
@@ -614,12 +617,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
     if (MAP_STYLE === "dark") {
       L.tileLayer(ESRI + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 16, attribution: "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"
+        maxZoom: 16, updateWhenZooming: false, keepBuffer: 4, attribution: "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"
       }).addTo(map);
-      L.tileLayer(ESRI + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 }).addTo(map);
+      L.tileLayer(ESRI + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, updateWhenZooming: false, keepBuffer: 4 }).addTo(map);
     } else if (MAP_STYLE === "topo") {
       L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-        maxZoom: 17, subdomains: "abc",
+        maxZoom: 17, subdomains: "abc", updateWhenZooming: false, keepBuffer: 4,
         attribution: "© OpenStreetMap contributors, SRTM · Map style © OpenTopoMap (CC-BY-SA)"
       }).addTo(map);
     } else {
@@ -627,10 +630,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       // so closer in it hands over to Esri World Topo, which has street/farm detail for NZ.
       // NatGeo stays underneath (stretched) so the map never goes white while Topo tiles load
       L.tileLayer(ESRI + "NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}", {
-        maxNativeZoom: 12, maxZoom: 18, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+        maxNativeZoom: 12, maxZoom: 18, updateWhenZooming: false, keepBuffer: 4, attribution: "Tiles © Esri — National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
       }).addTo(map);
       L.tileLayer(ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
-        minZoom: 13, maxZoom: 18, attribution: "Tiles © Esri — Esri, HERE, Garmin, LINZ, OpenStreetMap contributors"
+        minZoom: 13, maxZoom: 18, updateWhenZooming: false, keepBuffer: 4, attribution: "Tiles © Esri — Esri, HERE, Garmin, LINZ, OpenStreetMap contributors"
       }).addTo(map);
     }
     // Centre the map first – Leaflet can't draw shapes until it has a view
@@ -740,7 +743,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var refetchT = null;
     map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
     map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
-    map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); });
+    map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); if (renderLater) render(); });
     L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); setView(""); goHome(); });
     L.DomEvent.disableClickPropagation(homeBtn);
     // Zoom-out buttons: Marton with 2x the home distance to the edge, the North Island, all of New Zealand
@@ -957,7 +960,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     var size = on ? 36 : 28;
     var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + (flashUntil[a.hex] > Date.now() ? " flash" : "") +
       (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
-      Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg><span>' + esc(a.callsign) + "</span></div>";
+      Math.round(a.track || 0) + 'deg)"><g class="sh">' + shapeOf(a) + '</g><g>' + shapeOf(a) + '</g></svg><span>' + esc(a.callsign) + "</span></div>";
     return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
@@ -1022,22 +1025,29 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
 
   // Airport markers in view: large always, medium from zoom 6, small airfields from zoom 9; names from zoom 9
+  // Markers already on the map are kept; only airports entering or leaving the view (or changing label) are touched
+  var aptMarkers = {};
   function drawAirports() {
     if (!map || !AIRPORTS.length) return;
     if (!aptLayer) aptLayer = L.layerGroup().addTo(map);
-    aptLayer.clearLayers();
-    var z = map.getZoom(), b = map.getBounds().pad(0.1), maxTier = z >= 9 ? 3 : z >= 6 ? 2 : 1, n = 0;
+    var z = map.getZoom(), b = map.getBounds().pad(0.1), maxTier = z >= 9 ? 3 : z >= 6 ? 2 : 1, n = 0, want = {};
     for (var i = 0; i < AIRPORTS.length && n < 300; i++) {
       var r = AIRPORTS[i];
       if (r[5] > maxTier || !b.contains([r[2], r[3]])) continue;
+      n++;
+      var key = r[0] + "|" + r[2] + "|" + r[3] + (z >= 9 ? "|n" : "");
+      want[key] = true;
+      if (aptMarkers[key]) continue;
       var a = apt(r), label = esc(a.code) + (z >= 9 ? "<small>" + esc(a.name) + "</small>" : "");
       var html = '<div class="apt t' + a.tier + (a.mil ? " mil" : "") + '"><i></i><b>' + label + "</b></div>";
-      L.marker([a.lat, a.lon], {
+      aptMarkers[key] = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ className: "", html: html, iconSize: [12, 12], iconAnchor: [6, 6] }),
         interactive: false, keyboard: false, zIndexOffset: -1000
       }).addTo(aptLayer);
-      n++;
     }
+    Object.keys(aptMarkers).forEach(function (k) {
+      if (!want[k]) { aptLayer.removeLayer(aptMarkers[k]); delete aptMarkers[k]; }
+    });
   }
   fetch("airports.json")
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -1047,7 +1057,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
       drawAirports(); render();
     })
     .catch(function () { /* airports are optional – map still works without them */ });
-  if (map) map.on("moveend zoomend", drawAirports);
+  if (map) map.on("moveend", drawAirports);   // moveend also fires at the end of every zoom
 
   // ---------- photos ----------
   // ---------- routes (origin -> destination, looked up by callsign via api/route.js) ----------
@@ -1355,8 +1365,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
 
   // ---------- render ----------
-  var shownImg = null;
+  var shownImg = null, renderLater = false;
   function render() {
+    // new data arriving mid pan / pinch waits until the map stops, so the Hub isn't redrawing under your finger
+    if (moving && !autoPan) { renderLater = true; return; }
+    renderLater = false;
     $("place").textContent = selHex && selLast ? selLast.callsign : away ? "map centre" : PLACE;
     $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR * 1.852) + " km";
 
@@ -2158,31 +2171,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     say({ text: text, chime: "ding" });
   }
 
-  // ---------- rain radar (RainViewer, free) ----------
-  var rainLayer = null, rainOn = store.get("rain", true);
-  function loadRain() {
-    if (!map) return;
-    fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (j) {
-        var past = j && j.radar && j.radar.past, f = past && past[past.length - 1];
-        if (!f) return;
-        var url = j.host + f.path + "/256/{z}/{x}/{y}/2/1_1.png";
-        if (!rainLayer) rainLayer = L.tileLayer(url, { opacity: 0.55, maxNativeZoom: 7, maxZoom: 18, zIndex: 5,
-          attribution: "Rain radar © RainViewer" });
-        else rainLayer.setUrl(url);
-        if (rainOn && !map.hasLayer(rainLayer)) rainLayer.addTo(map);
-      })
-      .catch(function () { /* radar is optional */ });
-  }
-  function drawRainBtn() { $("rainbtn").classList.toggle("off", !rainOn); }
-  $("rainbtn").addEventListener("click", function (e) {
-    e.stopPropagation();
-    rainOn = !rainOn; store.set("rain", rainOn); drawRainBtn();
-    if (rainLayer) { if (rainOn) rainLayer.addTo(map); else map.removeLayer(rainLayer); }
-    else if (rainOn) loadRain();
-  });
-
   // ---------- International Space Station (satellite.js + orbit from api/iss.js) ----------
   var issRec = null, issMarker = null, issTrack = null, issPasses = [], issSaid = store.get("issSaid", 0);
   var ISS_ICON = '<svg viewBox="0 0 34 34"><rect x="1" y="11" width="9" height="12" fill="#2f6fd6" stroke="#fff" stroke-width="1"/>' +
@@ -2252,7 +2240,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   }
 
   drawVoicePanel();
-  drawRainBtn();
   rareCount();
 
   // ---------- clock / timers ----------
@@ -2274,8 +2261,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
   setInterval(tick, 1000);
   setInterval(hourly, 15000);
   setInterval(nextSay, 2000);
-  loadRain();
-  setInterval(loadRain, 10 * 60000);
   loadIss();
   setInterval(issTick, 5000);
   setInterval(findPasses, 10 * 60000);
