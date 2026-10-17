@@ -166,7 +166,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .top{display:flex;align-items:baseline;gap:1vh}
 .cs{flex:1;font-size:5.6vh;font-weight:800;letter-spacing:.03em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .idx{font-size:2vh;color:var(--dim);white-space:nowrap}
-.ty{font-size:2.6vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ty{font-size:2.6vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
 .rte{display:flex;align-items:baseline;gap:1vh;font-size:2.6vh;white-space:nowrap;overflow:hidden;min-height:3.4vh}
 .rte b{font-size:3.2vh;font-weight:800;letter-spacing:.02em}
 .rte .ar{color:var(--acc);font-weight:800}
@@ -174,9 +174,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .rte.none{color:var(--dim);font-size:2.2vh}
 .rte .unk{color:var(--dim)}
 .rte .ft{color:var(--dim);font-size:2.2vh;margin-left:.6vh;flex-shrink:0}
-.hist{font-size:2.2vh;color:#ffd27a}
+.hist{font-size:2.2vh;color:#ffd27a;flex-shrink:0}
 .hist div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hist .dim{color:var(--dim)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:1vh;margin-top:auto}
 .st{background:var(--deep);border-radius:1vh;padding:.9vh 1.2vh;min-width:0}
 .st b{display:block;font-size:3.9vh;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
@@ -1233,25 +1232,18 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (!airStart && !foreign) return "";
     var h = histFor(f), now = Date.now() / 1000, NZ = "New Zealand", lines = [], i, fl = h && h.flights;
     if (h && h.ok) {
-      var shown = -1, c = 0;
+      var c = 0;
       while (fl[c] && !fl[c].dep && !fl[c].live) c++;   // skip flights it hasn't started yet
       var cur = fl[c];
       if (cur && cur.from.country !== NZ && (cur.live || cur.dep > now - 86400)) {
-        shown = c;
         lines.push(esc("Came from " + histPlace(cur.from) + (cur.dep ? " · left " + histWhen(cur.dep, true) : "")));
       } else {
         for (i = 0; i < fl.length; i++) {
           if (fl[i].from.country !== NZ && fl[i].to && fl[i].to.country === NZ && fl[i].dep && fl[i].dep > now - 7 * 86400) {
-            shown = i;
             lines.push(esc("Arrived in NZ from " + histPlace(fl[i].from) + " · " + histWhen(fl[i].arr || fl[i].dep, false)));
             break;
           }
         }
-      }
-      var prev = shown >= 0 && fl[shown + 1];
-      if (prev && prev.to && prev.dep && prev.dep > now - 14 * 86400) {
-        lines.push('<span class="dim">Before that: ' + esc(prev.from.city || prev.from.name) + " → " + esc(prev.to.city || prev.to.name) +
-          ", " + esc(histWhen(prev.dep, false)) + "</span>");
       }
     } else if (h && airStart && !inNZ(pts[0][0], pts[0][1])) {
       var g = guessOrigin(pts);
