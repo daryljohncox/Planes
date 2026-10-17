@@ -1107,6 +1107,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     return true;
   }
   var ADHOC = { res: 1, pol: 1 };   // rescue & police reuse callsigns for one-off flights: databases can't know
+  // A plane flying under its registration (ZKJCJ) is a one-off private/charter flight: the route
+  // databases only hold whatever trip that callsign was last seen on, so don't use them
+  function noDbRoute(a) {
+    var cs = (a.flight || "").toUpperCase();
+    return !!ADHOC[a.cat] || /^ZK[A-Z0-9]{3}$/.test(cs) || (!!a.reg && cs === a.reg.replace(/-/g, "").toUpperCase());
+  }
   // Approximate time in the air, from the current leg's trace (api/trace.js): "35 min", "1 h 20 min".
   // "+" when the trace starts already airborne (takeoff happened out of coverage or before a signal gap).
   function airTimeHtml(a) {
@@ -1128,7 +1134,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (at) el.insertAdjacentHTML("beforeend", at);
   }
   function showRoute0(a, st) {
-    var r = ADHOC[a.cat] ? null : routeFor(a), el = $("rte");
+    var r = noDbRoute(a) ? null : routeFor(a), el = $("rte");
     if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
     if (r && (r.from || r.to) && !routeFits(a, r, st)) { routeCache[a.flight] = r = null; }
     if (!r || (!r.from && !r.to)) {
@@ -1698,7 +1704,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     return t || (a.heli ? "helicopter" : "plane");
   }
   function whoSays(a) {
-    var cs = (a.flight || "").toUpperCase(), pre = cs.slice(0, 3), r = ADHOC[a.cat] ? null : routeCache[a.flight];
+    var cs = (a.flight || "").toUpperCase(), pre = cs.slice(0, 3), r = noDbRoute(a) ? null : routeCache[a.flight];
     var airline = r && r !== "pending" && r.airline ? r.airline : (a.cat === "com" || a.cat === "cgo" || a.cat === "mil" || a.cat === "mtr") ? AIRLINES[pre] || "" : "";
     var co = csOp(cs), lead = "";
     if (a.cat === "res") lead = co ? co.name : a.heli ? "Rescue" : "Air ambulance";
@@ -1722,7 +1728,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   function whereTo(a) {
     var st = airportStatus(a);
     if (st && st.text === "Arriving") return "landing at " + shortApt(st.ap.name);
-    var r = ADHOC[a.cat] ? null : routeCache[a.flight];
+    var r = noDbRoute(a) ? null : routeCache[a.flight];
     if (r && r !== "pending" && r.to && routeFits(a, r, st)) return "to " + (r.to.city || shortApt(r.to.name || r.to.iata || ""));
     return "";
   }
@@ -1754,7 +1760,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     return fallback;
   }
   function routeWait(a) {
-    return function () { if (!ADHOC[a.cat] && a.flight && routeFor(latest(a.hex, a)) === "pending") return true; return false; };
+    return function () { if (!noDbRoute(a) && a.flight && routeFor(latest(a.hex, a)) === "pending") return true; return false; };
   }
   function sayPlane(a, opts) {
     opts = opts || {};
