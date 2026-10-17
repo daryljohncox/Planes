@@ -1811,21 +1811,27 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000,0 0 3px #000}
     $("rarecount").textContent = n ? n : "";
   }
   var RARE_GAP_MS = 2 * 3600000;   // gone this long, then back in the air = a new flight
+  // The flight callsign, ignoring its registration (the feed flips between "TIG86", "ZKASV" and none for the same flight)
+  function flightKey(cs, reg) {
+    var k = String(cs || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return k === String(reg || "").toUpperCase().replace(/[^A-Z0-9]/g, "") ? "" : k;
+  }
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
-    var now = Date.now(), gnd = a.alt === "ground";
+    var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
       // Another flight: landed and took off again, new callsign, or back after a long gap
-      var again = !gnd && ((r.air && r.gnd) || (a.callsign && r.cs && a.callsign !== r.cs) || now - (r.last || r.t) > RARE_GAP_MS);
+      var again = !gnd && ((r.air && r.gnd) || (fk && r.fk && fk !== r.fk) || now - (r.last || r.t) > RARE_GAP_MS);
       if (again) break;
       r.last = now; r.lat = a.lat; r.lon = a.lon;
       if (gnd) r.gnd = true; else { r.air = true; r.gnd = false; }
       if (!r.cs && a.callsign) r.cs = a.callsign;
+      if (!r.fk && fk) r.fk = fk;
       store.set("rare", rareList);
       return false;
     }
-    rareList.unshift({ hex: a.hex, cs: a.callsign, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd });
+    rareList.unshift({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd });
     rareList = rareList.filter(function (r) { return now - r.t < RARE_DAYS_MS; });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
     store.set("rare", rareList);
