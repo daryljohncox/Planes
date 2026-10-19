@@ -1531,8 +1531,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) { f = aircraft[i]; fi = i; }
       if (f) selLast = f; else f = selLast;
     }
+    var gone = f && fi < 0 && f.gone ? f : null;   // a rare plane opened from the list while it isn't flying
     drawMap(f);
-    drawTrail(f);
+    if (gone) drawGone(gone); else { drawGone(null); drawTrail(f); }
 
     // pre-load photos for the nearest few so a tap shows one straight away
     aircraft.slice(0, PREFETCH_N).forEach(function (a) { photoFor(a, true); });
@@ -1555,18 +1556,22 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     $("detail").style.display = "flex";
 
     $("cs").textContent = f.callsign;
-    $("idx").innerHTML = (fi >= 0 ? "following" : "signal lost") + tagHtml(f);
+    $("idx").innerHTML = (fi >= 0 ? "following" : gone ? "last seen " + esc(when(gone.gone.last || gone.gone.t)) : "signal lost") + tagHtml(f);
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
     if (f.owner) line += " · " + f.owner;
     if (f.country) line += " · " + f.country;
     $("ty").textContent = line;
-    var st = airportStatus(f);
-    showRoute(f, st);
-    $("hist").innerHTML = cameFromHtml(f);
+    var st = gone ? null : airportStatus(f);
+    if (gone) {
+      var gr = goneRouteHtml(f);
+      $("rte").className = gr ? "rte" : "rte none";
+      $("rte").innerHTML = gr || "No route recorded";
+    } else showRoute(f, st);
+    $("hist").innerHTML = gone ? "" : cameFromHtml(f);
     var co = csOp(f.flight.toUpperCase());
     $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
-    $("aps").textContent = st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
+    $("aps").textContent = gone ? "★ Rare: " + gone.gone.why : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
@@ -2024,6 +2029,18 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var k = String(cs || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     return k === String(reg || "").toUpperCase().replace(/[^A-Z0-9]/g, "") ? "" : k;
   }
+  // What a tap on the rare list shows once the plane has gone: its details as last seen, and the track
+  // it flew while the map could see it (one point per km, halved when it gets long)
+  var RARE_PATHS = 40, RARE_PATH_MAX = 400;
+  function rareInfo(r, a) {
+    r.fl = a.flight || ""; r.type = a.type || ""; r.desc = a.desc || ""; r.owner = a.owner || "";
+    r.cat = a.cat || ""; r.heli = !!a.heli; r.alt = a.alt; r.track = a.track; r.gs = a.gs;
+    if (a.lat == null || a.lon == null) return r;
+    var path = r.path || (r.path = []), p = path[path.length - 1];
+    if (!p || distKm(p[0], p[1], a.lat, a.lon) >= 1) path.push([+a.lat.toFixed(4), +a.lon.toFixed(4)]);
+    if (path.length > RARE_PATH_MAX) r.path = path.filter(function (x, i) { return i % 2 === 0 || i === path.length - 1; });
+    return r;
+  }
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     for (var i = 0; i < rareList.length; i++) {
@@ -2038,12 +2055,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (gnd) r.gnd = true; else { r.air = true; r.gnd = false; }
       if (!r.cs && a.callsign) r.cs = a.callsign;
       if (!r.fk && fk) r.fk = fk;
+      rareInfo(r, a);
       store.set("rare", rareList);
       return false;
     }
-    rareList.unshift({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd });
+    rareList.unshift(rareInfo({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd }, a));
     rareList = rareList.filter(function (r) { return now - r.t < RARE_DAYS_MS; });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
+    rareList.forEach(function (r, i) { if (i >= RARE_PATHS && r.path) delete r.path; });   // keeps the saved list small
     store.set("rare", rareList);
     rareCount();
     if (!$("rarepanel").hidden) drawRareList();
@@ -2074,13 +2093,61 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   }
   // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
   // select it once the feed for that area has it
-  var pendingHex = null, lastSeenLayer = null;
-  // Orange ring + label where a rare plane was last seen, shown for a minute
-  function lastSeenMark(rec) {
-    if (lastSeenLayer) map.removeLayer(lastSeenLayer);
-    lastSeenLayer = L.marker([rec.lat, rec.lon], { interactive: false, icon: L.divIcon({ className: "", iconSize: [0, 0],
-      html: '<div class="lastseen"><i></i><span>' + esc(rec.cs) + " last seen " + esc(when(rec.last || rec.t)) + "</span></div>" }) }).addTo(map);
-    setTimeout(function () { if (lastSeenLayer) { map.removeLayer(lastSeenLayer); lastSeenLayer = null; } }, 60000);
+  var pendingHex = null;
+  // A rare plane that isn't flying now: open its details (photo, type, last readings) and draw the last
+  // route on record – its adsb.lol track if that's as recent as the sighting, otherwise the track saved here
+  function showGone(rec) {
+    var m = /\(([A-Z0-9]+)\)$/.exec(rec.ty || ""), has = rec.lat != null;
+    var g = { hex: rec.hex, flight: rec.fl || rec.fk || "", callsign: rec.cs || rec.reg || rec.hex.toUpperCase(), reg: rec.reg || "",
+      type: rec.type || (m ? m[1] : ""), desc: rec.desc || "", owner: rec.owner || "", country: countryOf(rec.hex),
+      lat: has ? rec.lat : LAT, lon: has ? rec.lon : LON, alt: rec.alt === undefined ? null : rec.alt, vr: 0, track: rec.track == null ? null : rec.track,
+      gs: rec.gs, cat: rec.cat || "", ice: false, heli: !!rec.heli, gone: rec,
+      dist: has ? distKm(LAT, LON, rec.lat, rec.lon) : 0, brg: has ? bearing(LAT, LON, rec.lat, rec.lon) : 0 };
+    g.homeDist = g.dist; g.homeBrg = g.brg;
+    goneFit = 0;
+    selHex = rec.hex; selLast = g;
+    render();
+  }
+  function gonePath(f) {
+    var rec = f.gone, hist = traceFor(f.hex) || [];
+    if (hist.length > 1 && hist[hist.length - 1][3] >= rec.t / 1000)
+      return { pts: hist.map(function (p) { return [p[0], p[1]]; }), src: "trace" };
+    return { pts: (rec.path || []).slice(), src: "saved" };
+  }
+  // "From → To" for a recorded route: the airport (or else town) nearest each end
+  function placeAt(p) {
+    var ap = airportsNear(p[0], p[1], 10, 3)[0];
+    if (ap) return { iata: ap.code, name: ap.name };
+    var t = nearestTown(p[0], p[1]);
+    return t && distKm(p[0], p[1], t.lat, t.lon) < 30 ? { iata: t.name, name: "" } : null;
+  }
+  function goneRouteHtml(f) {
+    var pts = gonePath(f).pts;
+    if (pts.length < 2) return "";
+    return apHtml(placeAt(pts[0])) + '<span class="ar">→</span>' + apHtml(placeAt(pts[pts.length - 1]));
+  }
+  var goneLayer = null, goneFit = 0;
+  function drawGone(f) {
+    if (!map) return;
+    if (goneLayer) { map.removeLayer(goneLayer); goneLayer = null; }
+    if (!f) return;
+    var gp = gonePath(f), pts = gp.pts, end = pts.length ? pts[pts.length - 1] : f.gone.lat != null ? [f.gone.lat, f.gone.lon] : null;
+    trailCase.setLatLngs(pts);
+    trailLine.setLatLngs(pts);
+    if (!end) return;
+    goneLayer = L.marker(end, { interactive: false, icon: L.divIcon({ className: "", iconSize: [0, 0],
+      html: '<div class="lastseen"><i></i><span>' + esc(f.callsign) + " last seen " + esc(when(f.gone.last || f.gone.t)) + "</span></div>" }) }).addTo(map);
+    // Fit the route on screen once, and again if the fuller adsb.lol track turns up
+    var key = gp.src + pts.length;
+    if (goneFit && (goneFit === key || gp.src === "saved")) return;
+    goneFit = key;
+    // (after the details panel has opened and the map has its new size)
+    setTimeout(function () {
+      if (!selLast || !selLast.gone) return;
+      map.invalidateSize({ pan: false });
+      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [150, 70], paddingBottomRight: [60, 50], maxZoom: homeZoom || 11, animate: false });
+      else map.setView(end, homeZoom || map.getZoom(), { animate: false });
+    }, 50);
   }
   $("rarerows").addEventListener("click", function (e) {
     var r = e.target.closest ? e.target.closest(".rr") : null;
@@ -2100,12 +2167,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         if (!a || !map) {
           // Not in the air (or out of receiver range): show where it was last seen, if we know
           var rec = rareList.filter(function (x) { return x.hex === hex; })[0];
-          if (!rec || rec.lat == null || !map) { note("gone", "Not flying now"); return; }
+          if (!rec) { note("gone", "Not flying now"); return; }
           showPop(null);
           if (selHex) unselect();
-          map.setView([rec.lat, rec.lon], homeZoom || map.getZoom(), { animate: false });
           setStatus("");
-          lastSeenMark(rec);
+          showGone(rec);
           return;
         }
         showPop(null);
