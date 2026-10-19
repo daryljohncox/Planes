@@ -9,11 +9,14 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const okHex = /^[0-9a-f]{6}$/.test(hex), okReg = /^[A-Z0-9]{1,3}-?[A-Z0-9]{2,6}$/.test(reg);
   const ua = { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36" };
+  const diag = [];   // ?debug=1 shows what each site answered
   const get = async (url, text) => {
     try {
       const up = await fetch(url, { headers: ua, signal: AbortSignal.timeout(6000) });
-      return up.ok ? (text ? await up.text() : await up.json()) : null;
-    } catch (e) { return null; }
+      const body = up.ok ? (text ? await up.text() : await up.json()) : null;
+      diag.push([url, up.status, JSON.stringify(body).slice(0, 300)]);
+      return body;
+    } catch (e) { diag.push([url, String(e).slice(0, 100)]); return null; }
   };
 
   // All asked at once (one slow site mustn't run past Vercel's time limit); the first in this order wins
@@ -35,7 +38,7 @@ module.exports = async (req, res) => {
 
   // A miss is kept for 6 hours unless a site was down, then it's asked again next time
   res.setHeader("Cache-Control", photo ? "s-maxage=86400, stale-while-revalidate=86400" : failed ? "no-store" : "s-maxage=21600");
-  return res.status(200).json({ photo });
+  return res.status(200).json(req.query.debug ? { photo, diag } : { photo });
 };
 
 function airportData(j) {
