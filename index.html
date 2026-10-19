@@ -1168,6 +1168,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (r === "pending") { el.className = "rte none"; el.textContent = "Looking up route…"; return; }
     if (r && (r.from || r.to) && !routeFits(a, r, st)) { routeCache[a.flight] = r = null; }
     if (!r || (!r.from && !r.to)) {
+      var lf = liveLeg(a);   // Flightradar24's live flight for this aircraft, if it was looked up
+      if (lf) { el.className = "rte"; el.innerHTML = apHtml(lf.from) + '<span class="ar">→</span>' + apHtml(lf.to); return; }
       if (st && st.text === "Arriving") {   // at least say where it's landing
         el.className = "rte";
         el.innerHTML = apHtml(null) + '<span class="ar">→</span>' + apHtml({ iata: st.ap.code, name: st.ap.name });
@@ -1229,9 +1231,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     };
     return data.map(function (f) {
       var a = f.airport || {}, t = f.time || {}, real = t.real || {}, est = t.estimated || {}, from = ap(a.origin);
-      return from && { from: from, to: ap(a.destination), dep: real.departure || null, arr: real.arrival || est.arrival || null,
+      return from && { cs: ((f.identification && f.identification.callsign) || "").toUpperCase(), from: from, to: ap(a.destination), dep: real.departure || null, arr: real.arrival || est.arrival || null,
         live: !!(f.status && f.status.live) };
     }).filter(Boolean).slice(0, 4);
+  }
+  // The flight Flightradar24 shows live under this aircraft's registration, when it's the same callsign
+  function liveLeg(a) {
+    var reg = regOf(a), h = reg && histCache[reg], cs = (a.flight || "").trim().toUpperCase();
+    if (!h || h === "pending" || !h.ok || !cs) return null;
+    for (var i = 0; i < h.flights.length; i++) {
+      var fl = h.flights[i];
+      if (fl.live && fl.cs === cs && fl.to) return fl;
+    }
+    return null;
   }
   function inNZ(lat, lon) { return lat < -33.8 && lat > -47.6 && lon > 166 && lon < 179; }
   function histWhen(ts, withTime) {
@@ -1262,7 +1274,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var pts = traceFor(f.hex);
     var airStart = !!(pts && pts.length && pts[0][2] !== "ground");
     var foreign = !!f.country && f.country !== "New Zealand";
-    if (!airStart && !foreign) return "";
+    // A NZ plane whose trace begins overseas (e.g. took off in Sydney, seen by Australian receivers)
+    var overseas = !!(pts && pts.length && !inNZ(pts[0][0], pts[0][1]));
+    if (!airStart && !foreign && !overseas) return "";
     var h = histFor(f), now = Date.now() / 1000, NZ = "New Zealand", lines = [], i, fl = h && h.flights;
     if (h && h.ok) {
       var c = 0;
