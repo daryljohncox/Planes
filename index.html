@@ -1765,11 +1765,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     ["rare", "Rare planes", "Military visitors, vintage & unusual types (with a special chime)"],
     ["iss", "Space station", "Announce passes over " + PLACE + " 5 minutes ahead"],
     ["chc", "Christchurch watch", "US Air Force C-17s landing at or leaving Christchurch, and flights to Antarctica (the map follows those)"],
+    ["eagle", "Police Eagle hunting", "A little chime and “Police Eagle is hunting” when a police helicopter circles somewhere"],
     ["hourly", "Hourly summary", "How many planes passed in the last hour"],
     ["chime", "Chime first", "Ding-dong before each announcement"]
   ];
   var VOICE = Object.assign({ voice: "sonia", on: true, com: true, mil: true, res: true, light: true, heli: true, overhead: true, rare: true,
-    iss: true, hourly: true, chime: true, chc: true }, store.get("voice", {}));
+    iss: true, hourly: true, chime: true, chc: true, eagle: true }, store.get("voice", {}));
   if (VOICE.trn === undefined) VOICE.trn = VOICE.light;   // new switch: start where "Light aircraft" was
   if (P.get("voice") === "0") VOICE.on = false;
   var ANNOUNCE_KM = num("announce", 15);
@@ -1868,7 +1869,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     ding: [[880, 0, .45], [698.5, .42, .7]],
     rare: [[784, 0, .25], [988, .2, .25], [1319, .4, .6]],
     alarm: [[960, 0, .22], [640, .25, .22], [960, .5, .22], [640, .75, .22], [960, 1, .22], [640, 1.25, .4]],
-    space: [[523, 0, .35], [784, .3, .35], [1047, .6, .7]]
+    space: [[523, 0, .35], [784, .3, .35], [1047, .6, .7]],
+    eagle: [[1047, 0, .18], [1319, .16, .35]]
   };
   function chime(kind) {
     var c = ctx(), notes = CHIMES[kind] || CHIMES.ding;
@@ -1940,7 +1942,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     saying = true;
     if (item.card) showCard(item, text);
     if (item.hex) { flashUntil[item.hex] = Date.now() + 12000; render(); }
-    (VOICE.chime || item.chime === "alarm" ? chime(item.chime || "ding") : Promise.resolve())
+    (VOICE.chime || item.chime === "alarm" || item.chime === "eagle" ? chime(item.chime || "ding") : Promise.resolve())
       .then(function () { return speakText(text); })
       .then(function () { saying = false; setTimeout(nextSay, 600); });
   }
@@ -2417,6 +2419,44 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
       dist: distKm(ref.lat, ref.lon, x.lat, x.lon), brg: bearing(ref.lat, ref.lon, x.lat, x.lon) };
   }
+  // ---------- police Eagle watch: a chime and "Police Eagle is hunting" when one circles an area ----------
+  // The three Eagles are looked up by registration wherever they are. Circling = turned through a full circle
+  // in the last 6 minutes while staying within a few km.
+  var EAGLE_REGS = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"], EAGLE_MS = 20000, EAGLE_KEEP_MS = 6 * 60000, EAGLE_AGAIN_MS = 20 * 60000;
+  var eagleSt = {};   // registration -> { pts: [[t, lat, lon, track]], said }
+  function eagleCheck() {
+    if (!VOICE.on || VOICE.eagle === false) return;
+    EAGLE_REGS.forEach(function (reg) {
+      fetch(FEED + "?reg=" + reg, { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) {
+          var x = (j.ac || []).filter(function (x) { return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 60); })[0];
+          if (x) eagleFix(reg, bgPlane(withInfo(x), { lat: x.lat, lon: x.lon }));
+        })
+        .catch(function () { /* try again next time */ });
+    });
+  }
+  function eagleFix(reg, a) {
+    var now = Date.now(), s = eagleSt[reg] || (eagleSt[reg] = { pts: [], said: 0 });
+    if (a.alt === "ground" || a.track == null) { s.pts = []; return; }
+    var last = s.pts[s.pts.length - 1];
+    if (last && last[1] === a.lat && last[2] === a.lon) return;   // no new position yet
+    s.pts.push([now, a.lat, a.lon, a.track]);
+    s.pts = s.pts.filter(function (p) { return now - p[0] < EAGLE_KEEP_MS; });
+    if (s.pts.length < 4 || now - s.said < EAGLE_AGAIN_MS) return;
+    var turn = 0, la = 0, lo = 0;
+    s.pts.forEach(function (p, i) {
+      la += p[1] / s.pts.length; lo += p[2] / s.pts.length;
+      if (i) turn += ((p[3] - s.pts[i - 1][3] + 540) % 360) - 180;
+    });
+    var spread = Math.max.apply(null, s.pts.map(function (p) { return distKm(la, lo, p[1], p[2]); }));
+    if (Math.abs(turn) < 330 || spread > 4) return;
+    s.said = now;
+    chcLast[a.hex] = a;   // tapping the card follows it
+    var town = nearestTown(la, lo);
+    say({ hex: a.hex, chime: "eagle", card: { kind: "", tag: "Police Eagle hunting", title: a.callsign },
+      text: "Police Eagle is hunting" + (town ? " over " + town.name : "") + "." });
+  }
   // ---------- south scan: anything flying south of NZ goes on the rare list and is announced ----------
   var SOUTH = { lat: -50.5, lon: 169 }, SOUTH_R_NM = 250, SOUTH_MS = 60000;
   var STEWART = { lat: -47.0, lon: 167.9 };
@@ -2623,6 +2663,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   setTimeout(chcCheck, 3000);
   setInterval(chcCheck, CHC_MS);
   setTimeout(southCheck, 5000);
+  setTimeout(eagleCheck, 7000);
+  setInterval(eagleCheck, EAGLE_MS);
   setInterval(southCheck, SOUTH_MS);
   setTimeout(resumeIce, 2000);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
