@@ -1962,7 +1962,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     DH82: "Vintage Tiger Moth", DH83: "Vintage", DH84: "Vintage", DH89: "Vintage", DH60: "Vintage", DHC1: "Vintage Chipmunk",
     MOSQ: "Warbird", VAMP: "Vintage jet", L39: "Jet trainer", L29: "Jet trainer", JPRO: "Vintage jet", MIG: "Warbird",
     HUNT: "Vintage jet", STRK: "Vintage jet", A4: "Vintage jet", PITS: "Aerobatic", EXTR: "Aerobatic", E300: "Aerobatic",
-    B748: "Giant", B744: "Jumbo", B74S: "Jumbo", A124: "Giant", A225: "Giant", AN12: "Unusual", IL76: "Unusual",
+    B74S: "Rare 747SP", A124: "Giant", A225: "Giant", AN12: "Unusual", IL76: "Unusual",
     C5M: "Giant", C17: "Big military", A400: "Big military", B52: "Bomber", K35R: "Tanker", KC2: "Tanker", A332M: "Tanker",
     E3TF: "Radar plane", E7WW: "Radar plane", BLCF: "Dreamlifter", BELF: "Beluga", A3ST: "Beluga", A337: "Beluga XL",
     CONC: "Concorde", GLF6: "Business jet", GL7T: "Business jet", BBJ: "Business jet", ZEPP: "Airship", SHIP: "Airship",
@@ -1976,7 +1976,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     IL18: "Unusual", IL62: "Unusual", IL96: "Unusual", T154: "Unusual", T204: "Unusual", SGUP: "Super Guppy", SU95: "Russian airliner", MC21: "Russian airliner",
     C919: "Chinese airliner", AJ27: "Chinese airliner", C909: "Chinese airliner", Y8: "Chinese military", Y9: "Chinese military",
     H6: "Chinese bomber", KJ20: "Radar plane", AG60: "Chinese flying boat", MA60: "Chinese plane", MA70: "Chinese plane",
-    L101: "Classic", B742: "Jumbo", B743: "Jumbo", B703: "Classic", B722: "Classic",
+    L101: "Classic", B741: "Classic 747", B742: "Classic 747", B743: "Classic 747", B703: "Classic", B722: "Classic",
     DC85: "Classic", DC86: "Classic", DC87: "Classic", GA7C: "Business jet", LANC: "Warbird", P38: "Warbird", B24: "Warbird", B29: "Warbird", TBM: "Warbird",
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica",
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
@@ -1989,9 +1989,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type])) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
     return "";
   }
-  // Anything in the air south of Stewart Island counts as rare
+  // Anything in the air south of Stewart Island counts as rare, except airliners (Sydney-Santiago flies past there daily)
   var SOUTH_LAT = -47.4;
-  function southOfNZ(a) { return typeof a.lat === "number" && a.lat < SOUTH_LAT && a.alt !== "ground"; }
+  function southOfNZ(a) {
+    return typeof a.lat === "number" && a.lat < SOUTH_LAT && a.alt !== "ground" && !isAirliner(a);
+  }
+  function isAirliner(a) { return a.cat === "com" || a.cat === "cgo" || !!(a.type && AIRLINER_TYPES[a.type]); }
   function isRare(a) { return !!rareWhy(a); }
   // Kept for 7 days so missed ones can be checked; the list on the map starts afresh each day (older days below it)
   var RARE_DAYS_MS = 7 * 86400000;
@@ -2005,6 +2008,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     rareList.slice().reverse().forEach(function (r) {
       var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || "");
       if (m && !RARE_TYPES[m[1]] && !NOT_TYPE.test(r.why || "")) return;
+      if (r.why === "South of NZ" && isAirliner({ cat: r.cat, type: m ? m[1] : r.type })) return;
       for (var i = kept.length - 1; i >= 0; i--) {
         var k = kept[i];
         if (k.hex !== r.hex) continue;
