@@ -11,33 +11,34 @@ module.exports = async (req, res) => {
   const ua = { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36" };
   const get = async (url, text) => {
     try {
-      const up = await fetch(url, { headers: ua, signal: AbortSignal.timeout(5000) });
+      const up = await fetch(url, { headers: ua, signal: AbortSignal.timeout(6000) });
       return up.ok ? (text ? await up.text() : await up.json()) : null;
     } catch (e) { return null; }
   };
 
-  let photo = null, failed = 0;
-  if (okReg) {
-    const j = await get("https://api.planespotters.net/pub/photos/reg/" + encodeURIComponent(reg));
-    if (!j) failed++;
-    const p = j && j.photos && j.photos[0];
-    if (p) photo = { src: (p.thumbnail_large || p.thumbnail).src, credit: "© " + (p.photographer || "unknown") + " · Planespotters.net" };
-  }
-  for (const q of [okHex && "m=" + hex, okReg && "r=" + encodeURIComponent(reg)]) {
-    if (photo || !q) continue;
-    const j = await get("https://www.airport-data.com/api/ac_thumb.json?n=1&" + q);
-    if (!j) failed++;
-    const p = j && Array.isArray(j.data) && j.data[0];
-    if (p && p.image) photo = { src: p.image.replace("/thumbnails/", "/"), thumb: p.image, credit: "© " + (p.photographer || "unknown") + " · Airport-Data.com" };
-  }
-  if (!photo && okHex) {
-    const t = await get("https://hexdb.io/hex-image?hex=" + hex, true);
-    if (t == null) failed++;
-    const src = String(t || "").trim();
-    if (/^https?:\/\/\S+\.(jpe?g|png|webp)(\?\S*)?$/i.test(src)) photo = { src: src, credit: "Photo via hexdb.io" };
-  }
+  // All asked at once (one slow site mustn't run past Vercel's time limit); the first in this order wins
+  let failed = 0;
+  const ask = (url, text, pick) => url ? get(url, text).then((j) => { if (j == null) failed++; return j == null ? null : pick(j); }) : Promise.resolve(null);
+  const answers = await Promise.all([
+    ask(okReg && "https://api.planespotters.net/pub/photos/reg/" + encodeURIComponent(reg), false, (j) => {
+      const p = j.photos && j.photos[0];
+      return p ? { src: (p.thumbnail_large || p.thumbnail).src, credit: "© " + (p.photographer || "unknown") + " · Planespotters.net" } : null;
+    }),
+    ask(okHex && "https://www.airport-data.com/api/ac_thumb.json?n=1&m=" + hex, false, airportData),
+    ask(okReg && "https://www.airport-data.com/api/ac_thumb.json?n=1&r=" + encodeURIComponent(reg), false, airportData),
+    ask(okHex && "https://hexdb.io/hex-image?hex=" + hex, true, (t) => {
+      const src = String(t).trim();
+      return /^https?:\/\/\S+\.(jpe?g|png|webp)(\?\S*)?$/i.test(src) ? { src: src, credit: "Photo via hexdb.io" } : null;
+    })
+  ]);
+  const photo = answers.find(Boolean) || null;
 
   // A miss is kept for 6 hours unless a site was down, then it's asked again next time
   res.setHeader("Cache-Control", photo ? "s-maxage=86400, stale-while-revalidate=86400" : failed ? "no-store" : "s-maxage=21600");
   return res.status(200).json({ photo });
 };
+
+function airportData(j) {
+  const p = Array.isArray(j.data) && j.data[0];
+  return p && p.image ? { src: p.image, credit: "© " + (p.photographer || "unknown") + " · Airport-Data.com" } : null;
+}
