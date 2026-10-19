@@ -1303,11 +1303,38 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       };
     });
   }
-  function fetchRelayPhoto(hex, reg) {
-    return getJSON("/api/photo?hex=" + encodeURIComponent(hex) + "&reg=" + encodeURIComponent(reg)).then(function (j) {
-      var p = j && j.photo;
-      return p && p.src ? { src: p.src, credit: p.credit || "", kind: "actual" } : null;
-    });
+  // The other free photo sites, one after another: Planespotters by registration, Airport-Data by hex and
+  // registration (both asked from the Hub: they refuse Vercel), then hexdb.io through /api/photo.
+  // A site that's down or blocked just counts as no photo.
+  function fetchOtherPhoto(hex, reg) {
+    var none = function () { return null; };
+    var airportData = function (q) {
+      return getJSON("https://www.airport-data.com/api/ac_thumb.json?n=1&" + q).then(function (j) {
+        var p = j && Array.isArray(j.data) && j.data[0];
+        return p && p.image ? { src: p.image, credit: "© " + (p.photographer || "unknown") + " · Airport-Data.com", kind: "actual" } : null;
+      }, none);
+    };
+    var steps = [
+      reg && function () {
+        return getJSON("https://api.planespotters.net/pub/photos/reg/" + encodeURIComponent(reg)).then(function (j) {
+          var p = j && j.photos && j.photos[0];
+          return p ? { src: (p.thumbnail_large || p.thumbnail).src, credit: "© " + (p.photographer || "unknown") + " · Planespotters.net", kind: "actual" } : null;
+        }, none);
+      },
+      hex && function () { return airportData("m=" + hex); },
+      reg && function () { return airportData("r=" + encodeURIComponent(reg)); },
+      hex && function () {
+        return getJSON("/api/photo?hex=" + hex).then(function (j) {
+          var p = j && j.photo;
+          return p && p.src ? { src: p.src, credit: p.credit || "", kind: "actual" } : null;
+        }, none);
+      }
+    ].filter(Boolean);
+    var i = 0;
+    return (function next() {
+      if (i >= steps.length) return Promise.resolve(null);
+      return steps[i++]().then(function (p) { return p || next(); });
+    })();
   }
   // Wikimedia Commons photos whose file name carries the registration (free, and open to the Hub's browser)
   function fetchCommons(reg, label) {
@@ -1371,9 +1398,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         .catch(function () { cache[key] = null; setTimeout(function () { delete cache[key]; }, 300000); render(); });
   }
   var regCache = {};   // registration -> JetPhotos photo | null | "pending"
-  var relayCache = {};   // "hex|registration" -> photo from /api/photo | null | "pending"
+  var relayCache = {};   // "hex|registration" -> photo from the other sites | null | "pending"
   var commonsCache = {};   // registration (or "eagle") -> Wikimedia Commons photo | null | "pending"
-  // Order: Planespotters by hex, /api/photo (Planespotters by registration, Airport-Data, hexdb), JetPhotos,
+  // Order: Planespotters by hex, then by registration, Airport-Data, hexdb (/api/photo), JetPhotos,
   // Wikimedia Commons, then an example photo of the type.
   // prefetch: everything but JetPhotos (Flightradar24 is asked for planes you see close up)
   function photoFor(a, prefetch) {
@@ -1383,11 +1410,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (h === "pending") return null;
       if (h) return h;
     }
-    // No Planespotters photo by hex: the other free photo sites, through /api/photo
+    // No Planespotters photo by hex: the other free photo sites
     var reg = regOf(a), hex = a.hex && a.hex.charAt(0) !== "~" ? a.hex : "", rk = hex + "|" + reg;
     if (hex || reg) {
       var ps = relayCache[rk];
-      if (ps === undefined) { load(relayCache, rk, function () { return fetchRelayPhoto(hex, reg); }); return null; }
+      if (ps === undefined) { load(relayCache, rk, function () { return fetchOtherPhoto(hex, reg); }); return null; }
       if (ps === "pending") return null;
       if (ps) return ps;
     }
