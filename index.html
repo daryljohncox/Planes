@@ -843,11 +843,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // designators from AIP / NAFC OPS 007 (POL, AM, RSCU, BMBR …). A designator matches when digits follow it.
   // Rescue / air ambulance / SAR / firefighting
   //   NZ: AMD Airmed, CFL Care Flight, CGD/CGS/NLD Coastguard, FDC Flydoc, GIS Gismed, HLM Helimed, HLR Helilink Rescue,
-  //       KRC Kiwi Rescue (RNZAF), LFT Life Flight, MDK Medicare, MDL Medilift, NAR North Air Rescue, NOR Northland Rescue Helicopter,
+  //       KRC Kiwi Rescue (RNZAF), LFT Life Flight, MDK Medicare, MDL Medilift, NAR North Air Rescue, NOR Northland Rescue Helicopter, NRES Northern Rescue,
   //       PHL Philips Search & Rescue, WPR Westpac Rescue
   //   AU: RSCU Rescue, AM Ambulance, FD Royal Flying Doctor, CFH CareFlight; fire: SPTR BDOG FBIR BMBR HLTK FSCN
   var RESCUE_CS = new RegExp("^(" +
-    "(AMD|CFL|CGD|CGS|NLD|FDC|GIS|HLM|HLR|KRC|LFT|MDK|MDL|NAR|NOR|PHL|WPR|RSCU|RSC|AM|FD|RFD|CFH|SAR|" +
+    "(AMD|CFL|CGD|CGS|NLD|FDC|GIS|HLM|HLR|KRC|LFT|MDK|MDL|NAR|NOR|NRES|PHL|WPR|RSCU|RSC|AM|FD|RFD|CFH|SAR|" +
     "SPTR|BDOG|FBIR|BMBR|HLTK|FSCN|FBD|BOM|HTK|BDG)\\d" +
     "|LIFE|RESCUE|RESQ|RSQ|AMBUL|AMBO|MEDIC|MEDEVAC|MEDIVAC|HEMS|WESTPAC|HELIMED|CAREFLIGHT|AIRMED|LIFEFLT|RFDS|" +
     "COASTGUARD|FIREBIRD|BOMBER|HELITAK|FIRESPOT|BIRDOG)");
