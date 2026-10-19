@@ -1147,7 +1147,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // "+" when the trace starts already airborne (takeoff happened out of coverage or before a signal gap).
   function airTimeHtml(a) {
     if (a.alt === "ground") return "";
-    var pts = traceFor(a.hex);
+    var pts = traceFor(a.hex, a);
     if (!pts || !pts.length) return "";
     var i = 0, seenGround = false;
     while (i < pts.length && pts[i][2] === "ground") { seenGround = true; i++; }
@@ -1271,7 +1271,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     return best;
   }
   function cameFromHtml(f) {
-    var pts = traceFor(f.hex);
+    var pts = traceFor(f.hex, f);
     var airStart = !!(pts && pts.length && pts[0][2] !== "ground");
     var foreign = !!f.country && f.country !== "New Zealand";
     // A NZ plane whose trace begins overseas (e.g. took off in Sydney, seen by Australian receivers)
@@ -1555,7 +1555,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 
   // ---------- flight path ----------
   // Every poll's positions are kept per plane (so a path exists even if the history lookup fails).
-  // Tapping a plane also fetches its whole current flight from /api/trace and joins the two.
+  // Tapping a plane also fetches its whole current flight from /api/trace (else Flightradar24) and joins the two.
   var TRAIL_KEEP_MS = 10 * 60000, TRAIL_MAX = 3000;
   var trails = {};       // hex -> { pts: [[lat, lon, unix_s]], seen: ms }
   var traceCache = {};   // hex -> { pts, at } | "pending"
@@ -1570,7 +1570,33 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     });
     Object.keys(trails).forEach(function (hex) { if (now - trails[hex].seen > TRAIL_KEEP_MS && hex !== selHex) delete trails[hex]; });
   }
-  function traceFor(hex) {
+  // Flightradar24's track of the plane's live flight, fetched by the Hub itself (adsb.lol & co.
+  // refuse the Vercel relay). Same point format as /api/trace.
+  function fr24Track(f) {
+    var reg = f && regOf(f), cs = ((f && f.flight) || "").trim().toUpperCase();
+    if (!reg) return Promise.resolve([]);
+    return fr24(reg).then(function (j) {
+      var data = j.result.response.data, fl = null;
+      data.forEach(function (d) {
+        var live = d.status && d.status.live, dcs = ((d.identification && d.identification.callsign) || "").toUpperCase();
+        if (live && (!fl || dcs === cs)) fl = d;
+      });
+      if (!fl || !fl.identification || !fl.identification.id) return [];
+      var dep = fl.time && fl.time.real && fl.time.real.departure;
+      return getJSON("https://api.flightradar24.com/common/v1/flight-playback.json?flightId=" + fl.identification.id +
+        (dep ? "&timestamp=" + dep : "")).then(function (pj) {
+        var tr = pj && pj.result && pj.result.response && pj.result.response.data && pj.result.response.data.flight &&
+          pj.result.response.data.flight.track;
+        if (!Array.isArray(tr)) return [];
+        return tr.map(function (p) {
+          var ft = p.altitude && p.altitude.feet, kts = (p.speed && p.speed.kts) || 0;
+          return [p.latitude, p.longitude, !ft && kts < 60 ? "ground" : (typeof ft === "number" ? ft : null), p.timestamp];
+        }).filter(function (p) { return typeof p[0] === "number" && typeof p[1] === "number" && p[3]; })
+          .sort(function (a, b) { return a[3] - b[3]; });
+      });
+    }).catch(function () { return []; });
+  }
+  function traceFor(hex, f) {
     var c = traceCache[hex];
     if (c === "pending") return null;
     if (!c || Date.now() - c.at > 5 * 60000) {
@@ -1578,7 +1604,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       traceCache[hex] = "pending";
       fetch("/api/trace?hex=" + hex)
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-        .then(function (j) { traceCache[hex] = { pts: (j && j.pts) || [], at: Date.now() }; render(); })
+        .then(function (j) { return (j && j.pts && j.pts.length) ? j.pts : fr24Track(f); })
+        .then(function (pts) { traceCache[hex] = { pts: pts || [], at: Date.now() }; render(); })
         .catch(function () { traceCache[hex] = { pts: [], at: Date.now() - 4 * 60000 }; });   // retry in a minute
       return c && c.pts ? c.pts : null;
     }
@@ -1588,7 +1615,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (!trailLine) return;
     var path = [];
     if (f) {
-      var hist = traceFor(f.hex) || [], live = (trails[f.hex] && trails[f.hex].pts) || [];
+      var hist = traceFor(f.hex, f) || [], live = (trails[f.hex] && trails[f.hex].pts) || [];
       var histEnd = hist.length ? hist[hist.length - 1][3] : 0;
       hist.forEach(function (p) { path.push([p[0], p[1]]); });
       live.forEach(function (p) { if (p[2] > histEnd) path.push([p[0], p[1]]); });
@@ -2331,7 +2358,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     render();
   }
   function gonePath(f) {
-    var rec = f.gone, hist = traceFor(f.hex) || [];
+    var rec = f.gone, hist = traceFor(f.hex, f) || [];
     if (hist.length > 1 && hist[hist.length - 1][3] >= rec.t / 1000)
       return { pts: hist.map(function (p) { return [p[0], p[1]]; }), src: "trace" };
     return { pts: (rec.path || []).slice(), src: "saved" };
