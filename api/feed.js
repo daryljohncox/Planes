@@ -8,7 +8,12 @@ module.exports = async (req, res) => {
 
   // ?hex=c81234 finds one aircraft anywhere (used to jump to a plane from the rare plane list)
   const hex = /^[0-9a-f]{6}$/i.test(req.query.hex || "") ? req.query.hex.toLowerCase() : null;
-  const sources = hex ? [
+  // ?reg=ZK-IPB finds one aircraft by registration (used to watch the police Eagles)
+  const reg = /^[A-Z0-9]{1,3}-?[A-Z0-9]{2,6}$/i.test(req.query.reg || "") ? req.query.reg.toUpperCase() : null;
+  const sources = reg ? [
+    { url: `https://api.adsb.lol/v2/registration/${reg}`, list: "ac" },
+    { url: `https://opendata.adsb.fi/api/v2/registration/${reg}`, list: "aircraft" }
+  ] : hex ? [
     { url: `https://api.adsb.lol/v2/hex/${hex}`, list: "ac" },
     { url: `https://opendata.adsb.fi/api/v2/hex/${hex}`, list: "aircraft" }
   ] : [
