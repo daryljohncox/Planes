@@ -1453,7 +1453,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Order: Planespotters by hex, then by registration, Airport-Data, hexdb (/api/photo), JetPhotos,
   // Wikimedia Commons, then an example photo of the type.
   // prefetch: everything but JetPhotos (Flightradar24 is asked for planes you see close up)
+  // Photos the user supplied for particular callsigns, shown ahead of every photo site
+  var OWN_PHOTOS = {
+    CFL35: { src: "rescue-cfl35.jpg", credit: "© Liam Clayton Media · Gisborne-Tairāwhiti Rescue", kind: "actual", label: "" }
+  };
   function photoFor(a, prefetch) {
+    var own = OWN_PHOTOS[(a.flight || "").trim().toUpperCase()];
+    if (own) return own;
     if (a.hex && a.hex.charAt(0) !== "~") {
       var h = cached(hexCache, a.hex);
       if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
