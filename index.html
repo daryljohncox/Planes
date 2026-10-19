@@ -59,6 +59,15 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
 #stepbtns .mbtn{width:max(7vh,44px);justify-content:center;padding:0;font-size:4.4vh;line-height:1}
 #zoombtns{position:absolute;top:calc(2.6vh + max(7vh,44px));left:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-start}
 #keybtn .dots{display:flex;gap:.4vh}
+#sirenbtn{display:flex;width:max(7vh,44px);height:7vh;min-height:44px;padding:0;align-items:center;justify-content:center;border:0;border-radius:1.4vh;
+  background:#0b1f3a;box-shadow:0 .4vh 1.4vh rgba(0,0,0,.45);animation:sirenglow .8s steps(1) infinite}
+#sirenbtn[hidden]{display:none}
+#sirenbtn svg{width:4.6vh;height:4.6vh}
+#sirenbtn .sl{animation:sirenl .8s steps(1) infinite}
+#sirenbtn .sr{animation:sirenr .8s steps(1) infinite}
+@keyframes sirenl{0%{fill:#ff2a2a}50%{fill:#5a1010}}
+@keyframes sirenr{0%{fill:#10205a}50%{fill:#2a6bff}}
+@keyframes sirenglow{0%{box-shadow:0 0 1.6vh #ff2a2a}50%{box-shadow:0 0 1.6vh #2a6bff}}
 #keybtn .dots i{width:1.4vh;height:1.4vh;border-radius:50%;background:#ffd400}
 #keybtn .dots i:nth-child(2){background:#1fa24a}
 #keybtn .dots i:nth-child(3){background:#d7191c}
@@ -332,6 +341,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     <div id="mapbtns">
       <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
       <button id="keybtn" type="button"><span class="dots"><i></i><i></i><i></i></span><span>Colour key</span></button>
+      <button id="sirenbtn" type="button" aria-label="Police Eagle hunting" hidden><svg viewBox="0 0 24 24"><path class="sl" d="M12 5a6 6 0 0 0-6 6v6h6z"/><path class="sr" d="M12 5a6 6 0 0 1 6 6v6h-6z"/><rect x="4" y="17" width="16" height="3" rx="1" fill="#cfd8e3"/><path d="M12 1v2M4.2 3.8l1.4 1.4M19.8 3.8l-1.4 1.4" stroke="#ffd400" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </div>
     <div id="zoombtns">
       <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
@@ -2424,8 +2434,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // in the last 6 minutes while staying within a few km.
   var EAGLE_REGS = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"], EAGLE_MS = 20000, EAGLE_KEEP_MS = 6 * 60000, EAGLE_AGAIN_MS = 20 * 60000;
   var eagleSt = {};   // registration -> { pts: [[t, lat, lon, track]], said }
+  // Flashing siren beside the colour key while an Eagle is hunting; it goes once that Eagle has landed
+  // (or dropped off the feed for 10 minutes, which is what a landed helicopter usually does). Tap it to follow.
+  var hunting = {};   // registration -> { hex, lat, lon, seen }
+  var HUNT_GONE_MS = 10 * 60000;
+  function drawSiren() {
+    var now = Date.now();
+    Object.keys(hunting).forEach(function (reg) { if (now - hunting[reg].seen > HUNT_GONE_MS) delete hunting[reg]; });
+    $("sirenbtn").hidden = !Object.keys(hunting).length;
+  }
+  $("sirenbtn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var h = hunting[Object.keys(hunting)[0]];
+    if (h) trackPlane(h.hex, h.lat, h.lon);
+  });
   function eagleCheck() {
-    if (!VOICE.on || VOICE.eagle === false) return;
+    drawSiren();
+    if (VOICE.eagle === false) return;
     EAGLE_REGS.forEach(function (reg) {
       fetch(FEED + "?reg=" + reg, { cache: "no-store" })
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -2438,7 +2463,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   }
   function eagleFix(reg, a) {
     var now = Date.now(), s = eagleSt[reg] || (eagleSt[reg] = { pts: [], said: 0 });
-    if (a.alt === "ground" || a.track == null) { s.pts = []; return; }
+    if (a.alt === "ground") { s.pts = []; delete hunting[reg]; drawSiren(); return; }   // landed
+    if (hunting[reg]) { hunting[reg] = { hex: a.hex, lat: a.lat, lon: a.lon, seen: now }; chcLast[a.hex] = a; }
+    if (a.track == null) { s.pts = []; return; }
     var last = s.pts[s.pts.length - 1];
     if (last && last[1] === a.lat && last[2] === a.lon) return;   // no new position yet
     s.pts.push([now, a.lat, a.lon, a.track]);
@@ -2453,6 +2480,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (Math.abs(turn) < 330 || spread > 4) return;
     s.said = now;
     chcLast[a.hex] = a;   // tapping the card follows it
+    hunting[reg] = { hex: a.hex, lat: a.lat, lon: a.lon, seen: now };
+    drawSiren();
+    if (!VOICE.on) return;
     var town = nearestTown(la, lo);
     say({ hex: a.hex, chime: "eagle", card: { kind: "", tag: "Police Eagle hunting", title: a.callsign },
       text: "Police Eagle is hunting" + (town ? " over " + town.name : "") + "." });
