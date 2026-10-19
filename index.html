@@ -63,6 +63,8 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   box-shadow:0 .4vh 1.4vh rgba(0,0,0,.45);animation:sirenglow .65s steps(1) infinite}
 #sirenbtn[hidden]{display:none}
 #sirenbtn img{height:100%;width:auto;display:block}
+#sirenbtn b{display:flex;align-items:center;padding:0 1.6vh;background:#0b1f3a;color:#fff;font:800 3.2vh system-ui,sans-serif}
+#sirenbtn b:empty{display:none}
 @keyframes sirenglow{0%{box-shadow:0 0 1.6vh #2a6bff}50%{box-shadow:0 0 1.6vh #ff2a2a}}
 #keybtn .dots i{width:1.4vh;height:1.4vh;border-radius:50%;background:#ffd400}
 #keybtn .dots i:nth-child(2){background:#1fa24a}
@@ -337,7 +339,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     <div id="mapbtns">
       <button id="home" type="button"><span class="ic">⌂</span><span>Return to <span id="homeName">Marton</span></span></button>
       <button id="keybtn" type="button"><span class="dots"><i></i><i></i><i></i></span><span>Colour key</span></button>
-      <button id="sirenbtn" type="button" aria-label="Police Eagle hunting" hidden><img alt="" src="police-siren.gif"></button>
+      <button id="sirenbtn" type="button" aria-label="Police Eagle hunting" hidden><img alt="" src="police-siren.gif"><b id="huntcount"></b></button>
     </div>
     <div id="zoombtns">
       <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
@@ -2426,10 +2428,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       dist: distKm(ref.lat, ref.lon, x.lat, x.lon), brg: bearing(ref.lat, ref.lon, x.lat, x.lon) };
   }
   // ---------- police Eagle watch: a chime and "Police Eagle is hunting" when one circles an area ----------
-  // The three Eagles are looked up by registration wherever they are. Circling = turned through a full circle
-  // in the last 6 minutes while staying within a few km.
-  var EAGLE_REGS = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"], EAGLE_MS = 20000, EAGLE_KEEP_MS = 6 * 60000, EAGLE_AGAIN_MS = 20 * 60000;
-  var eagleSt = {};   // registration -> { pts: [[t, lat, lon, track]], said }
+  // The three Eagles are looked up by registration wherever they are, every 10 s. Circling = its heading has
+  // turned through a full circle (tight orbit or wide loop, up to about 10 km across) within the last 15 minutes.
+  var EAGLE_REGS = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"], EAGLE_MS = 10000, EAGLE_KEEP_MS = 15 * 60000;
+  var SPELL_GAP_MS = 15 * 60000;   // circling again after this long counts as a new hunt
+  var eagleSt = {};   // registration -> { pts: [[t, lat, lon, track]], lastCirc }
+  // Today's number of hunts, shown on the siren (kept through the hourly reload, starts again at midnight)
+  var huntDay = store.get("eagleHunts", { d: "", n: 0 });
+  function huntsToday() { return huntDay.d === new Date().toDateString() ? huntDay.n : 0; }
   // Flashing siren beside the colour key while an Eagle is hunting; it goes once that Eagle has landed
   // (or dropped off the feed for 10 minutes, which is what a landed helicopter usually does). Tap it to follow.
   var hunting = {};   // registration -> { hex, lat, lon, seen }
@@ -2438,6 +2444,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var now = Date.now();
     Object.keys(hunting).forEach(function (reg) { if (now - hunting[reg].seen > HUNT_GONE_MS) delete hunting[reg]; });
     $("sirenbtn").hidden = !Object.keys(hunting).length;
+    $("huntcount").textContent = huntsToday() || "";
   }
   $("sirenbtn").addEventListener("click", function (e) {
     e.stopPropagation();
@@ -2457,29 +2464,45 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         .catch(function () { /* try again next time */ });
     });
   }
+  // The newest full circle in pts ([[t, lat, lon, track]]): walk back from the latest heading until the turns add
+  // up to a full circle, then check that stretch stayed in one area. Returns its centre, or null.
+  function circled(pts) {
+    var turn = 0;
+    for (var i = pts.length - 1; i > 0; i--) {
+      turn += ((pts[i][3] - pts[i - 1][3] + 540) % 360) - 180;
+      if (Math.abs(turn) < 330) continue;
+      var loop = pts.slice(i - 1), la = 0, lo = 0;
+      loop.forEach(function (p) { la += p[1] / loop.length; lo += p[2] / loop.length; });
+      var spread = Math.max.apply(null, loop.map(function (p) { return distKm(la, lo, p[1], p[2]); }));
+      return spread <= 10 ? { lat: la, lon: lo } : null;
+    }
+    return null;
+  }
   function eagleFix(reg, a) {
-    var now = Date.now(), s = eagleSt[reg] || (eagleSt[reg] = { pts: [], said: 0 });
+    var now = Date.now(), s = eagleSt[reg] || (eagleSt[reg] = { pts: [], lastCirc: 0 });
     if (a.alt === "ground") { s.pts = []; delete hunting[reg]; drawSiren(); return; }   // landed
     if (hunting[reg]) { hunting[reg] = { hex: a.hex, lat: a.lat, lon: a.lon, seen: now }; chcLast[a.hex] = a; }
-    if (a.track == null) { s.pts = []; return; }
+    // Hovering: the heading jumps about at walking pace, so only moving positions count
+    if (a.track == null || a.gs == null || a.gs < 15) return;
     var last = s.pts[s.pts.length - 1];
     if (last && last[1] === a.lat && last[2] === a.lon) return;   // no new position yet
     s.pts.push([now, a.lat, a.lon, a.track]);
     s.pts = s.pts.filter(function (p) { return now - p[0] < EAGLE_KEEP_MS; });
-    if (s.pts.length < 4 || now - s.said < EAGLE_AGAIN_MS) return;
-    var turn = 0, la = 0, lo = 0;
-    s.pts.forEach(function (p, i) {
-      la += p[1] / s.pts.length; lo += p[2] / s.pts.length;
-      if (i) turn += ((p[3] - s.pts[i - 1][3] + 540) % 360) - 180;
-    });
-    var spread = Math.max.apply(null, s.pts.map(function (p) { return distKm(la, lo, p[1], p[2]); }));
-    if (Math.abs(turn) < 330 || spread > 4) return;
-    s.said = now;
-    chcLast[a.hex] = a;   // tapping the card follows it
+    var c = circled(s.pts);
+    if (!c) return;
+    var fresh = now - s.lastCirc > SPELL_GAP_MS;
+    s.lastCirc = now;
+    s.pts = s.pts.slice(-1);   // the next circle starts from here
     hunting[reg] = { hex: a.hex, lat: a.lat, lon: a.lon, seen: now };
+    chcLast[a.hex] = a;   // tapping the card follows it
+    if (fresh) {
+      var today = new Date().toDateString();
+      huntDay = { d: today, n: (huntDay.d === today ? huntDay.n : 0) + 1 };
+      store.set("eagleHunts", huntDay);
+    }
     drawSiren();
-    if (!VOICE.on) return;
-    var town = nearestTown(la, lo);
+    if (!fresh || !VOICE.on) return;
+    var town = nearestTown(c.lat, c.lon);
     say({ hex: a.hex, chime: "eagle", card: { kind: "", tag: "Police Eagle hunting", title: a.callsign },
       text: "Police Eagle is hunting" + (town ? " over " + town.name : "") + "." });
   }
