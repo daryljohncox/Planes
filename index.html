@@ -1276,7 +1276,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var foreign = !!f.country && f.country !== "New Zealand";
     // A NZ plane whose trace begins overseas (e.g. took off in Sydney, seen by Australian receivers)
     var overseas = !!(pts && pts.length && !inNZ(pts[0][0], pts[0][1]));
-    if (!airStart && !foreign && !overseas) return "";
+    if (!airStart && !foreign && !overseas) {
+      // No trace to go on (e.g. adsb.lol has none): still say so when Flightradar24 has this
+      // callsign live on a flight from overseas
+      histFor(f);
+      var lf = liveLeg(f);
+      return lf && lf.from.country !== "New Zealand"
+        ? "<div>" + esc("Came from " + histPlace(lf.from) + (lf.dep ? " · left " + histWhen(lf.dep, true) : "")) + "</div>" : "";
+    }
     var h = histFor(f), now = Date.now() / 1000, NZ = "New Zealand", lines = [], i, fl = h && h.flights;
     if (h && h.ok) {
       var c = 0;
