@@ -55,6 +55,7 @@ main{flex:1;display:flex;gap:1.2vw;min-height:0}
   box-shadow:0 0 0 2px rgba(255,255,255,.5),0 .6vh 1.6vh rgba(0,0,0,.6)}
 #keybtn:active{background:#24406b}
 #stepbtns{position:absolute;left:1.4vh;bottom:7vh;z-index:1000;display:flex;gap:1.2vh}
+#hourbtn{position:absolute;right:1.4vh;bottom:7vh;z-index:1000}
 #stepbtns .mbtn{width:max(7vh,44px);justify-content:center;padding:0;font-size:4.4vh;line-height:1}
 #zoombtns{position:absolute;top:calc(2.6vh + max(7vh,44px));left:1.4vh;z-index:1000;display:flex;flex-direction:column;gap:1.2vh;align-items:flex-start}
 #keybtn .dots{display:flex;gap:.4vh}
@@ -341,6 +342,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       <button id="stepin" class="mbtn" type="button" aria-label="Zoom in 25 km">+</button>
       <button id="stepout" class="mbtn" type="button" aria-label="Zoom out 25 km">−</button>
     </div>
+    <button id="hourbtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Hourly update</span></button>
     <div id="mapbtns2">
       <button id="voicebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg><span>Voice</span></button>
       <button id="rarebtn" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="#ffd400"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><span>Rare planes</span><b id="rarecount"></b></button>
@@ -1297,6 +1299,41 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       };
     });
   }
+  // Wikimedia Commons photos whose file name carries the registration (free, and open to the Hub's browser)
+  function fetchCommons(reg, label) {
+    var bare = reg.replace(/-/g, "").toUpperCase();
+    var url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6" +
+      "&gsrlimit=10&gsrsearch=" + encodeURIComponent('"' + reg + '"') + "&prop=imageinfo&iiprop=url|extmetadata|mime&iiurlwidth=800";
+    return getJSON(url).then(function (j) {
+      var pages = j && j.query && j.query.pages;
+      if (!pages) return null;
+      var list = Object.keys(pages).map(function (k) { return pages[k]; })
+        .sort(function (x, y) { return (x.index || 0) - (y.index || 0); });
+      for (var i = 0; i < list.length; i++) {
+        var pg = list[i], ii = pg.imageinfo && pg.imageinfo[0];
+        // the name must hold this registration (ZK-IPB or ZKIPB), not just mention it in the description
+        if (!ii || !/^image\/(jpeg|png|webp)$/.test(ii.mime || "") || pg.title.toUpperCase().replace(/-/g, "").indexOf(bare) < 0) continue;
+        var md = ii.extmetadata || {}, who = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").trim();
+        return {
+          src: ii.thumburl || ii.url,
+          credit: "© " + (who || "unknown") + " · Wikimedia Commons",
+          kind: label ? "generic" : "actual", label: label || ""
+        };
+      }
+      return null;
+    });
+  }
+  // NZ Police's three Eagle Bell 429s: a photo of one of them beats a picture of a foreign 429
+  var POLICE_EAGLES = ["ZK-IPA", "ZK-IPB", "ZK-IPC"];
+  function fetchEagle() {
+    var i = 0;
+    return (function next() {
+      if (i >= POLICE_EAGLES.length) return Promise.resolve(null);
+      var reg = POLICE_EAGLES[i++];
+      return fetchCommons(reg, "NZ Police Eagle (" + reg + ") · not this aircraft")
+        .catch(function () { return null; }).then(function (p) { return p || next(); });
+    })();
+  }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
   function fetchGeneric(type, desc, heli, searchOnly) {
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
@@ -1324,6 +1361,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         .catch(function () { cache[key] = null; setTimeout(function () { delete cache[key]; }, 300000); render(); });
   }
   var regCache = {};   // registration -> JetPhotos photo | null | "pending"
+  var commonsCache = {};   // registration (or "eagle") -> Wikimedia Commons photo | null | "pending"
   // prefetch: only the free Planespotters / Wikipedia lookups (Flightradar24 is asked for planes you see close up)
   function photoFor(a, prefetch) {
     if (a.hex && a.hex.charAt(0) !== "~") {
@@ -1341,6 +1379,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (r === undefined) { load(regCache, reg, function () { return fetchJetPhotos(reg, example); }); return null; }
       if (r === "pending") return null;
       if (r) return r;
+    }
+    // Then Wikimedia Commons, by registration
+    if (reg && !example && prefetch !== true) {
+      var c = commonsCache[reg];
+      if (c === undefined) { load(commonsCache, reg, function () { return fetchCommons(reg); }); return null; }
+      if (c === "pending") return null;
+      if (c) return c;
+    }
+    // A police helicopter with no photo of its own: one of the NZ Police Eagles
+    if (a.heli && a.cat === "pol" && prefetch !== true) {
+      var e = commonsCache.eagle;
+      if (e === undefined) { load(commonsCache, "eagle", fetchEagle); return null; }
+      if (e === "pending") return null;
+      if (e) return e;
     }
     var key = a.type || a.desc ? (a.type || "") + "|" + (a.desc || "") : "", type = a.type;
     // Unknown type: show a typical one of what it is (NZ rescue helicopters are mostly BK 117 / H145,
@@ -1585,7 +1637,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       $("noimg").innerHTML = "";
       $("badge").style.display = "block";
       $("badge").className = "badge " + ph.kind;
-      $("badge").textContent = ph.kind === "actual" ? "This aircraft" : "Example " + typeName(f) + " · not this aircraft";
+      $("badge").textContent = ph.kind === "actual" ? "This aircraft" : ph.label || "Example " + typeName(f) + " · not this aircraft";
       $("credit").style.display = "block";
       $("credit").textContent = ph.credit;
     } else {
@@ -1699,7 +1751,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         (r[2] ? "<small>" + esc(r[2]) + "</small>" : "") + "</span><i></i></button>";
     }).join("") + '<div class="note">Tap a plane, then the speaker button, to hear it any time.</div>';
     $("voicebtn").classList.toggle("off", !VOICE.on);
+    $("hourbtn").classList.toggle("off", !VOICE.hourly);
+    $("hourbtn").querySelector("span").textContent = "Hourly update " + (VOICE.hourly ? "on" : "off");
   }
+  // Bottom-right button: the hourly summary on/off without opening the voice panel
+  $("hourbtn").addEventListener("click", function () {
+    VOICE.hourly = !VOICE.hourly;
+    store.set("voice", VOICE);
+    drawVoicePanel();
+  });
   $("voicerows").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("button") : null;
     if (!b) return;
