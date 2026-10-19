@@ -1336,8 +1336,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       return steps[i++]().then(function (p) { return p || next(); });
     })();
   }
+  // The model number that must appear with a registration photo ("429" for a Bell 429), since NZ registrations
+  // get reused: ZK-IPA was a red Robinson before it was ever a police registration
+  function modelWord(type, desc) {
+    var name = (type && TYPES[type] && TYPES[type][0]) || desc || "";
+    var m = /\b[A-Z]*\d+/i.exec(name);
+    return m ? m[0].toUpperCase() : "";
+  }
   // Wikimedia Commons photos whose file name carries the registration (free, and open to the Hub's browser)
-  function fetchCommons(reg, label) {
+  function fetchCommons(reg, label, model) {
     var bare = reg.replace(/-/g, "").toUpperCase();
     var url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6" +
       "&gsrlimit=10&gsrsearch=" + encodeURIComponent('"' + reg + '"') + "&prop=imageinfo&iiprop=url|extmetadata|mime&iiurlwidth=800";
@@ -1350,7 +1357,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         var pg = list[i], ii = pg.imageinfo && pg.imageinfo[0];
         // the name must hold this registration (ZK-IPB or ZKIPB), not just mention it in the description
         if (!ii || !/^image\/(jpeg|png|webp)$/.test(ii.mime || "") || pg.title.toUpperCase().replace(/-/g, "").indexOf(bare) < 0) continue;
-        var md = ii.extmetadata || {}, who = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").trim();
+        var md = ii.extmetadata || {};
+        var about = [pg.title, md.ImageDescription && md.ImageDescription.value, md.ObjectName && md.ObjectName.value,
+          md.Categories && md.Categories.value].join(" ").replace(/<[^>]*>/g, " ").toUpperCase().replace(/[\s-]/g, "");
+        if (model && about.indexOf(model.replace(/-/g, "")) < 0) continue;   // same registration, different aircraft
+        var who = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").trim();
         return {
           src: ii.thumburl || ii.url,
           credit: "© " + (who || "unknown") + " · Wikimedia Commons",
@@ -1360,14 +1371,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       return null;
     });
   }
-  // NZ Police's three Eagle Bell 429s: a photo of one of them beats a picture of a foreign 429
-  var POLICE_EAGLES = ["ZK-IPA", "ZK-IPB", "ZK-IPC"];
+  // NZ Police's three Eagle Bell 429s (Police 2, 1, 3): a photo of one of them beats a picture of a foreign 429
+  var POLICE_EAGLES = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"];
   function fetchEagle() {
     var i = 0;
     return (function next() {
       if (i >= POLICE_EAGLES.length) return Promise.resolve(null);
       var reg = POLICE_EAGLES[i++];
-      return fetchCommons(reg, "NZ Police Eagle (" + reg + ") · not this aircraft")
+      return fetchCommons(reg, "NZ Police Eagle (" + reg + ") · not this aircraft", "429")
         .catch(function () { return null; }).then(function (p) { return p || next(); });
     })();
   }
@@ -1431,7 +1442,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     // Then Wikimedia Commons, by registration
     if (reg && !example) {
       var c = commonsCache[reg];
-      if (c === undefined) { load(commonsCache, reg, function () { return fetchCommons(reg); }); return null; }
+      if (c === undefined) { load(commonsCache, reg, function () { return fetchCommons(reg, "", modelWord(a.type, a.desc)); }); return null; }
       if (c === "pending") return null;
       if (c) return c;
     }
