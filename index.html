@@ -1460,9 +1460,30 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     ZKIPC: { src: "police-1.jpg", credit: "NZ Police Eagle · Police 1", kind: "actual", label: "" },
     ZKIPB: { src: "police-2.jpg", credit: "NZ Police Eagle · Police 2", kind: "actual", label: "" }
   };
+  // Aircraft no photo site has a real picture of (JetPhotos only has an older aircraft that used the
+  // registration): show a sister aircraft in the same livery instead, badged as not this aircraft
+  var SISTER_PHOTOS = {
+    ZKHTQ: ["ZK-IZB", "Northern Rescue AW169"], ZKIHB: ["ZK-IZB", "Northern Rescue AW169"]
+  };
   function photoFor(a, prefetch) {
-    var own = OWN_PHOTOS[(a.flight || "").trim().toUpperCase()] || OWN_PHOTOS[regOf(a).replace(/-/g, "").toUpperCase()];
+    var rkey = regOf(a).replace(/-/g, "").toUpperCase();
+    var own = OWN_PHOTOS[(a.flight || "").trim().toUpperCase()] || OWN_PHOTOS[rkey];
     if (own) return own;
+    var sis = SISTER_PHOTOS[rkey];
+    if (sis && prefetch !== true) {
+      var sk = sis[0] + "|sister", sp = cached(regCache, sk);
+      if (sp === undefined) {
+        load(regCache, sk, function () {
+          return fetchJetPhotos(sis[0], sis[1]).then(function (p) {
+            if (p) p.label = sis[1] + " " + sis[0] + " · not this aircraft";
+            return p;
+          });
+        });
+        return null;
+      }
+      if (sp === "pending") return null;
+      if (sp) return sp;
+    }
     if (a.hex && a.hex.charAt(0) !== "~") {
       var h = cached(hexCache, a.hex);
       if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
