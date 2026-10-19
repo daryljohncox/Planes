@@ -1371,16 +1371,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       return null;
     });
   }
-  // NZ Police's three Eagle Bell 429s (Police 2, 1, 3): a photo of one of them beats a picture of a foreign 429
-  var POLICE_EAGLES = ["ZK-IPB", "ZK-IPC", "ZK-IPJ"];
-  function fetchEagle() {
-    var i = 0;
-    return (function next() {
-      if (i >= POLICE_EAGLES.length) return Promise.resolve(null);
-      var reg = POLICE_EAGLES[i++];
-      return fetchCommons(reg, "NZ Police Eagle (" + reg + ") · not this aircraft", "429")
-        .catch(function () { return null; }).then(function (p) { return p || next(); });
-    })();
+  // NZ Police's Eagles are three Bell 429s (ZK-IPB Police 2, ZK-IPC Police 1, ZK-IPJ Police 3). No photo site has
+  // them, so a police helicopter without a photo of its own shows Police 3 (police-eagle.jpg, supplied by the user)
+  function eaglePhoto(reg) {
+    var ipj = reg.replace(/-/g, "").toUpperCase() === "ZKIPJ";
+    return { src: "police-eagle.jpg", credit: "NZ Police Eagle · Police 3", kind: ipj ? "actual" : "generic",
+      label: ipj ? "" : "NZ Police Eagle (Police 3) · not this aircraft" };
   }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
   function fetchGeneric(type, desc, heli, searchOnly) {
@@ -1410,7 +1406,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   }
   var regCache = {};   // registration -> JetPhotos photo | null | "pending"
   var relayCache = {};   // "hex|registration" -> photo from the other sites | null | "pending"
-  var commonsCache = {};   // registration (or "eagle") -> Wikimedia Commons photo | null | "pending"
+  var commonsCache = {};   // registration -> Wikimedia Commons photo | null | "pending"
   // Order: Planespotters by hex, then by registration, Airport-Data, hexdb (/api/photo), JetPhotos,
   // Wikimedia Commons, then an example photo of the type.
   // prefetch: everything but JetPhotos (Flightradar24 is asked for planes you see close up)
@@ -1447,12 +1443,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (c) return c;
     }
     // A police helicopter with no photo of its own: one of the NZ Police Eagles
-    if (a.heli && a.cat === "pol" && prefetch !== true) {
-      var e = commonsCache.eagle;
-      if (e === undefined) { load(commonsCache, "eagle", fetchEagle); return null; }
-      if (e === "pending") return null;
-      if (e) return e;
-    }
+    if (a.heli && a.cat === "pol") return eaglePhoto(reg);
     var key = a.type || a.desc ? (a.type || "") + "|" + (a.desc || "") : "", type = a.type;
     // Unknown type: show a typical one of what it is (NZ rescue helicopters are mostly BK 117 / H145,
     // NZ Police's Eagle is a Bell 429)
