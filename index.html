@@ -1466,6 +1466,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Aircraft no photo site has a real picture of (JetPhotos only has an older aircraft that used the
   // registration): show a sister aircraft in the same livery instead, badged as not this aircraft
   var SISTER_PHOTOS = {
+    NZ3615: ["NZ3611", "RNZAF Seasprite"], NZ3616: ["NZ3611", "RNZAF Seasprite"], NZ3618: ["NZ3611", "RNZAF Seasprite"],
+    NZ3619: ["NZ3611", "RNZAF Seasprite"], NZ3620: ["NZ3611", "RNZAF Seasprite"]
   };
   function photoFor(a, prefetch) {
     var rkey = regOf(a).replace(/-/g, "").toUpperCase();
