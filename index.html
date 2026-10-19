@@ -1297,21 +1297,30 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (!p) return null;
       return {
         src: (p.thumbnail_large || p.thumbnail).src,
+        alts: psAlts(j.photos),
         credit: "© " + (p.photographer || "unknown") + " · Planespotters.net",
         kind: "actual"
       };
     });
+  }
+  // Every picture size of every Planespotters photo, to try in turn if one won't load
+  function psAlts(photos) {
+    var out = [];
+    (photos || []).forEach(function (p) { [p.thumbnail_large, p.thumbnail].forEach(function (t) { if (t && t.src) out.push(t.src); }); });
+    return out;
   }
   // Flightradar24's JetPhotos pictures of one registration (for planes Planespotters has none of)
   function fetchJetPhotos(reg, example) {
     return fr24(reg).then(function (j) {
       var imgs = j.result.response.aircraftImages;
       imgs = Array.isArray(imgs) ? imgs[0] : imgs;
-      var set = imgs && imgs.images, p = null;
-      if (set) ["large", "medium", "thumbnails"].forEach(function (k) { if (!p && set[k] && set[k][0] && set[k][0].src) p = set[k][0]; });
+      var set = imgs && imgs.images, p = null, alts = [];
+      if (set) ["large", "medium", "thumbnails"].forEach(function (k) {
+        (set[k] || []).forEach(function (x) { if (x && x.src) { if (!p) p = x; alts.push(x.src); } });
+      });
       if (!p) return null;
       return {
-        src: p.src,
+        src: p.src, alts: alts,
         credit: (example ? example + " · " : "") + "© " + (p.copyright || "unknown") + " · " + (p.source || "JetPhotos"),
         kind: example ? "generic" : "actual"
       };
@@ -1332,7 +1341,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       reg && function () {
         return getJSON("https://api.planespotters.net/pub/photos/reg/" + encodeURIComponent(reg)).then(function (j) {
           var p = j && j.photos && j.photos[0];
-          return p ? { src: (p.thumbnail_large || p.thumbnail).src, credit: "© " + (p.photographer || "unknown") + " · Planespotters.net", kind: "actual" } : null;
+          return p ? { src: (p.thumbnail_large || p.thumbnail).src, alts: psAlts(j.photos), credit: "© " + (p.photographer || "unknown") + " · Planespotters.net", kind: "actual" } : null;
         }, none);
       },
       hex && function () { return airportData("m=" + hex); },
@@ -1347,7 +1356,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var i = 0;
     return (function next() {
       if (i >= steps.length) return Promise.resolve(null);
-      return steps[i++]().then(function (p) { return p || next(); });
+      return steps[i++]().then(function (p) { return usable(p) || next(); });   // skips photos that wouldn't load
     })();
   }
   // The model number that must appear with a registration photo ("429" for a Bell 429), since NZ registrations
@@ -1377,7 +1386,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         if (model && about.indexOf(model.replace(/-/g, "")) < 0) continue;   // same registration, different aircraft
         var who = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").trim();
         return {
-          src: ii.thumburl || ii.url,
+          src: ii.thumburl || ii.url, alts: [ii.url],
           credit: "© " + (who || "unknown") + " · Wikimedia Commons",
           kind: label ? "generic" : "actual", label: label || ""
         };
@@ -1413,6 +1422,26 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       return pg ? { src: pg.thumbnail.source, credit: "Example photo · Wikipedia", kind: "generic" } : null;
     });
   }
+  // Pictures the Hub couldn't load. A photo whose every size and alternative failed counts as none, so the
+  // next site gets asked: real photos of this aircraft first, an example of the type only after those.
+  var badImg = {};
+  function usable(p) {
+    if (!p || typeof p !== "object") return p;
+    if (!badImg[p.src]) return p;
+    var alts = p.alts || [];
+    for (var i = 0; i < alts.length; i++) if (!badImg[alts[i]]) return Object.assign({}, p, { src: alts[i] });
+    return null;
+  }
+  // A cached photo that won't load counts as none. retry: ask again (for the other photo sites, which then
+  // skip the broken ones and try the next site)
+  function cached(cache, key, retry) {
+    var v = cache[key];
+    if (v && typeof v === "object" && !usable(v)) {
+      if (retry) { delete cache[key]; return undefined; }
+      cache[key] = null;
+    }
+    return usable(cache[key]);
+  }
   function load(cache, key, fn) {
     cache[key] = "pending";
     fn().then(function (p) { cache[key] = p; render(); })
@@ -1426,7 +1455,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // prefetch: everything but JetPhotos (Flightradar24 is asked for planes you see close up)
   function photoFor(a, prefetch) {
     if (a.hex && a.hex.charAt(0) !== "~") {
-      var h = hexCache[a.hex];
+      var h = cached(hexCache, a.hex);
       if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
       if (h === "pending") return null;
       if (h) return h;
@@ -1434,7 +1463,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     // No Planespotters photo by hex: the other free photo sites
     var reg = regOf(a), hex = a.hex && a.hex.charAt(0) !== "~" ? a.hex : "", rk = hex + "|" + reg;
     if (hex || reg) {
-      var ps = relayCache[rk];
+      var ps = cached(relayCache, rk, true);
       if (ps === undefined) { load(relayCache, rk, function () { return fetchOtherPhoto(hex, reg); }); return null; }
       if (ps === "pending") return null;
       if (ps) return ps;
@@ -1444,14 +1473,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var example = "";
     if (!reg && a.heli && a.cat === "pol") { reg = "ZK-IPC"; example = "NZ Police Eagle"; }
     if (reg && prefetch !== true) {
-      var r = regCache[reg];
+      var r = cached(regCache, reg);
       if (r === undefined) { load(regCache, reg, function () { return fetchJetPhotos(reg, example); }); return null; }
       if (r === "pending") return null;
       if (r) return r;
     }
     // Then Wikimedia Commons, by registration
     if (reg && !example) {
-      var c = commonsCache[reg];
+      var c = cached(commonsCache, reg);
       if (c === undefined) { load(commonsCache, reg, function () { return fetchCommons(reg, "", modelWord(a.type, a.desc)); }); return null; }
       if (c === "pending") return null;
       if (c) return c;
@@ -1464,7 +1493,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (!key && a.heli) key = type = a.cat === "res" ? "BK17" : a.cat === "pol" ? "B429" : "";
     if (type && !TYPES[type] && !a.desc && acInfo[a.hex] === "pending") return null;   // its description is on the way
     if (!key) return null;
-    var t = typeCache[key];
+    var t = cached(typeCache, key);
     if (t === undefined) { load(typeCache, key, function () { return fetchGeneric(type, a.desc, a.heli); }); return null; }
     return t === "pending" ? null : t;
   }
@@ -1634,6 +1663,13 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 
   // ---------- render ----------
   var shownImg = null, renderLater = false;
+  // A picture that won't load (broken link, blocked by the site): try the next one instead of a blank box
+  $("img").addEventListener("error", function () {
+    if (!shownImg) return;
+    badImg[shownImg] = true; shownImg = null;
+    this.style.display = "none";
+    render();
+  });
   function render() {
     // new data arriving mid pan / pinch waits until the map stops, so the Hub isn't redrawing under your finger
     if (moving && !autoPan) { renderLater = true; return; }
