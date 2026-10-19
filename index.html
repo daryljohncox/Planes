@@ -1464,7 +1464,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     ZKHTQ: { src: "rescue-htq.jpg", credit: "Northern Rescue AW169 · arriving in NZ, still wrapped", kind: "actual", label: "" }
   };
   // Aircraft no photo site has a real picture of (JetPhotos only has an older aircraft that used the
-  // registration): show a sister aircraft in the same livery instead, badged as not this aircraft
+  // registration): show a sister aircraft in the same livery instead, badged as a sister helicopter
   var SISTER_PHOTOS = {
     NZ3615: ["NZ3611", "RNZAF Seasprite"], NZ3616: ["NZ3611", "RNZAF Seasprite"], NZ3618: ["NZ3611", "RNZAF Seasprite"],
     NZ3619: ["NZ3611", "RNZAF Seasprite"], NZ3620: ["NZ3611", "RNZAF Seasprite"]
@@ -1479,7 +1479,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (sp === undefined) {
         load(regCache, sk, function () {
           return fetchJetPhotos(sis[0], sis[1]).then(function (p) {
-            if (p) p.label = sis[1] + " " + sis[0] + " · not this aircraft";
+            if (p) p.label = "Photo of sister helicopter " + sis[0];
             return p;
           });
         });
