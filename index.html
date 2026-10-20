@@ -2501,24 +2501,36 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Antarctica gets an alert too, and the map jumps to it and follows it.
   var CHC = { lat: -43.4894, lon: 172.5322 }, CHC_R_NM = 40, CHC_MS = 15000, CHC_QUIET_MS = 45 * 60000;
   var chcSt = {};   // hex -> { gnd, near, dep, arr, ice, t } (times of the alerts already given)
-  // Planes that fly to Antarctica from Christchurch when their route isn't in the databases
-  var ICE_TYPES = { C17: 1, C130: 1, C30J: 1, B752: 1, IL76: 1, A319: 1, A332: 1 };
-  var ICE_CS = /^(RCH|REACH|ICE|SKIER|KBA|NSF|IAM)\d/;   // USAF Reach, Deep Freeze, LC-130 Skier, Kenn Borek, NSF, Italian AF
+  // Planes that fly to Antarctica from Christchurch when their route isn't in the databases:
+  //   USAF C-17A (Deep Freeze, callsign ICE or REACH), ANG LC-130H ski Hercules (SKIER), RNZAF C-130J and 757,
+  //   Italian AF C-130J, RAAF C-17A and A319, Kenn Borek Basler BT-67 and Twin Otter, chartered A332 / IL76
+  var ICE_TYPES = { C17: 1, C130: 1, C30J: 1, B752: 1, IL76: 1, A319: 1, A332: 1, DC3T: 1, DHC6: 1 };
+  // USAF Reach, Deep Freeze (ICE), LC-130 Skier, Kenn Borek, NSF, Italian AF, RNZAF, RAAF
+  var ICE_CS = /^(RCH|REACH|ICE|SKIER|KBA|NSF|IAM|KIWI|KIW|ASY)\d/;
+  var ICE_ONLY_CS = /^(ICE|SKIER)\d/;   // only ever used for Antarctic flights, whatever the route databases say
   function chcAngle(a, b) { var d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; }
   function usafC17(a) {
     return a.type === "C17" && (a.country === "United States" || /^(RCH|REACH|PAT|SAM)/.test(a.flight.toUpperCase()) ||
       /united states air force|usaf/i.test(a.owner || ""));
   }
   function iceBound(a) {
+    var cs = (a.flight || "").toUpperCase();
     var r = a.flight ? routeFor(a) : null;
-    if (r && r !== "pending" && r.to) return iceApt(r.to) ? r.to : false;   // a known route decides it
-    if (r === "pending") return null;   // ask again on the next check
+    if (r && r !== "pending" && r.to && iceApt(r.to)) return r.to;
     if (a.track == null || a.track < 120 || a.track > 240) return false;   // heading south
     if (a.dist < 15) return null;   // wait until it's clear of the airport and on its way
+    // Military callsigns get reused, so the route databases often hold an old flight (REACH to Hawaii).
+    // So a known route only rules it out when the plane is really flying towards that airport.
+    if (r === "pending" && !ICE_ONLY_CS.test(cs)) return null;   // ask again on the next check
+    if (r && r !== "pending" && r.to && !ICE_ONLY_CS.test(cs)) {
+      var c = aptCoords(r.to);
+      if (c && chcAngle(a.track, bearing(a.lat, a.lon, c[2], c[3])) < 50) return false;   // e.g. off to Dunedin
+    }
+    if (ICE_ONLY_CS.test(cs)) return true;
     var t = a.type;
     if (t === "C17" || t === "C130" || t === "C30J") return true;
     if (ICE_TYPES[t] && (a.cat === "mil" || a.cat === "ant")) return true;
-    return ICE_CS.test(a.flight.toUpperCase()) || a.cat === "ant";
+    return (ICE_CS.test(cs) && (!t || ICE_TYPES[t])) || a.cat === "ant";   // not an RNZAF King Air (KIW52)
   }
   function chcName(a) {
     var cs = a.flight ? ", " + a.flight.toUpperCase().replace(/^RCH/, "Reach ").replace(/(\D)(\d)/, "$1 $2") : "";
@@ -2734,6 +2746,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         }).map(withInfo).forEach(function (x) {
           var a = bgPlane(x, SOUTH);
           if (a.alt === "ground" || !(a.ice || southOfNZ(a))) return;
+          // Heading for the ice and missed leaving Christchurch: the full Antarctic alert, and the map follows it
+          var iceType = ICE_TYPES[a.type] || (!a.type && ICE_CS.test(a.flight.toUpperCase())) || RESEARCH_CS.test(a.flight.toUpperCase());
+          var to = a.lat < -60 || (a.ice && iceType ? iceBound(a) : false);
+          if (to) { iceAlert(a, to, false); return; }
           var why = a.ice ? "Antarctic flight" : "South of NZ";
           if (!noteRare(a, why) || !VOICE.on || !VOICE.rare) return;
           chcLast[a.hex] = a;   // tapping the card follows it
@@ -2745,6 +2761,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
         });
       })
       .catch(function () { /* try again next time */ });
+  }
+  // "Off to Antarctica": alert, rare list, then the map jumps to it and follows it (once per plane every 6 hours)
+  var iceSaid = {};   // hex -> time of the alert
+  try { var iceRec = JSON.parse(sessionStorage.getItem("planes.ice") || "null"); if (iceRec) iceSaid[iceRec.hex] = iceRec.t; } catch (e) { /* none */ }
+  function iceAlert(a, to, fromChc) {
+    var now = Date.now();
+    if (iceSaid[a.hex] && now - iceSaid[a.hex] < 6 * 3600000) return;
+    iceSaid[a.hex] = now;
+    chcLast[a.hex] = a;
+    noteRare(a, "Antarctic flight");
+    var where = to === true ? "Antarctica" : (to.city || shortApt(to.name) || "Antarctica");
+    chcAlert(a, { ice: true, tag: "Off to Antarctica", text: function (b) {
+      return "Antarctic flight. " + chcName(b) + (fromChc ? ", has left Christchurch for " : ", is on its way to ") + where +
+        (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
+    } });
+    try { sessionStorage.setItem("planes.ice", JSON.stringify({ hex: a.hex, t: now })); } catch (e) { /* not saved */ }
+    trackPlane(a.hex, a.lat, a.lon);
   }
   function chcCheck() {
     if (VOICE.chc === false) return;
@@ -2778,19 +2811,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
               return chcName(b) + (b.alt === "ground" ? ", has landed at Christchurch." : ", coming in to land at Christchurch.");
             } });
           }
-          // Off to Antarctica: left Christchurch in the last 45 minutes and bound for the ice
-          if (s.dep && now - s.dep < CHC_QUIET_MS && !gnd && (!s.ice || now - s.ice > 6 * 3600000)) {
+          // Off to Antarctica: seen leaving Christchurch in the last 45 minutes, or just found flying south away
+          // from it (the takeoff itself is easy to miss: ground coverage there is patchy), and bound for the ice
+          var leaving = (s.dep && now - s.dep < CHC_QUIET_MS) || (a.lat < CHC.lat && away);
+          if (leaving && !gnd) {
             var to = iceBound(a);
-            if (to) {
-              s.ice = now;
-              noteRare(a, "Antarctic flight");
-              var where = to === true ? "Antarctica" : (to.city || shortApt(to.name) || "Antarctica");
-              chcAlert(a, { ice: true, tag: "Off to Antarctica", text: function (b) {
-                return "Antarctic flight. " + chcName(b) + ", has left Christchurch for " + where + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
-              } });
-              try { sessionStorage.setItem("planes.ice", JSON.stringify({ hex: a.hex, t: now })); } catch (e) { /* not saved */ }
-              trackPlane(a.hex, a.lat, a.lon);
-            }
+            if (to) iceAlert(a, to, true);
           }
           s.gnd = gnd; s.near = near; s.t = now;
         });
