@@ -2246,8 +2246,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   var rareList = store.get("rare", []).filter(function (r) { return Date.now() - r.t < RARE_DAYS_MS; });   // [{hex, cs, ty, reg, why, t}], newest first
   var RARE_KEEP = 500, RARE_SAME_MS = 6 * 3600000;
   var RARE_FLIP_MS = 20 * 60000;   // a new callsign only means a new flight if the plane was out of sight this long
+  var RARE_STOP_MS = 15 * 60000;   // a landing only ends the flight if it stays down this long (circuits / touch-and-goes don't)
   // Tidy the saved list: drop types no longer counted as rare (e.g. the A380) and merge the repeats left by
-  // planes whose callsign flipped back and forth (YAK83 / ANZ648M)
+  // planes whose callsign flipped back and forth (YAK83 / ANZ648M) or that were doing circuits (one entry per touch-and-go)
   (function () {
     var NOT_TYPE = /^(Emergency|Antarctic flight|Research|South of NZ|.*Military)$/i, kept = [];
     rareList.slice().reverse().forEach(function (r) {
@@ -2257,8 +2258,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       for (var i = kept.length - 1; i >= 0; i--) {
         var k = kept[i];
         if (k.hex !== r.hex) continue;
-        if (!k.gnd && r.t - (k.last || k.t) < RARE_FLIP_MS) {
+        if ((!k.gnd && r.t - (k.last || k.t) < RARE_FLIP_MS) || r.t - (k.seg || k.t) < RARE_STOP_MS) {
           k.last = Math.max(k.last || k.t, r.last || r.t); k.lat = r.lat; k.lon = r.lon; k.gnd = r.gnd; k.air = k.air || r.air;
+          k.seg = r.t; if (r.path) k.path = (k.path || []).concat(r.path).slice(-400);
           return;
         }
         break;
@@ -2295,20 +2297,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
-      // Another flight: landed and took off again, back after a long gap, or a new callsign after being out of sight
+      // Another flight: landed (and stayed down a while) then took off again, back after a long gap, or a new callsign after being out of sight
       // for a while (the feed can flip between two callsigns for the same flight, e.g. YAK83 / ANZ648M)
       var away = now - (r.last || r.t);
-      var again = !gnd && ((r.air && r.gnd) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
+      var again = !gnd && ((r.air && r.gnd && now - (r.gndT || now) >= RARE_STOP_MS) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
       if (again) break;
       r.last = now; r.lat = a.lat; r.lon = a.lon;
-      if (gnd) r.gnd = true; else { r.air = true; r.gnd = false; }
+      if (gnd) { if (!r.gnd) r.gndT = now; r.gnd = true; } else { r.air = true; r.gnd = false; delete r.gndT; }
       if (!r.cs && a.callsign) r.cs = a.callsign;
       if (!r.fk && fk) r.fk = fk;
       rareInfo(r, a);
       store.set("rare", rareList);
       return false;
     }
-    rareList.unshift(rareInfo({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd }, a));
+    rareList.unshift(rareInfo({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd, gndT: gnd ? now : undefined }, a));
     rareList = rareList.filter(function (r) { return now - r.t < RARE_DAYS_MS; });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
     rareList.forEach(function (r, i) { if (i >= RARE_PATHS && r.path) delete r.path; });   // keeps the saved list small
