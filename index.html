@@ -2824,6 +2824,25 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       })
       .catch(function () { /* try again next time */ });
   }
+  // ---------- military watch: the military lists of all three feeds, for Antarctic flights the map's feed misses ----------
+  var MIL_MS = 60000;
+  function milCheck() {
+    if (VOICE.chc === false) return;
+    fetch(FEED + "?mil=1", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        (j.ac || []).filter(function (x) {
+          return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 120) && x.alt_baro !== "ground";
+        }).map(withInfo).forEach(function (x) {
+          var a = bgPlane(x, CHC);
+          // Leaving Christchurch southwards (within 400 km of it, south of it and flying away), or already down south
+          var away = a.track != null && chcAngle(a.track, a.brg) < 60;
+          var to = a.lat < -60 || ((a.dist < 400 && a.lat < CHC.lat && away) || (a.ice && a.lat < -47.5) ? iceBound(a) : false);
+          if (to) iceAlert(a, to, a.dist < 150);
+        });
+      })
+      .catch(function () { /* try again next time */ });
+  }
   // After the hourly reload, carry on following an Antarctic flight that's still in the air
   function resumeIce() {
     var rec = null;
@@ -2958,6 +2977,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   setInterval(eagleCheck, EAGLE_MS);
   setInterval(southCheck, SOUTH_MS);
   setTimeout(resumeIce, 2000);
+  setTimeout(milCheck, 9000);
+  setInterval(milCheck, MIL_MS);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
   setTimeout(function () { location.reload(); }, 3600000);
 })();

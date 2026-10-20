@@ -22,6 +22,38 @@ module.exports = async (req, res) => {
   ];
   const tried = [];
 
+  // ?mil=1: every military plane over the South Pacific and Antarctica, from the military lists of all three
+  // feeds put together (each one misses some), so an Antarctic flight one feed leaves out still gets caught
+  if (req.query.mil) {
+    const lists = [
+      { url: "https://api.adsb.lol/v2/mil", list: "ac" },
+      { url: "https://opendata.adsb.fi/api/v2/mil", list: "aircraft" },
+      { url: "https://api.airplanes.live/v2/mil", list: "ac" }
+    ];
+    const seen = {}, ac = [];
+    await Promise.all(lists.map(async (s) => {
+      const host = new URL(s.url).host;
+      try {
+        const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(6000) });
+        tried.push(host + " " + up.status);
+        if (!up.ok) return;
+        const data = await up.json();
+        (data[s.list] || []).forEach((x) => {
+          if (typeof x.lat !== "number" || x.lat > -30 || (x.lon < 140 && x.lon > -150) || !x.hex) return;
+          const old = seen[x.hex];
+          if (old && (old.seen_pos == null || (x.seen_pos != null && x.seen_pos >= old.seen_pos))) return;   // keep the freshest
+          if (old) ac.splice(ac.indexOf(old), 1);
+          seen[x.hex] = x; ac.push(x);
+        });
+      } catch (e) {
+        tried.push(host + " error");
+      }
+    }));
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "s-maxage=20, stale-while-revalidate=20");
+    return res.status(200).json({ ac, tried });
+  }
+
   for (const s of sources) {
     try {
       const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" } });
