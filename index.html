@@ -2501,12 +2501,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Antarctica gets an alert too, and the map jumps to it and follows it.
   var CHC = { lat: -43.4894, lon: 172.5322 }, CHC_R_NM = 40, CHC_MS = 15000, CHC_QUIET_MS = 45 * 60000;
   var chcSt = {};   // hex -> { gnd, near, dep, arr, ice, t } (times of the alerts already given)
-  // Planes that fly to Antarctica from Christchurch when their route isn't in the databases:
-  //   USAF C-17A (Deep Freeze, callsign ICE or REACH), ANG LC-130H ski Hercules (SKIER), RNZAF C-130J and 757,
-  //   Italian AF C-130J, RAAF C-17A and A319, Kenn Borek Basler BT-67 and Twin Otter, chartered A332 / IL76
-  var ICE_TYPES = { C17: 1, C130: 1, C30J: 1, B752: 1, IL76: 1, A319: 1, A332: 1, DC3T: 1, DHC6: 1 };
-  // USAF Reach, Deep Freeze (ICE), LC-130 Skier, Kenn Borek, NSF, Italian AF, RNZAF, RAAF
-  var ICE_CS = /^(RCH|REACH|ICE|SKIER|KBA|NSF|IAM|KIWI|KIW|ASY)\d/;
+  // Planes that fly to Antarctica when their route isn't in the databases:
+  //   US: USAF C-17A (Deep Freeze, callsign ICE or REACH), ANG LC-130H ski Hercules (SKIER), C-130H
+  //   NZ: RNZAF 757-200, C-130H, C-130J-30 · Italy: C-130J · Australia: RAAF C-17A, C-130J, A319LR, A330 (Wilkins)
+  //   Canada: Kenn Borek Basler BT-67 and Twin Otter · South Africa: Safair 737-700 and L-100 Hercules
+  //   Others: Il-76 (Cape Town / Novo), A340 and 787 (Troll, Wolf's Fang), 757 / 767 (Union Glacier),
+  //   Embraer C-390 (Brazil), BAe 146 (Chile), Dash 7 (British Antarctic Survey), A400M, Airbus A330 MRTT
+  var ICE_TYPES = { C17: 1, C130: 1, C30J: 1, L100: 1, B752: 1, B763: 1, IL76: 1, A319: 1, A332: 1, A343: 1, B737: 1,
+    B788: 1, B789: 1, DC3T: 1, DHC6: 1, DHC7: 1, B461: 1, B462: 1, E390: 1, A400: 1 };
+  // Airliner types on this list only count as Antarctic when military or under an Antarctic callsign:
+  // the Sydney-Santiago 787s fly past the south of NZ every day
+  var ICE_JETS = { B752: 1, B763: 1, A319: 1, A332: 1, A343: 1, B737: 1, B788: 1, B789: 1, B461: 1, B462: 1 };
+  // USAF Reach, Deep Freeze (ICE), LC-130 Skier, Kenn Borek, NSF, Italian AF, RNZAF, RAAF, Safair
+  var ICE_CS = /^(RCH|REACH|ICE|SKIER|KBA|NSF|IAM|KIWI|KIW|ASY|SFR)\d/;
   var ICE_ONLY_CS = /^(ICE|SKIER)\d/;   // only ever used for Antarctic flights, whatever the route databases say
   function chcAngle(a, b) { var d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; }
   function usafC17(a) {
@@ -2528,9 +2535,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     }
     if (ICE_ONLY_CS.test(cs)) return true;
     var t = a.type;
-    if (t === "C17" || t === "C130" || t === "C30J") return true;
-    if (ICE_TYPES[t] && (a.cat === "mil" || a.cat === "ant")) return true;
-    return (ICE_CS.test(cs) && (!t || ICE_TYPES[t])) || a.cat === "ant";   // not an RNZAF King Air (KIW52)
+    if (t === "C17" || t === "C130" || t === "C30J" || t === "L100") return true;
+    if (ICE_TYPES[t] && (a.cat === "mil" || (a.cat === "ant" && !ICE_JETS[t]))) return true;
+    if (ICE_CS.test(cs)) return !t || !!ICE_TYPES[t];   // not an RNZAF King Air (KIW52)
+    return a.cat === "ant" && !ICE_JETS[t] && !AIRLINER_TYPES[t];   // research planes, not airliners passing by
   }
   function chcName(a) {
     var cs = a.flight ? ", " + a.flight.toUpperCase().replace(/^RCH/, "Reach ").replace(/(\D)(\d)/, "$1 $2") : "";
