@@ -21,6 +21,14 @@ module.exports = async (req, res) => {
     { url: `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`, list: "aircraft" }
   ];
   const tried = [];
+  // A plane sending a blank callsign comes through as "@@@@@@@@" (character 0 in ADS-B): treat it as none
+  const clean = (list) => list.map((x) => {
+    if (typeof x.flight === "string" && x.flight.indexOf("@") >= 0) {
+      const f = x.flight.replace(/@/g, "").trim();
+      if (f) x.flight = f; else delete x.flight;
+    }
+    return x;
+  });
 
   // ?mil=1: every military plane over the South Pacific and Antarctica, from the military lists of all three
   // feeds put together (each one misses some), so an Antarctic flight one feed leaves out still gets caught
@@ -51,7 +59,7 @@ module.exports = async (req, res) => {
     }));
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "s-maxage=20, stale-while-revalidate=20");
-    return res.status(200).json({ ac, tried });
+    return res.status(200).json({ ac: clean(ac), tried });
   }
 
   for (const s of sources) {
@@ -62,7 +70,7 @@ module.exports = async (req, res) => {
       const data = await up.json();
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cache-Control", "s-maxage=5, stale-while-revalidate=5");
-      return res.status(200).json({ ac: data[s.list] || [], src: new URL(s.url).host });
+      return res.status(200).json({ ac: clean(data[s.list] || []), src: new URL(s.url).host });
     } catch (e) {
       tried.push(new URL(s.url).host + " error");
     }
