@@ -431,7 +431,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   var FEED = P.get("feed") || "/api/feed";
   // Current search area – starts at home, follows the map when it's panned/zoomed
   var cLat = LAT, cLon = LON, cR = RADIUS_NM, away = false;
-  function apiUrl(p) { p = p || [cLat, cLon, cR]; return FEED + "?lat=" + p[0].toFixed(2) + "&lon=" + p[1].toFixed(2) + "&r=" + Math.round(p[2]); }
+  function apiUrl(p) {
+    p = p || [cLat, cLon, cR];
+    var lon = ((p[1] + 540) % 360) - 180;   // the map can sit past the date line (a route drawn over it)
+    return FEED + "?lat=" + p[0].toFixed(2) + "&lon=" + lon.toFixed(2) + "&r=" + Math.round(p[2]);
+  }
   var cParts = null;   // views too big for one 250 nm search (all of NZ): searched as a north and a south half
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
@@ -1625,8 +1629,21 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       live.forEach(function (p) { if (p[2] > histEnd) path.push([p[0], p[1]]); });
       path.push([f.lat, f.lon]);
     }
+    path = unwrapLon(path);
     trailCase.setLatLngs(path);
     trailLine.setLatLngs(path);
+  }
+  // A route over the date line (e.g. Samoa -> NZ) jumps from -172 to +175 longitude, which Leaflet draws the long
+  // way round the world: shift the earlier points by 360 so each step is the short way (the latest point stays put)
+  function unwrapLon(path) {
+    var out = path.slice();
+    for (var i = out.length - 2; i >= 0; i--) {
+      var lon = out[i][1], next = out[i + 1][1];
+      while (lon - next > 180) lon -= 360;
+      while (next - lon > 180) lon += 360;
+      if (lon !== out[i][1]) out[i] = [out[i][0], lon];
+    }
+    return out;
   }
 
   // ---------- data ----------
@@ -2386,7 +2403,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (!map) return;
     if (goneLayer) { map.removeLayer(goneLayer); goneLayer = null; }
     if (!f) return;
-    var gp = gonePath(f), pts = gp.pts, end = pts.length ? pts[pts.length - 1] : f.gone.lat != null ? [f.gone.lat, f.gone.lon] : null;
+    var gp = gonePath(f), pts = unwrapLon(gp.pts), end = pts.length ? pts[pts.length - 1] : f.gone.lat != null ? [f.gone.lat, f.gone.lon] : null;
     trailCase.setLatLngs(pts);
     trailLine.setLatLngs(pts);
     if (!end) return;
