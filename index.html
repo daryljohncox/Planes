@@ -2921,6 +2921,52 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       })
       .catch(function () { /* try again next time */ });
   }
+  // ---------- Antarctic arrivals: look for an Antarctic flight again once it's out of range of NZ ----------
+  // Most of the way down there are no receivers, so the plane drops off the feeds. Every 2 minutes for 10 hours,
+  // look it up by hex anywhere in the world: if a receiver near the bases (or a satellite feed) picks it up,
+  // its rare-list record and track carry on from there, the map follows it, and its landing gets an alert.
+  var ICE_WATCH_MS = 2 * 60000, ICE_WATCH_FOR = 10 * 3600000, iceBack = {};
+  function iceWatch() {
+    if (VOICE.chc === false) return;
+    var now = Date.now();
+    rareList.filter(function (r) {
+      return r.why === "Antarctic flight" && now - (r.last || r.t) < ICE_WATCH_FOR && !r.iceDown && !latest(r.hex, null);
+    }).slice(0, 3).forEach(function (r) {
+      fetch(FEED + "?hex=" + encodeURIComponent(r.hex), { cache: "no-store" })
+        .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
+        .then(function (j) {
+          var x = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 300); })[0];
+          if (!x) return;
+          var a = bgPlane(withInfo(x), CHC), t = Date.now();
+          if (a.lat > -60) return;   // back up north: the usual watches pick it up
+          r.last = t; r.lat = a.lat; r.lon = a.lon;
+          rareInfo(r, a);
+          var base = null;
+          ICE_DEST.concat([{ city: "the South Pole", lat: -90, lon: 0 }]).forEach(function (d) {
+            if (distKm(a.lat, a.lon, d.lat, d.lon) < 40) base = d;
+          });
+          var down = a.alt === "ground" || (typeof a.alt === "number" && a.alt < 1500 && (a.gs == null || a.gs < 60));
+          if (down) {
+            r.iceDown = t;
+            var where = base ? base.city : "Antarctica";
+            chcAlert(a, { ice: true, tag: "Landed in Antarctica", text: function () {
+              return "Antarctic flight. " + chcName(a) + ", has landed at " + where + ".";
+            } });
+          } else if (!iceBack[r.hex]) {
+            iceBack[r.hex] = t;
+            chcAlert(a, { ice: true, tag: "Picked up in Antarctica", text: function (b) {
+              return "Antarctic flight. " + chcName(b) + ", has been picked up again " + (base ? "near " + base.city : "over Antarctica") +
+                (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
+            } });
+            trackPlane(a.hex, a.lat, a.lon);
+          }
+          store.set("rare", rareList);
+          if (!$("rarepanel").hidden) drawRareList();
+          render();
+        })
+        .catch(function () { /* try again next time */ });
+    });
+  }
   // After the hourly reload, carry on following an Antarctic flight that's still in the air
   function resumeIce() {
     var rec = null;
@@ -3057,6 +3103,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   setTimeout(resumeIce, 2000);
   setTimeout(milCheck, 9000);
   setInterval(milCheck, MIL_MS);
+  setTimeout(iceWatch, 15000);
+  setInterval(iceWatch, ICE_WATCH_MS);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
   setTimeout(function () { location.reload(); }, 3600000);
 })();
