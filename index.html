@@ -2311,6 +2311,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Kept for 7 days so missed ones can be checked; the list on the map starts afresh each day (older days below it)
   var RARE_DAYS_MS = 7 * 86400000;
   var rareList = store.get("rare", []).filter(function (r) { return Date.now() - r.t < RARE_DAYS_MS; });   // [{hex, cs, ty, reg, why, t}], newest first
+  // Saved before that fix: an Antarctic-coloured plane last seen over the Southern Ocean heading south
+  rareList.forEach(function (r) {
+    if (r.why !== "Antarctic flight" && r.cat === "ant" && r.lat < -47.5 && r.track > 100 && r.track < 260) r.why = "Antarctic flight";
+  });
   var RARE_KEEP = 500, RARE_SAME_MS = 6 * 3600000;
   var RARE_FLIP_MS = 20 * 60000;   // a new callsign only means a new flight if the plane was out of sight this long
   var RARE_STOP_MS = 15 * 60000;   // a landing only ends the flight if it stays down this long (circuits / touch-and-goes don't)
@@ -2370,6 +2374,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       var again = !gnd && ((r.air && r.gnd && now - (r.gndT || now) >= RARE_STOP_MS) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
       if (again) break;
       r.last = now; r.lat = a.lat; r.lon = a.lon;
+      // noted earlier for something else (a C-17 sitting at Christchurch is "Big military"), then off to the ice
+      if (why === "Antarctic flight" && r.why !== why) { r.why = why; if (!$("rarepanel").hidden) drawRareList(); }
       if (gnd) { if (!r.gnd) r.gndT = now; r.gnd = true; } else { r.air = true; r.gnd = false; delete r.gndT; }
       if (!r.cs && a.callsign) r.cs = a.callsign;
       if (!r.fk && fk) r.fk = fk;
