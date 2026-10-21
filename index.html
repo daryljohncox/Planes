@@ -173,8 +173,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 
 .info{flex:1;padding:1.4vh 1.8vh;display:flex;flex-direction:column;gap:.6vh;min-height:0}
 .top{display:flex;align-items:baseline;gap:1vh}
-.cs{flex:1;font-size:5.6vh;font-weight:800;letter-spacing:.03em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.idx{font-size:2vh;color:var(--dim);white-space:nowrap}
+.cs{flex:none;max-width:60%;font-size:5.6vh;font-weight:800;letter-spacing:.03em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.idx{flex:1;min-width:0;font-size:2vh;line-height:1.5;color:var(--dim)}
 .ty{font-size:2.6vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
 .rte{display:flex;align-items:baseline;gap:1vh;font-size:2.6vh;white-space:nowrap;overflow:hidden;min-height:3.4vh}
 .rte b{font-size:3.2vh;font-weight:800;letter-spacing:.02em}
@@ -632,7 +632,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // ---------- map ----------
   var map = null, markers = {};
   var mapFollow = null, mapUnfollow = null;   // set up once the map exists
-  var trailLine = null, trailCase = null;
+  var trailLine = null, trailCase = null, iceLine = null;
   if (typeof L === "undefined") {
     setStatus("Map library didn't load");
   } else {
@@ -762,6 +762,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     // Flight path of the selected plane: dark casing under an orange line
     trailCase = L.polyline([], { color: "#000", weight: 6, opacity: 0.35, interactive: false }).addTo(map);
     trailLine = L.polyline([], { color: "#ff6a00", weight: 3, opacity: 0.95, interactive: false }).addTo(map);
+    // Antarctic flights: dotted line on from the plane to where it's most likely going
+    iceLine = L.polyline([], { color: "#39ff14", weight: 3, opacity: 0.9, dashArray: "2 8", lineCap: "round", interactive: false }).addTo(map);
     mapFollow = function (a, now) {
       var pt = map.latLngToContainerPoint([a.lat, a.lon]), mid = map.getSize().divideBy(2);
       if (!moving && pt.distanceTo(mid) > 2) { autoPan = true; map.panTo([a.lat, a.lon], { animate: !now, duration: 0.8 }); }
@@ -1633,6 +1635,49 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     trailCase.setLatLngs(path);
     trailLine.setLatLngs(path);
   }
+  // Where an Antarctic flight is most likely going when the route databases don't say: the base its heading
+  // points at (McMurdo from Christchurch, Wilkins from Hobart)
+  var ICE_DEST = [{ icao: "NZFX", iata: "NZFX", city: "McMurdo", lat: -77.956, lon: 166.766 },
+    { icao: "YWKS", iata: "YWKS", city: "Wilkins Runway", lat: -66.691, lon: 111.524 }];
+  function iceDest(f) {
+    var g = f.gone, lat = g ? g.lat : f.lat, lon = g ? g.lon : f.lon;
+    if (!(g ? g.why === "Antarctic flight" : f.ice) || lat == null || lon == null) return null;
+    var r = !g && f.flight ? routeFor(f) : null;
+    if (r && r !== "pending" && r.to && iceApt(r.to)) {
+      var c = aptCoords(r.to);
+      if (c) return { icao: r.to.icao, iata: r.to.iata, city: r.to.city || r.to.name, lat: c[2], lon: c[3], lat0: lat, lon0: lon };
+    }
+    if (f.track == null || f.track < 100 || f.track > 260) return null;   // not heading for the ice (on its way back)
+    if (lat > -44) return null;   // not yet past Christchurch (a C-17 coming in to land there counts as Antarctic too)
+    var best = null, bestOff = 60;
+    ICE_DEST.forEach(function (d) {
+      var off = chcAngle(f.track, bearing(lat, lon, d.lat, d.lon));
+      if (off < bestOff) { bestOff = off; best = d; }
+    });
+    return best && { icao: best.icao, iata: best.iata, city: best.city + " (likely)", lat: best.lat, lon: best.lon, lat0: lat, lon0: lon };
+  }
+  // Great-circle points from one place to another (a straight line on the map is way off this far south)
+  function gcPath(lat1, lon1, lat2, lon2, n) {
+    var R = Math.PI / 180, p1 = lat1 * R, l1 = lon1 * R, p2 = lat2 * R, l2 = lon2 * R;
+    var d = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin((p2 - p1) / 2), 2) + Math.cos(p1) * Math.cos(p2) * Math.pow(Math.sin((l2 - l1) / 2), 2)));
+    if (!d) return [[lat1, lon1]];
+    var out = [];
+    for (var i = 0; i <= n; i++) {
+      var f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+      var x = A * Math.cos(p1) * Math.cos(l1) + B * Math.cos(p2) * Math.cos(l2);
+      var y = A * Math.cos(p1) * Math.sin(l1) + B * Math.cos(p2) * Math.sin(l2);
+      var z = A * Math.sin(p1) + B * Math.sin(p2);
+      out.push([Math.atan2(z, Math.sqrt(x * x + y * y)) / R, Math.atan2(y, x) / R]);
+    }
+    return out;
+  }
+  function drawIce(f) {
+    if (!iceLine) return;
+    var d = f ? iceDest(f) : null;
+    // start from the end of the drawn trail so the two lines join up
+    var end = d && trailLine.getLatLngs().slice(-1)[0], lat0 = end ? end.lat : d && d.lat0, lon0 = end ? end.lng : d && d.lon0;
+    iceLine.setLatLngs(d ? unwrapLon(gcPath(d.lat, d.lon, lat0, lon0, 40)).reverse() : []);
+  }
   // A route over the date line (e.g. Samoa -> NZ) jumps from -172 to +175 longitude, which Leaflet draws the long
   // way round the world: shift the earlier points by 360 so each step is the short way (the latest point stays put)
   function unwrapLon(path) {
@@ -1789,6 +1834,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var gone = f && fi < 0 && f.gone ? f : null;   // a rare plane opened from the list while it isn't flying
     drawMap(f);
     if (gone) drawGone(gone); else { drawGone(null); drawTrail(f); }
+    drawIce(f);
 
     // pre-load photos for the nearest few so a tap shows one straight away
     aircraft.slice(0, PREFETCH_N).forEach(function (a) { photoFor(a, true); });
@@ -2396,7 +2442,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   function goneRouteHtml(f) {
     var pts = gonePath(f).pts;
     if (pts.length < 2) return "";
-    return apHtml(placeAt(pts[0])) + '<span class="ar">→</span>' + apHtml(placeAt(pts[pts.length - 1]));
+    var to = placeAt(pts[pts.length - 1]) || iceDest(f);
+    return apHtml(placeAt(pts[0])) + '<span class="ar">→</span>' + apHtml(to);
   }
   var goneLayer = null, goneFit = 0;
   function drawGone(f) {
