@@ -1570,16 +1570,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     });
     Object.keys(trails).forEach(function (hex) { if (now - trails[hex].seen > TRAIL_KEEP_MS && hex !== selHex) delete trails[hex]; });
   }
-  // Flightradar24's track of the plane's live flight, fetched by the Hub itself (adsb.lol & co.
-  // refuse the Vercel relay). Same point format as /api/trace.
+  // Flightradar24's track of the plane's live flight (or, for a plane that has gone, the flight it was on
+  // when last seen), fetched by the Hub itself (adsb.lol & co. refuse the Vercel relay). Same point format as /api/trace.
   function fr24Track(f) {
-    var reg = f && regOf(f), cs = ((f && f.flight) || "").trim().toUpperCase();
+    var reg = f && regOf(f), cs = ((f && f.flight) || "").trim().toUpperCase(), g = f && f.gone;
     if (!reg) return Promise.resolve([]);
     return fr24(reg).then(function (j) {
       var data = j.result.response.data, fl = null;
       data.forEach(function (d) {
-        var live = d.status && d.status.live, dcs = ((d.identification && d.identification.callsign) || "").toUpperCase();
-        if (live && (!fl || dcs === cs)) fl = d;
+        var dcs = ((d.identification && d.identification.callsign) || "").toUpperCase(), ok;
+        if (g) {   // in the air at some point between first and last seen (10 min slack)
+          var rt = (d.time && d.time.real) || {}, from = g.t / 1000 - 600, to = (g.last || g.t) / 1000 + 600;
+          ok = rt.departure && rt.departure <= to && (rt.arrival ? rt.arrival >= from : !!(d.status && d.status.live));
+        } else ok = d.status && d.status.live;
+        if (ok && (!fl || dcs === cs)) fl = d;
       });
       if (!fl || !fl.identification || !fl.identification.id) return [];
       var dep = fl.time && fl.time.real && fl.time.real.departure;
