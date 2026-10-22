@@ -706,7 +706,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     // The chosen view survives the hourly reload (same tab) but a fresh cast always opens at home
     try { localStorage.removeItem("planes.view"); viewKey = sessionStorage.getItem("planes.view") || ""; } catch (e) { /* not saved */ }
     if (!VIEWS[viewKey]) viewKey = "";
-    headView = viewKey;
     function viewTarget() {
       if (!viewKey) return { c: home.c, z: home.z };
       var b = VIEWS[viewKey].b(), c = viewKey === "50" ? home.c : b.getCenter();
@@ -717,7 +716,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       return Math.abs(map.getZoom() - t.z) < 0.01 && map.latLngToContainerPoint(t.c).distanceTo(map.getSize().divideBy(2)) < 3;
     }
     function setView(k) {
-      viewKey = headView = k;
+      viewKey = k;
       renderList();
       try { sessionStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
     }
@@ -1934,7 +1933,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     return metres(a.alt).toLocaleString("en-NZ") + " m" + (a.vr > 300 ? " ↑" : a.vr < -300 ? " ↓" : "");
   }
   // "All planes" list: grouped in this order, closest first within each. Headings with counts only on the NZ view.
-  var headView;   // set by setView() before this line runs, so no initial value here
   var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["vin", "Vintage"], ["res", "Rescue"], ["ant", "Antarctic / research"], ["mil", "Military"],
     ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["ag", "Topdressing"], ["mtr", "Military trainer"],
     ["trn", "Trainer"], ["com", "Airline"], ["cgo", "Cargo"]];
@@ -1951,7 +1949,6 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
       if (!inGroup.length) return "";
-      if (headView !== "nz") return inGroup.map(rowHtml).join("");
       var shut = !!listHidden[g[0]];
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + (shut ? "▸ " : "▾ ") + g[1] + "</b><span>" +
         (shut ? "hidden · " : "") + inGroup.length + "</span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
