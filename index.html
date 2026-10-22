@@ -1937,15 +1937,31 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["ag", "Topdressing"], ["mtr", "Military trainer"],
     ["trn", "Trainer"], ["com", "Airline"], ["cgo", "Cargo"]];
   function listGroup(a) { return a.heli && !a.cat ? "heli" : a.cat || "pvt"; }
+  // Rebuilding the rows mid-scroll stops the fling and makes the list jump, so while a finger is on the list
+  // (or it is still gliding) new data waits until it settles; unchanged rows aren't rebuilt at all
+  var listHtml = "", listTouch = false, listScrollT = null, listPending = false;
   function renderList() {
-    var top = $("rows").scrollTop;
-    $("rows").innerHTML = LIST_GROUPS.map(function (g) {
+    if (listTouch || listScrollT) { listPending = true; return; }
+    listPending = false;
+    var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
       if (!inGroup.length) return "";
       return headView !== "nz" ? inGroup.map(rowHtml).join("") : '<div class="grp"><b>' + g[1] + "</b><span>" + inGroup.length + "</span></div>" + inGroup.map(rowHtml).join("");
     }).join("");
+    if (html === listHtml) return;
+    listHtml = html;
+    var top = $("rows").scrollTop;
+    $("rows").innerHTML = html;
     $("rows").scrollTop = top;
   }
+  function listSettled() {
+    clearTimeout(listScrollT);
+    listScrollT = setTimeout(function () { listScrollT = null; if (listPending && !listTouch) renderList(); }, 700);
+  }
+  $("rows").addEventListener("touchstart", function () { listTouch = true; }, { passive: true });
+  $("rows").addEventListener("touchend", function () { listTouch = false; listSettled(); }, { passive: true });
+  $("rows").addEventListener("touchcancel", function () { listTouch = false; listSettled(); }, { passive: true });
+  $("rows").addEventListener("scroll", listSettled, { passive: true });
   function rowHtml(a) {
       var ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
       var st = airportStatus(a);
