@@ -205,6 +205,12 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .grp.shut{opacity:.6}
 button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;background:none;text-align:left;font-family:inherit;cursor:pointer}
 .ovh{color:#ffd23f;font-weight:700}
+.kpick{cursor:pointer;border-radius:.8vh}
+.kpick.on{background:rgba(255,210,63,.18);box-shadow:inset 0 0 0 2px #ffd23f}
+.rseg{display:flex;gap:.8vh;padding:1vh 1.8vh;border-bottom:1px solid #1d2632}
+.rseg button{flex:1;padding:.8vh 0;border:0;border-radius:.8vh;background:#1c2633;color:var(--dim);font:700 1.9vh system-ui,sans-serif;cursor:pointer}
+.rseg button.on{background:#ffd400;color:#000}
+.vplay{flex:0 0 auto;width:5vh;height:5vh;border-radius:50%;background:#1c2633;color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:2.2vh}
 .grp span{display:flex;align-items:center;gap:1.2vh}
 .eye{border:0;background:none;color:var(--dim);padding:0 .4vh;margin:-.6vh 0;cursor:pointer;line-height:0}
 .eye svg{width:3.2vh;height:3.2vh}
@@ -256,6 +262,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 #back{flex:0 0 auto;height:6vh;min-height:40px;padding:0 1.8vh;border:0;border-bottom:1px solid #222d3a;background:var(--deep);
   color:var(--acc);font:700 2.6vh system-ui,sans-serif;text-align:left;cursor:pointer}
 #back:active{background:#1c2633}
+.dnav{flex:0 0 auto;display:flex;background:var(--deep);border-bottom:1px solid #222d3a}
+.dnav #back{flex:1;border-bottom:0}
+.pn{flex:0 0 auto;width:8vh;min-height:40px;border:0;border-left:1px solid #222d3a;background:none;color:var(--acc);font:700 4.4vh/1 system-ui,sans-serif;cursor:pointer}
+.pn:active{background:#1c2633}
 .empty{display:none;flex:1;align-items:center;justify-content:center;text-align:center;padding:2vh;color:var(--dim);font-size:3vh}
 
 /* right-hand map buttons: voice settings, rare plane list */
@@ -394,7 +404,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       <div id="rows"></div>
     </div>
     <div id="detail" style="display:none">
-    <button id="back" type="button">← All planes</button>
+    <div class="dnav"><button id="back" type="button">← All planes</button><button id="prevp" class="pn" type="button" aria-label="Previous plane">‹</button><button id="nextp" class="pn" type="button" aria-label="Next plane">›</button></div>
     <div class="ph" id="ph">
       <div class="noimg" id="noimg"></div>
       <img id="img" alt="" referrerpolicy="no-referrer" style="display:none">
@@ -988,11 +998,22 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   ];
   $("keyrows").innerHTML = KEY.map(function (k) {
     var dark = /^#(39ff14|fff|fff200|c4c9cf|ffd400|d9a300|ffff00|8ecbff|ffffff|d2a46b)/i.test(k[1]) && k[1] !== "#111111";   // light colours get a dark outline
-    return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
+    return '<div class="krow' + (k[0] === "emg" ? " emg" : "") + (k[0] === "on" ? "" : " kpick") + '" data-g="' + (k[0] || "heli") + '"><span class="kic"><svg viewBox="0 0 24 24" fill="currentColor" style="color:' + k[1] + ';filter:drop-shadow(0 0 1px ' +
       (dark ? "#000" : "#fff") + ') drop-shadow(0 0 1px ' + (dark ? "#000" : "#fff") + ')">' + shapeOf({ heli: k[2] }) +
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
   }).join("");
-  function toggleKey(show) { $("key").hidden = !show; }
+  function toggleKey(show) { $("key").hidden = !show; if (show) markKey(); }
+  // Tap a colour in the key: only that type on the map (same as the eye in the list); tap again for all
+  function markKey() {
+    Array.prototype.forEach.call($("keyrows").querySelectorAll(".kpick"), function (r) { r.classList.toggle("on", r.getAttribute("data-g") === mapOnly); });
+  }
+  $("keyrows").addEventListener("click", function (e) {
+    var r = e.target.closest ? e.target.closest(".kpick") : null;
+    if (!r) return;
+    var g = r.getAttribute("data-g");
+    setMapOnly(mapOnly === g ? "" : g);
+    toggleKey(false);
+  });
   ["keybtn", "keyclose", "key"].forEach(function (id) {
     $(id).addEventListener("click", function (e) { e.stopPropagation(); if (id !== "key") toggleKey(id === "keybtn" && $("key").hidden); });
     ["mousedown", "touchstart", "pointerdown", "dblclick", "wheel"].forEach(function (ev) { $(id).addEventListener(ev, function (e) { e.stopPropagation(); }); });
@@ -1178,11 +1199,27 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var txt = mins < 60 ? mins + " min" : Math.floor(mins / 60) + " h " + (mins % 60) + " min";
     return '<span class="ft">· ' + txt + (seenGround ? "" : "+") + " in the air</span>";
   }
+  // "· lands in about 25 min": straight-line distance to where it's going at its current speed, plus a little
+  // for the approach; only while it's actually pointing that way
+  function landsHtml(a, st) {
+    if (a.alt === "ground" || a.gs == null || a.gs < 60 || a.track == null) return "";
+    var to = null, r, lf;
+    if (st && st.text === "Arriving" && st.ap && st.ap.lat != null) to = [st.ap.lat, st.ap.lon];
+    if (!to && !noDbRoute(a) && (r = routeFor(a)) && r !== "pending" && r.to) { var c = aptCoords(r.to); if (c) to = [c[2], c[3]]; }
+    if (!to && (lf = liveLeg(a)) && lf.to) { var c2 = aptCoords(lf.to); if (c2) to = [c2[2], c2[3]]; }
+    if (!to) return "";
+    var d = distKm(a.lat, a.lon, to[0], to[1]);
+    if (d > 15 && chcAngle(a.track, bearing(a.lat, a.lon, to[0], to[1])) > 60) return "";
+    var mins = Math.round(d / (a.gs * 1.852) * 60 + (d > 40 ? 6 : 2));
+    if (mins > 15 * 60) return "";
+    return '<span class="ft">· lands in about ' + (mins < 60 ? mins + " min" : Math.floor(mins / 60) + " h " + (mins % 60) + " min") + "</span>";
+  }
   function showRoute(a, st) {
     var el = $("rte");
     showRoute0(a, st);
-    var at = airTimeHtml(a);
+    var at = airTimeHtml(a), ld = landsHtml(a, st);
     if (at) el.insertAdjacentHTML("beforeend", at);
+    if (ld) el.insertAdjacentHTML("beforeend", ld);
   }
   function showRoute0(a, st) {
     var r = noDbRoute(a) ? null : routeFor(a), el = $("rte");
@@ -2050,10 +2087,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var grp = e.target.closest ? e.target.closest(".grp") : null;
     if (grp && e.target.closest(".eye")) {
       var og = grp.getAttribute("data-g");
-      mapOnly = mapOnly === og ? "" : og;
-      try { sessionStorage.setItem("planes.only", mapOnly); } catch (e2) { /* not saved */ }
       listTouch = false; clearTimeout(listScrollT); listScrollT = null;
-      render();
+      setMapOnly(mapOnly === og ? "" : og);
       return;
     }
     if (grp) {
@@ -2065,11 +2100,29 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     }
   });
   $("back").addEventListener("click", unselect);
-  $("onlytag").addEventListener("click", function () {
-    mapOnly = "";
-    try { sessionStorage.setItem("planes.only", ""); } catch (e) { /* not saved */ }
+  // ‹ › in the details: the plane before / after this one, in the list's order (hidden groups skipped)
+  function listOrder() {
+    var by = SORTS[listSort] || SORTS.near, out = [];
+    LIST_GROUPS.forEach(function (g) {
+      if (listHidden[g[0]]) return;
+      aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]).forEach(function (a) { out.push(a.hex); });
+    });
+    return out;
+  }
+  function stepPlane(d) {
+    var order = listOrder();
+    if (!order.length) return;
+    var i = order.indexOf(selHex);
+    select(order[i < 0 ? 0 : (i + d + order.length) % order.length], true);
+  }
+  $("prevp").addEventListener("click", function () { stepPlane(-1); });
+  $("nextp").addEventListener("click", function () { stepPlane(1); });
+  $("onlytag").addEventListener("click", function () { setMapOnly(""); });
+  function setMapOnly(g) {
+    mapOnly = g;
+    try { sessionStorage.setItem("planes.only", g); } catch (e) { /* not saved */ }
     render();
-  });
+  }
 
   // ---------- saved settings (per device; the page still works if storage is blocked) ----------
   var store = {
@@ -2127,12 +2180,13 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     return "light";
   }
   // Free Microsoft neural voices (api/tts.js); the first is the default
+  var sample = null;   // voice sample player (▶ in the voice list)
   var VOICE_NAMES = [["sonia", "Sonia", "British female"], ["libby", "Libby", "British female, younger"],
     ["hollie", "Hollie", "British female, softer"], ["molly", "Molly", "New Zealand female"], ["natasha", "Natasha", "Australian female"]];
   function drawVoicePanel() {
     $("voicerows").innerHTML = '<div class="note">Which voice</div>' + VOICE_NAMES.map(function (v) {
         return '<button type="button" class="tg' + (VOICE.voice === v[0] ? " on" : "") + '" data-v="' + v[0] + '"><span><b>' + esc(v[1]) +
-          "</b><small>" + esc(v[2]) + "</small></span><i></i></button>";
+          "</b><small>" + esc(v[2]) + '</small></span><span class="vplay" data-play="' + v[0] + '" aria-label="Hear ' + esc(v[1]) + '">▶</span><i></i></button>';
       }).join("") + '<button type="button" class="act" id="voicetest">Test the voice</button>' +
       '<div class="note">What to announce</div>' + VOICE_ROWS.map(function (r) {
       return '<button type="button" class="tg' + (VOICE[r[0]] ? " on" : "") + (r[3] ? " sub" : "") + '" data-k="' + r[0] + '"><span><b>' + esc(r[1]) + "</b>" +
@@ -2151,6 +2205,17 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   $("voicerows").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("button") : null;
     if (!b) return;
+    var pl = e.target.closest(".vplay");
+    if (pl) {   // hear a sample without switching voice
+      unlockAudio();
+      try {
+        if (sample) sample.pause();
+        sample = new Audio(TTS + "?v=" + encodeURIComponent(pl.getAttribute("data-play")) + "&text=" +
+          encodeURIComponent("Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, altitude 1,500 metres."));
+        sample.play().catch(function () {});
+      } catch (e2) { /* no audio */ }
+      return;
+    }
     if (b.id === "voicetest") { unlockAudio(); say({ text: "Kia ora. This is how plane announcements will sound." }); return; }
     if (b.getAttribute("data-v")) {
       VOICE.voice = b.getAttribute("data-v"); store.set("voice", VOICE); drawVoicePanel();
@@ -2536,15 +2601,32 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     if (d.toDateString() === now.toDateString()) return time;
     try { return d.toLocaleDateString("en-NZ", { timeZone: TZ, day: "numeric", month: "short" }) + " " + time; } catch (e) { return d.toLocaleDateString() + " " + time; }
   }
+  // Today / last 3 days / all 7 days, remembered on this Hub
+  var RARE_RANGES = [["today", "Today"], ["3", "3 days"], ["all", "All 7 days"]], rareRange = "all";
+  try { rareRange = localStorage.getItem("planes.rarerange") || "all"; } catch (e) { /* none */ }
+  function rareShown() {
+    if (rareRange === "today") return rareList.filter(function (r) { return dayLabel(r.t) === "Today"; });
+    if (rareRange === "3") return rareList.filter(function (r) { return Date.now() - r.t < 3 * 86400000; });
+    // All: each aircraft once (its latest sighting), with how many times it's been seen
+    var at = {}, out = [];
+    rareList.forEach(function (r) {
+      if (at[r.hex]) { at[r.hex].times++; return; }
+      at[r.hex] = Object.assign({}, r, { times: 1 });
+      out.push(at[r.hex]);
+    });
+    return out;
+  }
   function drawRareList() {
-    var day = null;
-    $("rarerows").innerHTML = rareList.length ? rareList.map(function (r) {
+    var day = null, shown = rareShown();
+    $("rarerows").innerHTML = '<div class="rseg">' + RARE_RANGES.map(function (x) {
+      return '<button type="button" data-range="' + x[0] + '"' + (rareRange === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>";
+    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last 3 days") + " yet.</div>" : shown.map(function (r) {
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
         '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
-        esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
-    }).join("") : '<div class="note">No rare planes in the last 7 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>';
+        esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+    }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 7 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
   function dayLabel(t) {
     var key = function (x) { try { return new Date(x).toLocaleDateString("en-NZ", { timeZone: TZ }); } catch (e) { return new Date(x).toDateString(); } };
@@ -2614,6 +2696,13 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     }, 50);
   }
   $("rarerows").addEventListener("click", function (e) {
+    var rg = e.target.closest ? e.target.closest("[data-range]") : null;
+    if (rg) {
+      rareRange = rg.getAttribute("data-range");
+      try { localStorage.setItem("planes.rarerange", rareRange); } catch (e2) { /* not saved */ }
+      drawRareList();
+      return;
+    }
     var r = e.target.closest ? e.target.closest(".rr") : null;
     if (!r) return;
     var hex = r.getAttribute("data-hex"), rw = r.querySelector(".rw");
