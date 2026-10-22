@@ -1454,7 +1454,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       if (known) return fetchGeneric(type, desc || TYPES[type][0], heli, true);   // that page has no picture: search instead
       if (title) return null;
       // Nothing found for the full name (e.g. "HPH spol. s r.o. Glasflügel 304 MS"): drop the maker's name a word
-      // at a time ("spol. s r.o. Glasflügel 304 MS", "Glasflügel 304 MS"), then a typical glider
+      // at a time (down to "Glasflügel 304 MS"), then a typical glider
       var words = q.split(" ");
       if (words.length > 3) return fetchGeneric(type, words.slice(1).join(" "), heli, true);
       return GLIDER_PAGE[type] ? fetchGeneric(type, "", heli, true, GLIDER_PAGE[type]) : null;
