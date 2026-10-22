@@ -1564,6 +1564,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Tapping a plane also fetches its whole current flight from /api/trace (else Flightradar24) and joins the two.
   var TRAIL_KEEP_MS = 10 * 60000, TRAIL_MAX = 3000;
   var trails = {};       // hex -> { pts: [[lat, lon, unix_s]], seen: ms }
+  // The hourly reload would wipe these, so a plane with no history lookup (e.g. a private jet Flightradar24 hides)
+  // would start its trail wherever it was at reload time: keep them through the reload
+  try {
+    var savedTrails = JSON.parse(sessionStorage.getItem("planes.trails") || "null");
+    sessionStorage.removeItem("planes.trails");
+    if (savedTrails) Object.keys(savedTrails).forEach(function (hex) {
+      if (Date.now() - savedTrails[hex].seen < TRAIL_KEEP_MS) trails[hex] = savedTrails[hex];
+    });
+  } catch (e) { /* none */ }
+  function saveTrails() {
+    var keep = {};
+    Object.keys(trails).forEach(function (hex) {
+      keep[hex] = { pts: trails[hex].pts.slice(-1500).map(function (p) {
+        return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5, p[2]];
+      }), seen: trails[hex].seen };
+    });
+    try { sessionStorage.setItem("planes.trails", JSON.stringify(keep)); } catch (e) { /* too big or not allowed */ }
+  }
   var traceCache = {};   // hex -> { pts, at } | "pending"
   function recordTrails(list) {
     var now = Date.now(), t = Math.round(now / 1000);
@@ -3112,7 +3130,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   setTimeout(iceWatch, 15000);
   setInterval(iceWatch, ICE_WATCH_MS);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
-  setTimeout(function () { location.reload(); }, 3600000);
+  setTimeout(function () { saveTrails(); location.reload(); }, 3600000);
 })();
 </script>
 </body>
