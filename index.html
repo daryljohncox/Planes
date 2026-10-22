@@ -201,6 +201,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .grp{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;padding:.8vh 1.8vh;background:var(--deep);
   border-bottom:1px solid #1d2632;font-size:1.9vh;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 .grp b{color:var(--txt)}
+.grp{cursor:pointer}
+.grp.shut{opacity:.6}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#d9a300}
@@ -1940,13 +1942,19 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Rebuilding the rows mid-scroll stops the fling and makes the list jump, so while a finger is on the list
   // (or it is still gliding) new data waits until it settles; unchanged rows aren't rebuilt at all
   var listHtml = "", listTouch = false, listScrollT = null, listPending = false;
+  // Groups tapped shut (their header stays, with the count); kept through the hourly reload
+  var listHidden = {};
+  try { listHidden = JSON.parse(sessionStorage.getItem("planes.hidden") || "{}") || {}; } catch (e) { /* none */ }
   function renderList() {
     if (listTouch || listScrollT) { listPending = true; return; }
     listPending = false;
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
       if (!inGroup.length) return "";
-      return headView !== "nz" ? inGroup.map(rowHtml).join("") : '<div class="grp"><b>' + g[1] + "</b><span>" + inGroup.length + "</span></div>" + inGroup.map(rowHtml).join("");
+      if (headView !== "nz") return inGroup.map(rowHtml).join("");
+      var shut = !!listHidden[g[0]];
+      return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + (shut ? "▸ " : "▾ ") + g[1] + "</b><span>" +
+        (shut ? "hidden · " : "") + inGroup.length + "</span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
     }).join("");
     if (html === listHtml) return;
     listHtml = html;
@@ -1975,6 +1983,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   $("rows").addEventListener("click", function (e) {
     var row = e.target.closest ? e.target.closest(".row") : null;
     if (row) select(row.getAttribute("data-hex"), true);
+    var grp = e.target.closest ? e.target.closest(".grp") : null;
+    if (grp) {
+      var g = grp.getAttribute("data-g");
+      if (listHidden[g]) delete listHidden[g]; else listHidden[g] = 1;
+      try { sessionStorage.setItem("planes.hidden", JSON.stringify(listHidden)); } catch (e2) { /* not saved */ }
+      listTouch = false; clearTimeout(listScrollT); listScrollT = null;
+      renderList();
+    }
   });
   $("back").addEventListener("click", unselect);
 
