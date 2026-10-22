@@ -203,6 +203,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .grp b{color:var(--txt)}
 .grp{cursor:pointer}
 .grp.shut{opacity:.6}
+button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;background:none;text-align:left;font-family:inherit;cursor:pointer}
+.ovh{color:#ffd23f;font-weight:700}
 .grp span{display:flex;align-items:center;gap:1.2vh}
 .eye{border:0;background:none;color:var(--dim);padding:0 .4vh;margin:-.6vh 0;cursor:pointer;line-height:0}
 .eye svg{width:3.2vh;height:3.2vh}
@@ -328,6 +330,8 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 #issbadge{position:absolute;left:1.4vh;bottom:1.4vh;z-index:1000;padding:.8vh 1.4vh;border-radius:1vh;background:rgba(19,40,74,.92);color:#fff;
   font:700 2.2vh system-ui,sans-serif;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
 #issbadge[hidden]{display:none}
+#onlytag{position:absolute;left:50%;bottom:1.4vh;transform:translateX(-50%);z-index:1001;padding:.8vh 1.6vh;border:0;border-radius:1vh;
+  background:#ffd23f;color:#000;font:700 2.2vh system-ui,sans-serif;box-shadow:0 .3vh 1vh rgba(0,0,0,.4);cursor:pointer;white-space:nowrap}
 #voicehint{position:absolute;left:50%;top:10vh;transform:translateX(-50%);z-index:1003;padding:1vh 2vh;border-radius:1vh;background:var(--acc);color:#000;font:700 2.4vh system-ui,sans-serif}
 #voicehint[hidden]{display:none}
 </style>
@@ -377,6 +381,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     </div>
     <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
     <div id="issbadge" hidden></div>
+    <button id="onlytag" type="button" hidden></button>
     <div id="voicehint" hidden>Tap the screen once to turn the voice on</div>
     <div id="key" hidden>
       <div class="kh"><span>Colour key</span><button id="keyclose" type="button" aria-label="Close">✕</button></div>
@@ -385,7 +390,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   </div>
   <section id="side">
     <div id="list">
-      <div class="lh">Tap a plane for photo &amp; details</div>
+      <button class="lh" id="sortbtn" type="button">Nearest first · tap to sort</button>
       <div id="rows"></div>
     </div>
     <div id="detail" style="display:none">
@@ -1026,6 +1031,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     Object.keys(markers).forEach(function (hex) {
       if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
     });
+    // reminder that the map is filtered; tapping it shows everything again
+    var og = mapOnly && LIST_GROUPS.filter(function (g) { return g[0] === mapOnly; })[0];
+    $("onlytag").hidden = !og;
+    if (og) $("onlytag").textContent = "Only " + og[1] + " showing · tap for all";
   }
 
   // ---------- airports (OurAirports data in airports.json) ----------
@@ -1594,7 +1603,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var keep = {};
     Object.keys(trails).forEach(function (hex) {
       keep[hex] = { pts: trails[hex].pts.slice(-1500).map(function (p) {
-        return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5, p[2]];
+        return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5, p[2], p[3]];
       }), seen: trails[hex].seen };
     });
     try { sessionStorage.setItem("planes.trails", JSON.stringify(keep)); } catch (e) { /* too big or not allowed */ }
@@ -1605,7 +1614,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     list.forEach(function (a) {
       var tr = trails[a.hex] || (trails[a.hex] = { pts: [], seen: now });
       var last = tr.pts[tr.pts.length - 1];
-      if (!last || last[0] !== a.lat || last[1] !== a.lon) tr.pts.push([a.lat, a.lon, t]);
+      if (!last || last[0] !== a.lat || last[1] !== a.lon) tr.pts.push([a.lat, a.lon, t, a.alt]);
       if (tr.pts.length > TRAIL_MAX) tr.pts.shift();
       tr.seen = now;
     });
@@ -1656,19 +1665,47 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     }
     return c.pts;
   }
+  // The flight path is coloured by height (feet in, colour out): red near the ground up to blue at airliner height
+  var TRAIL_BANDS = [[1600, "#ff3b30", "Under 500 m"], [5000, "#ff8c00", "500 – 1,500 m"], [10000, "#ffd400", "1,500 – 3,000 m"],
+    [20000, "#4cd964", "3,000 – 6,000 m"], [30000, "#2fd8c5", "6,000 – 9,000 m"], [1e9, "#5b8cff", "Over 9,000 m"]];
+  function trailColour(alt) {
+    if (alt === "ground") return TRAIL_BANDS[0][1];
+    if (typeof alt !== "number") return null;
+    for (var i = 0; i < TRAIL_BANDS.length; i++) if (alt < TRAIL_BANDS[i][0]) return TRAIL_BANDS[i][1];
+    return null;
+  }
+  // ...and listed under the colour key
+  $("keyrows").innerHTML += '<div class="krow"><span></span><span><b>Flight path height</b></span></div>' + TRAIL_BANDS.map(function (b) {
+    return '<div class="krow"><span class="kic"><svg viewBox="0 0 24 24"><path d="M2 12h20" stroke="' + b[1] + '" stroke-width="4" stroke-linecap="round"/></svg></span><span><b>' + b[2] + "</b></span></div>";
+  }).join("");
+  var trailCol = null;   // the coloured pieces, drawn over trailLine (which stays as the plain path)
   function drawTrail(f) {
     if (!trailLine) return;
-    var path = [];
+    var path = [], alts = [];
     if (f) {
       var hist = traceFor(f.hex, f) || [], live = (trails[f.hex] && trails[f.hex].pts) || [];
       var histEnd = hist.length ? hist[hist.length - 1][3] : 0;
-      hist.forEach(function (p) { path.push([p[0], p[1]]); });
-      live.forEach(function (p) { if (p[2] > histEnd) path.push([p[0], p[1]]); });
-      path.push([f.lat, f.lon]);
+      hist.forEach(function (p) { path.push([p[0], p[1]]); alts.push(p[2]); });
+      live.forEach(function (p) { if (p[2] > histEnd) { path.push([p[0], p[1]]); alts.push(p[3]); } });
+      path.push([f.lat, f.lon]); alts.push(f.alt);
     }
     path = unwrapLon(path);
     trailCase.setLatLngs(path);
     trailLine.setLatLngs(path);
+    if (!trailCol) trailCol = L.layerGroup().addTo(map);
+    trailCol.clearLayers();
+    // one line per run of the same colour; a point with no height keeps the colour before it
+    var col = null, run = [];
+    for (var i = 0; i < path.length; i++) {
+      var c = trailColour(alts[i]) || col || "#ff6a00";
+      if (c !== col && run.length) {
+        run.push(path[i]);
+        L.polyline(run, { color: col, weight: 3, opacity: 0.95, interactive: false }).addTo(trailCol);
+        run = [];
+      }
+      col = c; run.push(path[i]);
+    }
+    if (run.length > 1) L.polyline(run, { color: col, weight: 3, opacity: 0.95, interactive: false }).addTo(trailCol);
   }
   // Where an Antarctic flight is most likely going when the route databases don't say: the base its heading
   // points at (McMurdo from Christchurch, Wilkins from Hobart)
@@ -1946,6 +1983,15 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // (or it is still gliding) new data waits until it settles; unchanged rows aren't rebuilt at all
   var listHtml = "", listTouch = false, listScrollT = null, listPending = false;
   // Groups tapped shut (their header stays, with the count); kept through the hourly reload
+  // Order within each group: tap the list title to go round nearest -> lowest -> fastest (remembered on this Hub)
+  var SORTS = {
+    near: ["Nearest", function (x, y) { return x.dist - y.dist; }],
+    low: ["Lowest", function (x, y) { return altFt(x) - altFt(y) || x.dist - y.dist; }],
+    fast: ["Fastest", function (x, y) { return (y.gs || 0) - (x.gs || 0) || x.dist - y.dist; }]
+  };
+  function altFt(a) { return a.alt === "ground" ? 0 : typeof a.alt === "number" ? a.alt : 1e9; }
+  var listSort = "near";
+  try { listSort = localStorage.getItem("planes.sort") || "near"; } catch (e) { /* none */ }
   var listHidden = {};
   try { listHidden = JSON.parse(sessionStorage.getItem("planes.hidden") || "{}") || {}; } catch (e) { /* none */ }
   // The eye on a header shows only that group on the map (tap again for all); also kept through the hourly reload
@@ -1955,8 +2001,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   function renderList() {
     if (listTouch || listScrollT) { listPending = true; return; }
     listPending = false;
+    var by = SORTS[listSort] || SORTS.near;
+    $("sortbtn").textContent = by[0] + " first · tap to sort";
     var html = LIST_GROUPS.map(function (g) {
-      var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
+      var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
       if (!inGroup.length && mapOnly !== g[0]) return "";   // the group shown alone on the map keeps its header (to switch it off)
       var shut = !!listHidden[g[0]];
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + (shut ? "▸ " : "▾ ") + g[1] + "</b><span>" +
@@ -1979,14 +2027,23 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   $("rows").addEventListener("scroll", listSettled, { passive: true });
   function rowHtml(a) {
       var ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
-      var st = airportStatus(a);
+      var st = airportStatus(a), oh = overheadIn(a);
       if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
+      if (oh) ty = '<span class="ovh">Overhead ' + (oh < 1 ? "now" : "in " + Math.round(oh) + " min") + "</span> · " + ty;
       return '<button type="button" class="row" data-hex="' + esc(a.hex) + '">' +
         '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg></span>' +
         '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span></span>' +
         '<span class="rs"><b>' + esc(altText(a)) + '</b><br>' + a.dist.toFixed(1) + ' km · ' +
         (a.gs == null ? "—" : Math.round(a.gs * 1.852) + " km/h") + '</span></button>';
   }
+  $("sortbtn").addEventListener("click", function () {
+    var keys = Object.keys(SORTS);
+    listSort = keys[(keys.indexOf(listSort) + 1) % keys.length];
+    try { localStorage.setItem("planes.sort", listSort); } catch (e) { /* not saved */ }
+    listTouch = false; clearTimeout(listScrollT); listScrollT = null;
+    renderList();
+    $("rows").scrollTop = 0;
+  });
   $("rows").addEventListener("click", function (e) {
     var row = e.target.closest ? e.target.closest(".row") : null;
     if (row) select(row.getAttribute("data-hex"), true);
@@ -2008,6 +2065,11 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     }
   });
   $("back").addEventListener("click", unselect);
+  $("onlytag").addEventListener("click", function () {
+    mapOnly = "";
+    try { sessionStorage.setItem("planes.only", ""); } catch (e) { /* not saved */ }
+    render();
+  });
 
   // ---------- saved settings (per device; the page still works if storage is blocked) ----------
   var store = {
@@ -2535,6 +2597,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var gp = gonePath(f), pts = unwrapLon(gp.pts), end = pts.length ? pts[pts.length - 1] : f.gone.lat != null ? [f.gone.lat, f.gone.lon] : null;
     trailCase.setLatLngs(pts);
     trailLine.setLatLngs(pts);
+    if (trailCol) trailCol.clearLayers();   // no heights saved for a gone plane: plain orange
     if (!end) return;
     goneLayer = L.marker(end, { interactive: false, icon: L.divIcon({ className: "", iconSize: [0, 0],
       html: '<div class="lastseen"><i></i><span>' + esc(f.callsign) + " last seen " + esc(when(f.gone.last || f.gone.t)) + "</span></div>" }) }).addTo(map);
