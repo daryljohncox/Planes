@@ -203,6 +203,10 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .grp b{color:var(--txt)}
 .grp{cursor:pointer}
 .grp.shut{opacity:.6}
+.grp span{display:flex;align-items:center;gap:1.2vh}
+.eye{border:0;background:none;color:var(--dim);padding:0 .4vh;margin:-.6vh 0;cursor:pointer;line-height:0}
+.eye svg{width:3.2vh;height:3.2vh}
+.eye.on{color:#ffd23f;filter:drop-shadow(0 0 3px #ffd23f)}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#d9a300}
@@ -1003,8 +1007,9 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     if (!map) return;
     var seen = {};
     aircraft.forEach(function (a) {
-      seen[a.hex] = true;
       var on = featured && a.hex === featured.hex;
+      if (mapOnly && !on && listGroup(a) !== mapOnly) return;   // eye on a list header: only that group shows
+      seen[a.hex] = true;
       var ic = iconFor(a, on);
       var m = markers[a.hex];
       if (!m) {
@@ -1943,15 +1948,20 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Groups tapped shut (their header stays, with the count); kept through the hourly reload
   var listHidden = {};
   try { listHidden = JSON.parse(sessionStorage.getItem("planes.hidden") || "{}") || {}; } catch (e) { /* none */ }
+  // The eye on a header shows only that group on the map (tap again for all); also kept through the hourly reload
+  var mapOnly = "";
+  try { mapOnly = sessionStorage.getItem("planes.only") || ""; } catch (e) { /* none */ }
+  var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C6.5 5 2.7 9.3 1.5 12c1.2 2.7 5 7 10.5 7s9.3-4.3 10.5-7C21.3 9.3 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
   function renderList() {
     if (listTouch || listScrollT) { listPending = true; return; }
     listPending = false;
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; });
-      if (!inGroup.length) return "";
+      if (!inGroup.length && mapOnly !== g[0]) return "";   // the group shown alone on the map keeps its header (to switch it off)
       var shut = !!listHidden[g[0]];
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + (shut ? "▸ " : "▾ ") + g[1] + "</b><span>" +
-        (shut ? "hidden · " : "") + inGroup.length + "</span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
+        (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly === g[0] ? " on" : "") +
+        '" aria-label="Show only these on the map">' + EYE_SVG + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
     }).join("");
     if (html === listHtml) return;
     listHtml = html;
@@ -1981,6 +1991,14 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
     var row = e.target.closest ? e.target.closest(".row") : null;
     if (row) select(row.getAttribute("data-hex"), true);
     var grp = e.target.closest ? e.target.closest(".grp") : null;
+    if (grp && e.target.closest(".eye")) {
+      var og = grp.getAttribute("data-g");
+      mapOnly = mapOnly === og ? "" : og;
+      try { sessionStorage.setItem("planes.only", mapOnly); } catch (e2) { /* not saved */ }
+      listTouch = false; clearTimeout(listScrollT); listScrollT = null;
+      render();
+      return;
+    }
     if (grp) {
       var g = grp.getAttribute("data-g");
       if (listHidden[g]) delete listHidden[g]; else listHidden[g] = 1;
