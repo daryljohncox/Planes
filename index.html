@@ -1429,24 +1429,35 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
       label: ipj ? "" : "NZ Police Eagle (Police 3) · not this aircraft" };
   }
   var AIRCRAFT_DESC = /aircraft|airplane|aeroplane|airliner|helicopter|rotorcraft|gyroplane|autogyro|glider|sailplane|microlight|ultralight|biplane|monoplane|trainer|bomber|fighter|airship|seaplane|floatplane|amphibian/i;
-  function fetchGeneric(type, desc, heli, searchOnly) {
+  // Glider-type codes with no description of their own get a typical sailplane
+  var GLIDER_PAGE = { GLID: "Glider (sailplane)" };
+  function fetchGeneric(type, desc, heli, searchOnly, title) {
     var base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&piprop=thumbnail&pithumbsize=800";
     var known = !searchOnly && type && TYPES[type];
+    if (known) title = TYPES[type][1];
+    var glider = !!GLIDER_TYPES[type];
     // Unknown types: search, then take the first result whose Wikipedia short description says it's an aircraft
     // (a bare type code like "P208" can otherwise match a ship or anything else)
-    var url = known
-      ? base + "&prop=pageimages&titles=" + encodeURIComponent(TYPES[type][1])
-      : base + "&prop=pageimages|description&generator=search&gsrlimit=10&gsrsearch=" + encodeURIComponent((desc || type) + (heli ? " helicopter" : " aircraft"));
+    var q = (desc || type || "").replace(/\bspol\.?\s*s\.?\s*r\.?\s*o\.?|\b(ltd|gmbh|inc|s\.?a\.?s?|co|corp|pty)\b\.?/gi, " ")
+      .replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    var url = title
+      ? base + "&prop=pageimages&titles=" + encodeURIComponent(title)
+      : base + "&prop=pageimages|description&generator=search&gsrlimit=10&gsrsearch=" + encodeURIComponent(q + (heli ? " helicopter" : glider ? " glider" : " aircraft"));
     return getJSON(url).then(function (j) {
-      var pages = j && j.query && j.query.pages;
-      if (!pages) return null;
+      var pages = (j && j.query && j.query.pages) || {};
       var list = Object.keys(pages).map(function (k) { return pages[k]; })
         .sort(function (x, y) { return (x.index || 0) - (y.index || 0); });
       var pg = null;
       for (var i = 0; i < list.length && !pg; i++)
-        if (list[i].thumbnail && (known || AIRCRAFT_DESC.test(list[i].description || ""))) pg = list[i];
-      if (!pg && known) return fetchGeneric(type, desc || TYPES[type][0], heli, true);   // that page has no picture: search instead
-      return pg ? { src: pg.thumbnail.source, credit: "Example photo · Wikipedia", kind: "generic" } : null;
+        if (list[i].thumbnail && (title || AIRCRAFT_DESC.test(list[i].description || ""))) pg = list[i];
+      if (pg) return { src: pg.thumbnail.source, credit: "Example photo · Wikipedia", kind: "generic" };
+      if (known) return fetchGeneric(type, desc || TYPES[type][0], heli, true);   // that page has no picture: search instead
+      if (title) return null;
+      // Nothing found for the full name (e.g. "HPH spol. s r.o. Glasflügel 304 MS"): drop the maker's name a word
+      // at a time (down to "Glasflügel 304 MS"), then a typical glider
+      var words = q.split(" ");
+      if (words.length > 3) return fetchGeneric(type, words.slice(1).join(" "), heli, true);
+      return GLIDER_PAGE[type] ? fetchGeneric(type, "", heli, true, GLIDER_PAGE[type]) : null;
     });
   }
   // Pictures the Hub couldn't load. A photo whose every size and alternative failed counts as none, so the
@@ -1564,6 +1575,24 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   // Tapping a plane also fetches its whole current flight from /api/trace (else Flightradar24) and joins the two.
   var TRAIL_KEEP_MS = 10 * 60000, TRAIL_MAX = 3000;
   var trails = {};       // hex -> { pts: [[lat, lon, unix_s]], seen: ms }
+  // The hourly reload would wipe these, so a plane with no history lookup (e.g. a private jet Flightradar24 hides)
+  // would start its trail wherever it was at reload time: keep them through the reload
+  try {
+    var savedTrails = JSON.parse(sessionStorage.getItem("planes.trails") || "null");
+    sessionStorage.removeItem("planes.trails");
+    if (savedTrails) Object.keys(savedTrails).forEach(function (hex) {
+      if (Date.now() - savedTrails[hex].seen < TRAIL_KEEP_MS) trails[hex] = savedTrails[hex];
+    });
+  } catch (e) { /* none */ }
+  function saveTrails() {
+    var keep = {};
+    Object.keys(trails).forEach(function (hex) {
+      keep[hex] = { pts: trails[hex].pts.slice(-1500).map(function (p) {
+        return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5, p[2]];
+      }), seen: trails[hex].seen };
+    });
+    try { sessionStorage.setItem("planes.trails", JSON.stringify(keep)); } catch (e) { /* too big or not allowed */ }
+  }
   var traceCache = {};   // hex -> { pts, at } | "pending"
   function recordTrails(list) {
     var now = Date.now(), t = Math.round(now / 1000);
@@ -3112,7 +3141,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
   setTimeout(iceWatch, 15000);
   setInterval(iceWatch, ICE_WATCH_MS);
   // Reload hourly to keep the Nest Hub's browser fresh over long sessions
-  setTimeout(function () { location.reload(); }, 3600000);
+  setTimeout(function () { saveTrails(); location.reload(); }, 3600000);
 })();
 </script>
 </body>
