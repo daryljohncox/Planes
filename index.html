@@ -1991,7 +1991,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     $("hist").innerHTML = gone ? "" : cameFromHtml(f);
     var co = csOp(f.flight.toUpperCase());
     $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
-    $("aps").textContent = gone ? "★ Rare: " + gone.gone.why + (gone.gone.with && gone.gone.with.length ? " · flying alongside " + gone.gone.with.join(", ") : "") : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
+    $("aps").textContent = gone && gone.gone.hunt ? "🚨 Hunted over " + gone.gone.hunt : gone ? "★ Rare: " + gone.gone.why + (gone.gone.with && gone.gone.with.length ? " · flying alongside " + gone.gone.with.join(", ") : "") : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
@@ -2998,6 +2998,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   // Hunt list, newest first: { reg, cs, town, t: hunt start, up: takeoff, upSure, last: last seen flying, down: landed }
   var huntLog = store.get("eagleLog", []);
   var EAGLE_NAMES = { "ZK-IPC": "Police 1", "ZK-IPB": "Police 2", "ZK-IPJ": "Police 3" };
+  var EAGLE_HEX = { "ZK-IPC": "c8280d", "ZK-IPB": "c8281b", "ZK-IPJ": "c82827" };   // (hexdb.io; for hunts logged before the hex was saved)
   // registration -> { t, seen }: first time seen flying on this flight (if the trace can't say); kept through the hourly reload
   var flightUp = store.get("eagleUp", {});
   function saveHunts() {
@@ -3025,7 +3026,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var by = {}, out = [];
     list.forEach(function (h) {   // newest first
       var k = h.reg + "|" + (h.up || h.t), f = by[k];
-      if (!f) { f = by[k] = { reg: h.reg, cs: h.cs, up: h.up || h.t, upSure: !!h.upSure, towns: [], n: 0, down: h.down, last: h.last, t: h.t }; out.push(f); }
+      if (!f) { f = by[k] = { reg: h.reg, cs: h.cs, hex: h.hex || EAGLE_HEX[h.reg], up: h.up || h.t, upSure: !!h.upSure, towns: [], n: 0, down: h.down, last: h.last, t: h.t,
+        lat: h.lat, lon: h.lon, path: h.path }; out.push(f); }
       if (h.town && f.towns.indexOf(h.town) < 0) f.towns.unshift(h.town);
       f.n++;
     });
@@ -3041,7 +3043,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
         : "In the air " + least + hm(now - f.up) + " so far";
       var nowHunting = hunting[f.reg] && !live[f.reg] && !end;
       live[f.reg] = 1;
-      return head + '<button type="button" class="rr" data-reg="' + esc(f.reg) + '"><img class="hsir" alt="" src="police-siren-still.png"><span class="rm"><span class="rc">' +
+      return head + '<button type="button" class="rr" data-reg="' + esc(f.reg) + '" data-up="' + f.up + '"><img class="hsir" alt="" src="police-siren-still.png"><span class="rm"><span class="rc">' +
         esc((EAGLE_NAMES[f.reg] || f.cs) + " · " + f.reg) + '</span><span class="rt">' +
         esc("Hunting over " + (f.towns.length ? f.towns.join(", ") : "an area")) +
         "<br>" + esc(fl) + '</span></span><span class="rw">' + esc(when(f.up)) + "<br>" +
@@ -3049,8 +3051,21 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     }).join("") : '<div class="note">No Police Eagle hunts in the last 48 hours. A hunt is when one of the Eagles circles over a town.</div>';
   }
   $("huntrows").addEventListener("click", function (e) {
-    var r = e.target.closest ? e.target.closest(".rr") : null, h = r && hunting[r.getAttribute("data-reg")];
-    if (h) { showPop(null); trackPlane(h.hex, h.lat, h.lon); }
+    var r = e.target.closest ? e.target.closest(".rr") : null;
+    if (!r) return;
+    var reg = r.getAttribute("data-reg"), h = hunting[reg], up = +r.getAttribute("data-up");
+    var f = huntFlights(huntLog).filter(function (x) { return x.reg === reg && x.up === up; })[0];
+    if (h && f && !f.down) { showPop(null); trackPlane(h.hex, h.lat, h.lon); return; }   // hunting now: follow it
+    if (!f || !f.hex) return;
+    // Landed or gone: its photo and details, and the route it flew on that flight
+    var end = f.down || f.last, last = f.path && f.path.length ? f.path[f.path.length - 1] : null;
+    showPop(null);
+    if (selHex) unselect();
+    setStatus("");
+    showGone({ hex: f.hex, cs: f.cs || EAGLE_NAMES[reg] || reg, reg: reg, ty: "Bell 429 (B429)", type: "B429", cat: "pol", heli: true,
+      why: "Police Eagle", hunt: f.towns.length ? f.towns.join(", ") : "an area", t: f.up, last: end,
+      lat: f.lat != null ? f.lat : last ? last[0] : null, lon: f.lon != null ? f.lon : last ? last[1] : null,
+      alt: f.down ? "ground" : undefined, path: (f.path || []).slice() });
   });
   // Keeps each logged hunt's flight times up to date: takeoff, still flying, landed
   function logFix(reg, a, now) {
@@ -3062,15 +3077,22 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       var f = flightUp[reg];
       if (!f || now - f.seen > HUNT_GONE_MS) f = flightUp[reg] = { t: now, seen: now };
       f.seen = now;
+      // the route it flies, one point per km (for the hunt list)
+      if (a.lat != null && a.lon != null) {
+        var path = f.path || (f.path = []), p = path[path.length - 1];
+        if (!p || distKm(p[0], p[1], a.lat, a.lon) >= 1) path.push([+a.lat.toFixed(4), +a.lon.toFixed(4)]);
+        if (path.length > RARE_PATH_MAX) f.path = path.filter(function (x, i) { return i % 2 === 0 || i === path.length - 1; });
+      }
       store.set("eagleUp", flightUp);
-      open.forEach(function (h) { h.last = now; });
+      open.forEach(function (h, i) { h.last = now; h.lat = a.lat; h.lon = a.lon; if (i === 0) h.path = f.path; else delete h.path; });   // (newest hunt of the flight keeps it)
     }
     if (open.length) saveHunts();
   }
   // A new hunt goes on the list; its takeoff time comes from the flight's trace (api/trace.js)
   function logHunt(reg, a, town, now) {
     var same = huntLog.filter(function (h) { return h.reg === reg && !h.down && now - h.last < HUNT_GONE_MS; })[0];
-    var h = { reg: reg, cs: a.callsign, town: town ? town.name : "", t: now, last: now, down: null,
+    var h = { reg: reg, cs: a.callsign, hex: a.hex, town: town ? town.name : "", t: now, last: now, down: null, lat: a.lat, lon: a.lon,
+      path: (flightUp[reg] && flightUp[reg].path) || [],
       up: same ? same.up : (flightUp[reg] || { t: now }).t, upSure: same ? same.upSure : false };
     huntLog.unshift(h);
     saveHunts();
