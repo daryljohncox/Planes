@@ -1594,7 +1594,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       if (sp === "pending") return null;
       if (sp) return sp;
     }
-    if (a.hex && a.hex.charAt(0) !== "~") {
+    // NZ rescue registrations were mostly used by other helicopters before (ZK-IGC was an R44), and the
+    // other photo sites still show those: go straight to JetPhotos, which lists the newest photo first
+    var rescueReg = RESCUE_REGO[rkey];
+    if (a.hex && a.hex.charAt(0) !== "~" && !rescueReg) {
       var h = cached(hexCache, a.hex);
       if (h === undefined) { load(hexCache, a.hex, function () { return fetchActual(a.hex); }); return null; }
       if (h === "pending") return null;
@@ -1602,7 +1605,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     }
     // No Planespotters photo by hex: the other free photo sites
     var reg = regOf(a), hex = a.hex && a.hex.charAt(0) !== "~" ? a.hex : "", rk = hex + "|" + reg;
-    if (hex || reg) {
+    if ((hex || reg) && !rescueReg) {
       var ps = cached(relayCache, rk, true);
       if (ps === undefined) { load(relayCache, rk, function () { return fetchOtherPhoto(hex, reg); }); return null; }
       if (ps === "pending") return null;
