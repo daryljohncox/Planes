@@ -3127,15 +3127,20 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   }
   // The newest full circle in pts ([[t, lat, lon, track]]): walk back from the latest heading until the turns add
   // up to a full circle, then check that stretch stayed in one area. Returns its centre, or null.
+  // Figure-eights and clover-leaf loops turn left then right, so their turns cancel out: a lot of turning
+  // either way (one and a half circles' worth) inside a small area counts too.
   function circled(pts) {
-    var turn = 0;
+    var turn = 0, abs = 0;
     for (var i = pts.length - 1; i > 0; i--) {
-      turn += ((pts[i][3] - pts[i - 1][3] + 540) % 360) - 180;
-      if (Math.abs(turn) < 330) continue;
+      var d = ((pts[i][3] - pts[i - 1][3] + 540) % 360) - 180;
+      turn += d; abs += Math.abs(d);
+      var full = Math.abs(turn) >= 330;
+      if (!full && abs < 540) continue;
       var loop = pts.slice(i - 1), la = 0, lo = 0;
       loop.forEach(function (p) { la += p[1] / loop.length; lo += p[2] / loop.length; });
       var spread = Math.max.apply(null, loop.map(function (p) { return distKm(la, lo, p[1], p[2]); }));
-      return spread <= 10 ? { lat: la, lon: lo } : null;
+      if (spread <= (full ? 10 : 5)) return { lat: la, lon: lo };
+      if (full) return null;
     }
     return null;
   }
