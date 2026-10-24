@@ -2416,6 +2416,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var t = nearestTown(c[0], c[1]);
     if (!t) return Math.round(a.dist) + " kilometres " + dir8(a.brg) + " of the map centre";
     var d = distKm(t.lat, t.lon, a.lat, a.lon);
+    // map zoomed out or moved away (centre near Takaka): the town nearest the plane instead
+    if (d > 40) { var t2 = nearestTown(a.lat, a.lon); if (t2) { t = t2; d = distKm(t.lat, t.lon, a.lat, a.lon); } }
     if (d < 1.5) return "over " + t.name;
     return Math.round(d) + " kilometres " + dir8(bearing(t.lat, t.lon, a.lat, a.lon)) + " of " + t.name;
   }
