@@ -300,6 +300,11 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   color:var(--txt);font:inherit;text-align:left;cursor:pointer}
 .rr .rm{flex:1;min-width:0}
 .rr .rc{display:block;font-size:2.6vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .pal{margin-left:1vh;font-size:1.8vh;font-weight:600;color:#7fd4ff}
+.tag.emg.tap{cursor:pointer;box-shadow:0 0 0 2px #fff}
+#emgrows .er{padding:1vh 1.8vh;border-bottom:1px solid #1d2632;font-size:2vh}
+#emgrows .er b{display:block;font-size:1.6vh;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+#emgrows .big{padding:1.4vh 1.8vh;font-size:2.6vh;font-weight:700;color:#ff6b6b}
 .rr .rt{display:block;font-size:1.9vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rr .rw{font-size:1.9vh;color:var(--dim);text-align:right;white-space:nowrap;line-height:1.35}
 .rr .rw .now{color:var(--good);font-weight:700}
@@ -384,6 +389,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     <div id="huntpanel" class="pop" hidden>
       <div class="kh"><span>Police Eagle hunts</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
       <div class="pb" id="huntrows"></div>
+    </div>
+    <div id="emgpanel" class="pop" hidden>
+      <div class="kh"><span id="emgtitle">Emergency</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="pb" id="emgrows"></div>
     </div>
     <div id="rarepanel" class="pop" hidden>
       <div class="kh"><span>Rare plane list</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
@@ -1896,6 +1905,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
             vr: first(a.baro_rate, a.geom_rate, 0),
             track: first(a.track, a.true_heading, a.mag_heading),
             gs: a.gs,
+            sq: a.squawk || "", emg: a.emergency && a.emergency !== "none" ? a.emergency : "",
             cat: category(a),
             ice: antarcticFlight(a),
             heli: isHeli(a),
@@ -1966,7 +1976,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     $("detail").style.display = "flex";
 
     $("cs").textContent = f.callsign;
-    $("idx").innerHTML = (fi >= 0 ? "following" : gone ? "last seen " + esc(when(gone.gone.last || gone.gone.t)) : "signal lost") + tagHtml(f);
+    $("idx").innerHTML = (fi >= 0 ? "following" : gone ? "last seen " + esc(when(gone.gone.last || gone.gone.t)) : "signal lost") + (f.cat === "emg" ? tagHtml(f).replace('class="tag emg"', 'class="tag emg tap"').replace("</span>", " ›</span>") : tagHtml(f));
     var line = typeName(f) + (f.type ? " (" + f.type + ")" : "");
     if (f.reg && f.reg !== f.callsign) line += " · " + f.reg;
     if (f.owner) line += " · " + f.owner;
@@ -1981,7 +1991,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     $("hist").innerHTML = gone ? "" : cameFromHtml(f);
     var co = csOp(f.flight.toUpperCase());
     $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
-    $("aps").textContent = gone ? "★ Rare: " + gone.gone.why : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
+    $("aps").textContent = gone ? "★ Rare: " + gone.gone.why + (gone.gone.with && gone.gone.with.length ? " · flying alongside " + gone.gone.with.join(", ") : "") : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
@@ -2232,7 +2242,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 
   // Panels on the right (voice settings, rare list): only one open at a time
   function showPop(id) {
-    ["voicepanel", "rarepanel", "huntpanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
+    ["voicepanel", "rarepanel", "huntpanel", "emgpanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
     if (id === "rarepanel" && !$(id).hidden) drawRareList();
     if (id === "huntpanel" && !$(id).hidden) drawHuntList();
   }
@@ -2242,7 +2252,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
     b.addEventListener("click", function (e) { e.stopPropagation(); showPop(null); });
   });
-  ["mapbtns2", "voicepanel", "rarepanel", "huntpanel", "card", "issbadge"].forEach(function (id) {
+  ["mapbtns2", "voicepanel", "rarepanel", "huntpanel", "emgpanel", "card", "issbadge"].forEach(function (id) {
     ["mousedown", "touchstart", "pointerdown", "dblclick", "wheel", "click"].forEach(function (ev) {
       $(id).addEventListener(ev, function (e) { e.stopPropagation(); });
     });
@@ -2560,6 +2570,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   function rareInfo(r, a) {
     r.fl = a.flight || ""; r.type = a.type || ""; r.desc = a.desc || ""; r.owner = a.owner || "";
     r.cat = a.cat || ""; r.heli = !!a.heli; r.alt = a.alt; r.track = a.track; r.gs = a.gs;
+    if (a.cat === "emg") noteEmg(r, a);
     if (a.lat == null || a.lon == null) return r;
     var path = r.path || (r.path = []), p = path[path.length - 1];
     if (!p || distKm(p[0], p[1], a.lat, a.lon) >= 1) path.push([+a.lat.toFixed(4), +a.lon.toFixed(4)]);
@@ -2624,7 +2635,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-        '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
         esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 7 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
@@ -2758,6 +2769,73 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     return miss < 2 ? t : 0;
   }
   var rareGroup = [], RARE_GROUP_MS = 10 * 60000, RARE_GROUP_KM = 5;   // recent rare alerts, to spot planes flying together
+  function rareRec(hex) { for (var i = 0; i < rareList.length; i++) if (rareList[i].hex === hex) return rareList[i]; return null; }
+
+  // ---------- emergency details: what the transponder said, when and where ----------
+  var EMG_SQ = { "7700": "General emergency", "7600": "Radio failure (can't talk to air traffic control)", "7500": "Unlawful interference (hijack)" };
+  var EMG_KIND = { general: "General emergency", minfuel: "Low on fuel", nordo: "No radio contact", unlawful: "Unlawful interference (hijack)",
+    downed: "Aircraft down", reserved: "Emergency (unspecified)" };
+  function emgMeaning(sq, kind) { return EMG_KIND[kind] || EMG_SQ[sq] || "Emergency"; }
+  function noteEmg(r, a) {
+    var now = Date.now(), e = r.emg;
+    var snap = { t: now, lat: a.lat, lon: a.lon, alt: a.alt, gs: a.gs, vr: a.vr, track: a.track, sq: a.sq || "", kind: a.emg || "" };
+    if (!e || now - e.last.t > 2 * 3600000) e = r.emg = { first: snap, codes: [], n: 0 };   // a new emergency
+    e.last = snap; e.n++;
+    var code = (snap.sq || "") + "|" + (snap.kind || "");
+    if (e.codes.indexOf(code) < 0) e.codes.push(code);
+  }
+  function placeText(lat, lon) {
+    if (lat == null || lon == null) return "";
+    var ap = AIRPORTS.length ? airportsNear(lat, lon, 4, 3)[0] : null;
+    if (ap) return (ap.d < 1.5 ? "at " : plainNum(ap.d) + " km from ") + ap.name + (ap.code ? " (" + ap.code + ")" : "");
+    var t = nearestTown(lat, lon);
+    if (!t) return lat.toFixed(3) + ", " + lon.toFixed(3);
+    var d = distKm(t.lat, t.lon, lat, lon);
+    return d < 1.5 ? "over " + t.name : plainNum(d) + " km " + dir8(bearing(t.lat, t.lon, lat, lon)) + " of " + t.name;
+  }
+  function snapText(s) {
+    var bits = [placeText(s.lat, s.lon)];
+    if (s.alt === "ground") bits.push("on the ground");
+    else if (typeof s.alt === "number") bits.push("altitude " + plainNum(Math.round(s.alt * 0.3048 / 10) * 10) + " m");
+    if (s.gs != null) bits.push(plainNum(s.gs * 1.852) + " km/h");
+    if (s.track != null && s.alt !== "ground") bits.push("heading " + dir8(s.track));
+    if (s.vr && Math.abs(s.vr) >= 200 && s.alt !== "ground") bits.push((s.vr < 0 ? "descending " : "climbing ") + plainNum(Math.abs(s.vr) * 0.3048) + " m/min");
+    return bits.filter(Boolean).join(", ");
+  }
+  function emgMins(ms) { var m = Math.round(ms / 60000); return m < 1 ? "under a minute" : m === 1 ? "1 minute" : m + " minutes"; }
+  function drawEmg(hex) {
+    var live = latest(hex, null), r = rareRec(hex), e = r && r.emg, f = live || selLast || {};
+    var rows = [], row = function (h, v) { if (v) rows.push('<div class="er"><b>' + esc(h) + "</b>" + esc(v) + "</div>"); };
+    $("emgtitle").textContent = (f.callsign || (r && r.cs) || hex.toUpperCase()) + " emergency";
+    var sq = live && live.cat === "emg" ? live.sq : e ? e.last.sq : "", kind = live && live.cat === "emg" ? live.emg : e ? e.last.kind : "";
+    rows.push('<div class="big">' + esc(emgMeaning(sq, kind)) + "</div>");
+    if (e) {
+      row("Transponder code", e.codes.map(function (c) { var p = c.split("|"); return (p[0] ? "Squawk " + p[0] : "No squawk") + (p[1] && p[1] !== "general" ? " · flag: " + emgMeaning("", p[1]) : ""); }).join(" / "));
+      row("First seen squawking", when(e.first.t) + " – " + snapText(e.first));
+      row("Last emergency signal", when(e.last.t) + " – " + snapText(e.last));
+      row("Emergency lasted", e.last.t - e.first.t >= 60000 ? "At least " + emgMins(e.last.t - e.first.t) + " (" + plainNum(e.n) + " updates)" : e.n > 1 ? "Under a minute so far (" + plainNum(e.n) + " updates)" : "Seen once");
+    } else {
+      row("Transponder code", sq ? "Squawk " + sq : "");
+      row("Details", "This emergency was seen before the map started recording emergency details, so only the basics are known.");
+    }
+    if (live) {
+      var st = airportStatus(live);
+      row("Now", (live.cat === "emg" ? "Still squawking emergency. " : "Emergency signal has stopped. ") + (st ? st.text + " " + st.ap.name + ". " : "") + snapText(live));
+    } else if (r) {
+      row("Now", "Not on the map. Last seen " + when(r.last || r.t) + (r.lat != null ? " – " + snapText({ lat: r.lat, lon: r.lon, alt: r.alt, gs: r.gs, track: r.track }) : ""));
+    }
+    row("Aircraft", [typeName(f) + (f.type ? " (" + f.type + ")" : ""), f.reg, f.owner, f.country].filter(Boolean).join(" · "));
+    if (f.flight) row("Callsign", f.flight);
+    rows.push('<div class="note">From the plane\'s transponder. 7700 = emergency, 7600 = radio failure, 7500 = hijack. Pilots sometimes set a code briefly by mistake or for practice, so a short one that stops on its own is often nothing serious.</div>');
+    $("emgrows").innerHTML = rows.join("");
+  }
+  $("idx").addEventListener("click", function (e) {
+    if (!e.target.closest || !e.target.closest(".tag.emg") || !selHex) return;
+    e.stopPropagation();
+    drawEmg(selHex);
+    ["voicepanel", "rarepanel", "huntpanel"].forEach(function (p) { $(p).hidden = true; });
+    $("emgpanel").hidden = false;
+  });
   function voiceCheck(list) {
     var now = Date.now(), following = !!(selHex && selLast);
     // A new search area (map moved, or following a plane) starts quietly: planes already there aren't "new"
@@ -2777,17 +2855,24 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       var why = rareWhy(a), rareNew = false;
       if (why && noteRare(a, why)) {
         rareNew = true;
-        if (VOICE.on && VOICE.rare && why !== "Emergency") {
-          // Flying together (e.g. two Tiger Moths leaving Ardmore): one alert for the group, not one each
-          var pal = rareGroup.filter(function (g) { return g.why === why && now - g.t < RARE_GROUP_MS && a.lat != null && distKm(g.lat, g.lon, a.lat, a.lon) < RARE_GROUP_KM; })[0];
-          if (pal) pal.n++;
-          else {
-            var g = { why: why, t: now, lat: a.lat, lon: a.lon, n: 0 };
-            rareGroup.push(g);
-            sayPlane(a, { chime: "rare", kind: "rare", tag: why, prefix: function () {
-              return "Rare plane. " + why + (g.n ? ", with " + (g.n === 1 ? "another" : plainNum(g.n) + " others") + " flying alongside" : "") + ". ";
-            } });
-          }
+        // Flying together (e.g. two Tiger Moths leaving Ardmore): one alert for the group, not one each, and
+        // each one's rare list entry names the others
+        var pal = why === "Emergency" ? null : rareGroup.filter(function (g) { return g.why === why && now - g.t < RARE_GROUP_MS && a.lat != null && distKm(g.lat, g.lon, a.lat, a.lon) < RARE_GROUP_KM; })[0];
+        if (pal) {
+          pal.hexes.push(a.hex);
+          var recs = pal.hexes.map(rareRec);
+          recs.forEach(function (r) {
+            if (r) r.with = recs.filter(function (o) { return o && o !== r; }).map(function (o) { return o.cs || o.reg || o.hex.toUpperCase(); });
+          });
+          store.set("rare", rareList);
+          if (!$("rarepanel").hidden) drawRareList();
+        } else if (why !== "Emergency") {
+          var g = { why: why, t: now, lat: a.lat, lon: a.lon, hexes: [a.hex] };
+          rareGroup.push(g);
+          if (VOICE.on && VOICE.rare) sayPlane(a, { chime: "rare", kind: "rare", tag: why, prefix: function () {
+            var n = g.hexes.length - 1;
+            return "Rare plane. " + why + (n ? ", with " + (n === 1 ? "another" : plainNum(n) + " others") + " flying alongside" : "") + ". ";
+          } });
         }
       }
       // Overhead soon
@@ -2886,6 +2971,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || "", country: countryOf(x.hex),
       lat: x.lat, lon: x.lon, alt: typeof alt === "number" || alt === "ground" ? alt : null,
       vr: first(x.baro_rate, x.geom_rate, 0), track: first(x.track, x.true_heading, x.mag_heading), gs: x.gs,
+      sq: x.squawk || "", emg: x.emergency && x.emergency !== "none" ? x.emergency : "",
       cat: category(x), ice: antarcticFlight(x), heli: isHeli(x),
       dist: distKm(ref.lat, ref.lon, x.lat, x.lon), brg: bearing(ref.lat, ref.lon, x.lat, x.lon) };
   }
