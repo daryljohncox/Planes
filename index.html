@@ -2436,7 +2436,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       hex: a.hex, chime: opts.chime || "ding", urgent: opts.urgent,
       card: { kind: opts.kind || "", tag: opts.tag || "" },
       wait: routeWait(a),
-      make: function () { var b = latest(a.hex, a); return (opts.prefix || "") + (opts.body ? opts.body(b) : sentence(b, c)); }
+      make: function () { var b = latest(a.hex, a); return (typeof opts.prefix === "function" ? opts.prefix() : opts.prefix || "") + (opts.body ? opts.body(b) : sentence(b, c)); }
     });
     photoFor(a);   // start loading the photo for the pop-up card
   }
@@ -2757,6 +2757,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var miss = Math.hypot(x + vx * t, y + vy * t);
     return miss < 2 ? t : 0;
   }
+  var rareGroup = [], RARE_GROUP_MS = 10 * 60000, RARE_GROUP_KM = 5;   // recent rare alerts, to spot planes flying together
   function voiceCheck(list) {
     var now = Date.now(), following = !!(selHex && selLast);
     // A new search area (map moved, or following a plane) starts quietly: planes already there aren't "new"
@@ -2776,7 +2777,18 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       var why = rareWhy(a), rareNew = false;
       if (why && noteRare(a, why)) {
         rareNew = true;
-        if (VOICE.on && VOICE.rare && why !== "Emergency") sayPlane(a, { chime: "rare", kind: "rare", tag: why, prefix: "Rare plane. " + why + ". " });
+        if (VOICE.on && VOICE.rare && why !== "Emergency") {
+          // Flying together (e.g. two Tiger Moths leaving Ardmore): one alert for the group, not one each
+          var pal = rareGroup.filter(function (g) { return g.why === why && now - g.t < RARE_GROUP_MS && a.lat != null && distKm(g.lat, g.lon, a.lat, a.lon) < RARE_GROUP_KM; })[0];
+          if (pal) pal.n++;
+          else {
+            var g = { why: why, t: now, lat: a.lat, lon: a.lon, n: 0 };
+            rareGroup.push(g);
+            sayPlane(a, { chime: "rare", kind: "rare", tag: why, prefix: function () {
+              return "Rare plane. " + why + (g.n ? ", with " + (g.n === 1 ? "another" : plainNum(g.n) + " others") + " flying alongside" : "") + ". ";
+            } });
+          }
+        }
       }
       // Overhead soon
       var mins = overheadIn(a);
@@ -2798,6 +2810,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       if (VOICE.on && wantVoice(a)) sayPlane(a);
     });
     Object.keys(zoneSeen).forEach(function (h) { if (now - zoneSeen[h] > 2 * ZONE_QUIET_MS) delete zoneSeen[h]; });
+    rareGroup = rareGroup.filter(function (g) { return now - g.t < RARE_GROUP_MS; });
   }
 
   // ---------- Christchurch watch (runs in the background, wherever the map is) ----------
