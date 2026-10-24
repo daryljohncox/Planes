@@ -2221,7 +2221,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       try {
         if (sample) sample.pause();
         sample = new Audio(TTS + "?v=" + encodeURIComponent(pl.getAttribute("data-play")) + "&text=" +
-          encodeURIComponent("Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, altitude 1,500 metres."));
+          encodeURIComponent("Air New Zealand A320 to Auckland, 18 kilometres north of Marton, altitude 1,500 metres."));
         sample.play().catch(function () {});
       } catch (e2) { /* no audio */ }
       return;
@@ -2411,15 +2411,11 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     return to;
   }
   function shortApt(n) { return String(n || "").replace(/^RNZAF Base (.+)$/, "$1 Air Force Base").replace(/\s*(International|Intl\.?|Domestic|Regional)?\s*(Airport|Aerodrome|Airfield|Air Base|Airbase)\b.*$/i, "").trim(); }
-  function whereNow(a, c) {
-    c = c || [cLat, cLon];
-    var t = nearestTown(c[0], c[1]);
-    if (!t) return Math.round(a.dist) + " kilometres " + dir8(a.brg) + " of the map centre";
-    var d = distKm(t.lat, t.lon, a.lat, a.lon);
-    // map zoomed out or moved away (centre near Takaka): the town nearest the plane instead
-    if (d > 40) { var t2 = nearestTown(a.lat, a.lon); if (t2) { t = t2; d = distKm(t.lat, t.lon, a.lat, a.lon); } }
-    if (d < 1.5) return "over " + t.name;
-    return Math.round(d) + " kilometres " + dir8(bearing(t.lat, t.lon, a.lat, a.lon)) + " of " + t.name;
+  // Always measured from home (Marton), wherever the map is
+  function whereNow(a) {
+    var d = distKm(LAT, LON, a.lat, a.lon);
+    if (d < 1.5) return "over " + PLACE;
+    return plainNum(d) + " kilometres " + dir8(bearing(LAT, LON, a.lat, a.lon)) + " of " + PLACE;
   }
   function heightSpeed(a) {
     if (a.alt === "ground") return "on the ground";
@@ -2429,11 +2425,11 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     if (a.gs != null) out.push("moving at " + plainNum(Math.round(a.gs * 1.852 / 10) * 10) + " kilometres per hour");
     return out.join(", ");
   }
-  // "Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, altitude 1,500 metres, heading north-east,
+  // "Air New Zealand A320 to Auckland, 18 kilometres north of Marton, altitude 1,500 metres, heading north-east,
   //  moving at 250 kilometres per hour."
   function sentence(a, c) {
     // (taking off from an airport already says where it is)
-    var st = airportStatus(a), parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), st && st.text === "Departing" ? "" : whereNow(a, c), heightSpeed(a)].filter(Boolean);
+    var st = airportStatus(a), parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), st && st.text === "Departing" ? "" : whereNow(a), heightSpeed(a)].filter(Boolean);
     return parts.join(", ") + ".";
   }
   function latest(hex, fallback) {
@@ -3152,7 +3148,6 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   }
   // ---------- south scan: anything flying south of NZ goes on the rare list and is announced ----------
   var SOUTH = { lat: -50.5, lon: 169 }, SOUTH_R_NM = 250, SOUTH_MS = 60000;
-  var STEWART = { lat: -47.0, lon: 167.9 };
   function southCheck() {
     fetch(FEED + "?lat=" + SOUTH.lat + "&lon=" + SOUTH.lon + "&r=" + SOUTH_R_NM, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -3170,9 +3165,9 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
           if (!noteRare(a, why) || !VOICE.on || !VOICE.rare) return;
           chcLast[a.hex] = a;   // tapping the card follows it
           chcAlert(a, { tag: why, text: function (b) {
-            var km = Math.round(distKm(STEWART.lat, STEWART.lon, b.lat, b.lon) / 10) * 10;
+            var km = Math.round(distKm(LAT, LON, b.lat, b.lon) / 10) * 10;
             return "Plane south of New Zealand. " + chcName(b) + ", " + plainNum(km) + " kilometres " +
-              dir8(bearing(STEWART.lat, STEWART.lon, b.lat, b.lon)) + " of Stewart Island" + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
+              dir8(bearing(LAT, LON, b.lat, b.lon)) + " of " + PLACE + (heightSpeed(b) ? ", " + heightSpeed(b) : "") + ".";
           } });
         });
       })
