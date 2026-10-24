@@ -2407,9 +2407,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     if (st && st.text === "Arriving") return "landing at " + shortApt(st.ap.name);
     var r = noDbRoute(a) ? null : routeCache[a.flight];
     if (r && r !== "pending" && r.to && routeFits(a, r, st)) return "to " + (r.to.city || shortApt(r.to.name || r.to.iata || ""));
+    if (st && st.text === "Departing") return "taking off from " + shortApt(st.ap.name);
     return "";
   }
-  function shortApt(n) { return String(n || "").replace(/\s*(International|Intl\.?|Domestic|Regional)?\s*(Airport|Aerodrome|Airfield|Air Base|Airbase)\b.*$/i, "").trim(); }
+  function shortApt(n) { return String(n || "").replace(/^RNZAF Base (.+)$/, "$1 Air Force Base").replace(/\s*(International|Intl\.?|Domestic|Regional)?\s*(Airport|Aerodrome|Airfield|Air Base|Airbase)\b.*$/i, "").trim(); }
   function whereNow(a, c) {
     c = c || [cLat, cLon];
     var t = nearestTown(c[0], c[1]);
@@ -2585,7 +2586,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       // Another flight: landed (and stayed down a while) then took off again, back after a long gap, or a new callsign after being out of sight
       // for a while (the feed can flip between two callsigns for the same flight, e.g. YAK83 / ANZ648M)
       var away = now - (r.last || r.t);
-      var again = !gnd && ((r.air && r.gnd && now - (r.gndT || now) >= RARE_STOP_MS) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
+      // (only ever seen parked, e.g. an RNZAF 757 sitting at Ohakea, then taking off also counts)
+      var again = !gnd && ((r.gnd && (!r.air || now - (r.gndT || now) >= RARE_STOP_MS)) || away > RARE_GAP_MS || (fk && r.fk && fk !== r.fk && away > RARE_FLIP_MS));
       if (again) break;
       r.last = now; r.lat = a.lat; r.lon = a.lon;
       // noted earlier for something else (a C-17 sitting at Christchurch is "Big military"), then off to the ice
