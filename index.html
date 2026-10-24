@@ -2406,9 +2406,9 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var st = airportStatus(a);
     if (st && st.text === "Arriving") return "landing at " + shortApt(st.ap.name);
     var r = noDbRoute(a) ? null : routeCache[a.flight];
-    if (r && r !== "pending" && r.to && routeFits(a, r, st)) return "to " + (r.to.city || shortApt(r.to.name || r.to.iata || ""));
-    if (st && st.text === "Departing") return "taking off from " + shortApt(st.ap.name);
-    return "";
+    var to = r && r !== "pending" && r.to && routeFits(a, r, st) ? "to " + (r.to.city || shortApt(r.to.name || r.to.iata || "")) : "";
+    if (st && st.text === "Departing") return "taking off from " + shortApt(st.ap.name) + (to ? " " + to : "");
+    return to;
   }
   function shortApt(n) { return String(n || "").replace(/^RNZAF Base (.+)$/, "$1 Air Force Base").replace(/\s*(International|Intl\.?|Domestic|Regional)?\s*(Airport|Aerodrome|Airfield|Air Base|Airbase)\b.*$/i, "").trim(); }
   function whereNow(a, c) {
@@ -2430,7 +2430,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   // "Air New Zealand A320 to Auckland, 18 kilometres north of Feilding, altitude 1,500 metres, heading north-east,
   //  moving at 250 kilometres per hour."
   function sentence(a, c) {
-    var parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), whereNow(a, c), heightSpeed(a)].filter(Boolean);
+    // (taking off from an airport already says where it is)
+    var st = airportStatus(a), parts = [whoSays(a) + (whereTo(a) ? " " + whereTo(a) : ""), st && st.text === "Departing" ? "" : whereNow(a, c), heightSpeed(a)].filter(Boolean);
     return parts.join(", ") + ".";
   }
   function latest(hex, fallback) {
