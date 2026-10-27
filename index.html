@@ -323,6 +323,18 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .lastseen span{position:absolute;left:18px;top:-12px;white-space:nowrap;background:#ff6a00;color:#fff;font:700 13px system-ui,sans-serif;padding:2px 6px;border-radius:4px}
 .rr .star{color:#ffd400;font-size:3vh}
 .rr .hsir{height:3.4vh;width:auto;border-radius:.6vh;flex:0 0 auto}
+.pop .kh .ktabs{display:flex;gap:.8vh}
+.pop .kh .ktabs button{width:auto;height:auto;padding:.8vh 1.6vh;font:700 2.2vh system-ui,sans-serif;background:#1c2633;color:var(--dim)}
+.pop .kh .ktabs button.on{background:#ffd400;color:#000}
+.pop .kh .ktabs button[data-tab="emg"].on{background:#ff4040;color:#fff}
+.ktabs b{margin-left:.6vh}
+.rr .warn{color:#ff4040;font-size:3vh}
+.en{padding:1vh 1.8vh;border-bottom:1px solid #1d2632;cursor:pointer}
+.en .rc{display:block;font-size:2.2vh;font-weight:700;line-height:1.3}
+.en .rt{display:block;font-size:1.8vh;color:var(--dim);margin-top:.3vh}
+.en .ex{display:none;font-size:1.9vh;margin-top:.6vh;line-height:1.35}
+.en.open .ex{display:block}
+.en .ex a{color:#7fd4ff}
 .rday{padding:1vh 1.8vh .6vh;font-size:1.9vh;font-weight:700;color:#ffd400;border-bottom:1px solid #1d2632}
 /* pop-up card for the plane being announced */
 #card{position:absolute;left:1.4vh;right:1.4vh;bottom:3vh;z-index:1002;display:flex;gap:1.6vh;align-items:center;
@@ -432,7 +444,7 @@ body.infoup main{visibility:hidden}
       <div class="pb" id="emgrows"></div>
     </div>
     <div id="rarepanel" class="pop" hidden>
-      <div class="kh"><span>Rare plane list</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="kh"><span class="ktabs"><button type="button" data-tab="rare">Rare planes</button><button type="button" data-tab="emg">Emergencies<b id="emgcount"></b></button></span><button class="popclose" type="button" aria-label="Close">✕</button></div>
       <div class="pb" id="rarerows"></div>
     </div>
     <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
@@ -2793,14 +2805,14 @@ body.infoup main{visibility:hidden}
   }
   function isAirliner(a) { return a.cat === "com" || a.cat === "cgo" || !!(a.type && AIRLINER_TYPES[a.type]); }
   function isRare(a) { return !!rareWhy(a); }
-  // Kept for 7 days so missed ones can be checked; the list on the map starts afresh each day (older days below it)
-  var RARE_DAYS_MS = 7 * 86400000;
+  // Kept for 30 days so missed ones can be checked; the list on the map starts afresh each day (older days below it)
+  var RARE_DAYS_MS = 30 * 86400000;
   var rareList = store.get("rare", []).filter(function (r) { return Date.now() - r.t < RARE_DAYS_MS; });   // [{hex, cs, ty, reg, why, t}], newest first
   // Saved before that fix: an Antarctic-coloured plane last seen over the Southern Ocean heading south
   rareList.forEach(function (r) {
     if (r.why !== "Antarctic flight" && r.cat === "ant" && r.lat < -47.5 && r.track > 100 && r.track < 260) r.why = "Antarctic flight";
   });
-  var RARE_KEEP = 500, RARE_SAME_MS = 6 * 3600000;
+  var RARE_KEEP = 1500, RARE_SAME_MS = 6 * 3600000;
   var RARE_FLIP_MS = 20 * 60000;   // a new callsign only means a new flight if the plane was out of sight this long
   var RARE_STOP_MS = 15 * 60000;   // a landing only ends the flight if it stays down this long (circuits / touch-and-goes don't)
   // Tidy the saved list: drop types no longer counted as rare (e.g. the A380) and merge the repeats left by
@@ -2827,8 +2839,10 @@ body.infoup main{visibility:hidden}
   })();
   function rareCount() {   // today's rare planes on the button
     var d0 = new Date(); d0.setHours(0, 0, 0, 0);
-    var n = rareList.filter(function (r) { return r.t >= d0.getTime(); }).length;
+    var n = rareList.filter(function (r) { return r.t >= d0.getTime() && r.why !== "Emergency"; }).length;
     $("rarecount").textContent = n ? n : "";
+    var e = emgItems().filter(function (x) { return x.t >= d0.getTime(); }).length;
+    $("emgcount").textContent = e ? " " + e : "";
   }
   var RARE_GAP_MS = 2 * 3600000;   // gone this long, then back in the air = a new flight
   // The flight callsign, ignoring its registration (the feed flips between "TIG86", "ZKASV" and none for the same flight)
@@ -2885,12 +2899,15 @@ body.infoup main{visibility:hidden}
     if (d.toDateString() === now.toDateString()) return time;
     try { return d.toLocaleDateString("en-NZ", { timeZone: TZ, day: "numeric", month: "short" }) + " " + time; } catch (e) { return d.toLocaleDateString() + " " + time; }
   }
-  // Today / last 3 days / all 7 days, remembered on this Hub
-  var RARE_RANGES = [["today", "Today"], ["3", "3 days"], ["all", "All 7 days"]], rareRange = "all";
+  // Today / last 3 days / 7 days / all 30 days, remembered on this Hub
+  var RARE_RANGES = [["today", "Today"], ["3", "3 days"], ["7", "7 days"], ["all", "All 30 days"]], rareRange = "all";
   try { rareRange = localStorage.getItem("planes.rarerange") || "all"; } catch (e) { /* none */ }
+  // (emergencies are on their own tab)
+  function rareOnly() { return rareList.filter(function (r) { return r.why !== "Emergency"; }); }
   function rareShown() {
+    var rareList = rareOnly();
     if (rareRange === "today") return rareList.filter(function (r) { return dayLabel(r.t) === "Today"; });
-    if (rareRange === "3") return rareList.filter(function (r) { return Date.now() - r.t < 3 * 86400000; });
+    if (rareRange === "3" || rareRange === "7") return rareList.filter(function (r) { return Date.now() - r.t < +rareRange * 86400000; });
     // All: each aircraft once (its latest sighting), with how many times it's been seen
     var at = {}, out = [];
     rareList.forEach(function (r) {
@@ -2901,16 +2918,18 @@ body.infoup main{visibility:hidden}
     return out;
   }
   function drawRareList() {
-    var day = null, shown = rareShown();
+    Array.prototype.forEach.call(document.querySelectorAll("#rarepanel [data-tab]"), function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === rareTab); });
+    if (rareTab === "emg") return drawEmgList();
+    var day = null, shown = rareShown(), rareList = rareOnly();
     $("rarerows").innerHTML = '<div class="rseg">' + RARE_RANGES.map(function (x) {
       return '<button type="button" data-range="' + x[0] + '"' + (rareRange === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>";
-    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last 3 days") + " yet.</div>" : shown.map(function (r) {
+    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : shown.map(function (r) {
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
         (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
         esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
-    }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 7 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
+    }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
   function dayLabel(t) {
     var key = function (x) { try { return new Date(x).toLocaleDateString("en-NZ", { timeZone: TZ }); } catch (e) { return new Date(x).toDateString(); } };
@@ -2918,6 +2937,53 @@ body.infoup main{visibility:hidden}
     if (k === key(Date.now())) return "Today";
     if (k === key(Date.now() - 86400000)) return "Yesterday";
     try { return new Date(t).toLocaleDateString("en-NZ", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" }); } catch (e) { return k; }
+  }
+  // ---------- Emergencies tab: emergency squawks the map saw, plus NZ aviation emergencies in the news ----------
+  // News stories and Aviation Safety Network entries come from api/incidents.js every 15 minutes and are kept
+  // here for 30 days (like the rare list), so they stay even after they drop off the news feeds.
+  var rareTab = "rare";
+  try { rareTab = localStorage.getItem("planes.raretab") || "rare"; } catch (e) { /* none */ }
+  var emgNews = store.get("emgnews", []).filter(function (x) { return Date.now() - x.t < RARE_DAYS_MS; });   // [{id, t, title, src, text, url, day}]
+  var INCIDENTS_MS = 15 * 60000;
+  function incidentCheck() {
+    getJSON((P.get("feed") || "/api/feed").replace(/feed$/, "incidents")).then(function (j) {
+      var have = {}, added = 0, now = Date.now();
+      emgNews.forEach(function (x) { have[x.id] = 1; });
+      (j.items || []).forEach(function (x) {
+        if (have[x.id] || !x.title || now - x.t >= RARE_DAYS_MS) return;
+        have[x.id] = 1; added++;
+        emgNews.push({ id: x.id, t: x.t, title: x.title, src: x.src || "", text: x.text || "", url: x.url || "", day: !!x.day });
+      });
+      emgNews = emgNews.filter(function (x) { return now - x.t < RARE_DAYS_MS; }).sort(function (a, b) { return b.t - a.t; }).slice(0, 300);
+      if (added) {
+        store.set("emgnews", emgNews);
+        rareCount();
+        if (!$("rarepanel").hidden && rareTab === "emg") drawEmgList();
+      }
+    }).catch(function () { /* try again next time */ });
+  }
+  function emgItems() {
+    return rareList.filter(function (r) { return r.why === "Emergency"; }).map(function (r) { return { t: r.t, sq: r }; })
+      .concat(emgNews.map(function (x) { return { t: x.t, news: x }; })).sort(function (a, b) { return b.t - a.t; });
+  }
+  function emgDay(t) {   // a news date with no time (Aviation Safety Network): its day, not a made-up time
+    try { return new Date(t).toLocaleDateString("en-NZ", { timeZone: "UTC", day: "numeric", month: "short" }); } catch (e) { return ""; }
+  }
+  function drawEmgList() {
+    var day = null, list = emgItems();
+    $("rarerows").innerHTML = !list.length ? '<div class="note">No emergencies in the last 30 days. Planes squawking 7700 / 7600 / 7500 anywhere around NZ, and NZ aircraft emergencies in the news (1News, RNZ, NZ Herald, Stuff and others) and on the Aviation Safety Network, show up here.</div>' : list.map(function (x) {
+      var d = x.news && x.news.day ? (function () { try { return new Date(x.t).toLocaleDateString("en-NZ", { timeZone: "UTC" }) === new Date().toLocaleDateString("en-NZ", { timeZone: TZ }) ? "Today" : dayLabel(x.t + 12 * 3600000); } catch (e) { return dayLabel(x.t); } })() : dayLabel(x.t), head = "";
+      if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
+      if (x.sq) {
+        var r = x.sq, here = latest(r.hex, null), e = r.emg, mean = e && e.last ? emgMeaning(e.last.sq, e.last.kind) : "Emergency";
+        return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="warn">⚠</span><span class="rm"><span class="rc">' + esc(r.cs) +
+          '</span><span class="rt">' + esc(mean.replace(/ \(.*\)/, "") + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+          esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+      }
+      var n = x.news;
+      return head + '<div class="en"><span class="rc">' + esc(n.title) + '</span><span class="rt">' + esc(n.src + " · " + (n.day ? emgDay(n.t) : when(n.t))) + " · tap for more</span>" +
+        '<div class="ex">' + (n.text ? esc(n.text) + "<br>" : "") + (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">Open the story</a>' : "") + "</div></div>";
+    }).join("");
   }
   // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
   // select it once the feed for that area has it
@@ -2979,7 +3045,16 @@ body.infoup main{visibility:hidden}
       else map.setView(end, homeZoom || map.getZoom(), { animate: false });
     }, 50);
   }
+  $("rarepanel").querySelector(".ktabs").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("[data-tab]") : null;
+    if (!b) return;
+    rareTab = b.getAttribute("data-tab");
+    try { localStorage.setItem("planes.raretab", rareTab); } catch (e2) { /* not saved */ }
+    drawRareList();
+  });
   $("rarerows").addEventListener("click", function (e) {
+    var en = e.target.closest ? e.target.closest(".en") : null;
+    if (en) { if (!e.target.closest("a")) en.classList.toggle("open"); return; }
     var rg = e.target.closest ? e.target.closest("[data-range]") : null;
     if (rg) {
       rareRange = rg.getAttribute("data-range");
@@ -3567,10 +3642,11 @@ body.infoup main{visibility:hidden}
           return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 120) && EMERG_SQUAWK[x.squawk];
         }).map(withInfo).forEach(function (x) {
           if (latest(x.hex, null)) return;
+          var a = bgPlane(x, { lat: LAT, lon: LON });
+          noteRare(a, "Emergency");   // on the Emergencies tab
           var seen = emgSeen[x.hex];
           emgSeen[x.hex] = now;
           if (seen && now - seen < ZONE_QUIET_MS) return;
-          var a = bgPlane(x, { lat: LAT, lon: LON });
           if (VOICE.on) sayPlane(a, { chime: "alarm", urgent: true, kind: "emg", tag: "Emergency", prefix: "Emergency! ", body: function (b) {
             var t = nearestTown(b.lat, b.lon), d = t ? distKm(t.lat, t.lon, b.lat, b.lon) : 0;
             var where = !t ? whereNow(b) : d < 1.5 ? "over " + t.name : plainNum(d) + " kilometres " + dir8(bearing(t.lat, t.lon, b.lat, b.lon)) + " of " + t.name;
@@ -3763,6 +3839,8 @@ body.infoup main{visibility:hidden}
   setTimeout(resumeIce, 2000);
   setTimeout(milCheck, 9000);
   setTimeout(emgWatch, 5000);
+  setTimeout(incidentCheck, 12000);
+  setInterval(incidentCheck, INCIDENTS_MS);
   setInterval(emgWatch, EMG_WATCH_MS);
   setInterval(milCheck, MIL_MS);
   setTimeout(iceWatch, 15000);
