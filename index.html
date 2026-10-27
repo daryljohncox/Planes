@@ -215,6 +215,11 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .eye{border:0;background:none;color:var(--dim);padding:0 .4vh;margin:-.6vh 0;cursor:pointer;line-height:0}
 .eye svg{width:3.2vh;height:3.2vh}
 .eye.on{color:#ffd23f;filter:drop-shadow(0 0 3px #ffd23f)}
+.grp b,.grp>span{flex:1}
+.grp>span{justify-content:flex-end}
+.fold{flex:0 0 auto;border:0;border-radius:.8vh;background:#1c2633;color:var(--txt);padding:0 1.6vh;margin:-.6vh 1vh;cursor:pointer;line-height:0}
+.fold svg{width:3.2vh;height:3.2vh;transition:transform .2s}
+.grp.shut .fold svg{transform:rotate(-90deg)}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#d9a300}
@@ -2055,6 +2060,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   // The eye on a header shows only that group on the map (tap again for all); also kept through the hourly reload
   var mapOnly = "";
   try { mapOnly = sessionStorage.getItem("planes.only") || ""; } catch (e) { /* none */ }
+  var FOLD_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.6 8.3 12 15.7l7.4-7.4 1.8 1.8L12 19.3 2.8 10.1z"/></svg>';
   var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C6.5 5 2.7 9.3 1.5 12c1.2 2.7 5 7 10.5 7s9.3-4.3 10.5-7C21.3 9.3 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
   function renderList() {
     if (listTouch || listScrollT) { listPending = true; return; }
@@ -2065,7 +2071,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
       if (!inGroup.length && mapOnly !== g[0]) return "";   // the group shown alone on the map keeps its header (to switch it off)
       var shut = !!listHidden[g[0]];
-      return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + (shut ? "▸ " : "▾ ") + g[1] + "</b><span>" +
+      return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + g[1] + '</b><button type="button" class="fold" aria-label="' + (shut ? "Show" : "Hide") +
+        ' these in the list">' + FOLD_SVG + "</button><span>" +
         (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly === g[0] ? " on" : "") +
         '" aria-label="Show only these on the map">' + EYE_SVG + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
     }).join("");
