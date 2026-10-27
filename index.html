@@ -365,6 +365,9 @@ body.infoup main{visibility:hidden}
 #infobody .ipic{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:1vh;background:#05080c;display:block}
 #infobody .wiki{font-size:2.3vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh}
 #infobody .wiki small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
+#infobody .use{font-size:2.3vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh;padding-top:1.2vh;border-top:1px solid #1d2632}
+#infobody .use b{color:var(--acc)}
+#infobody .use small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
 #infobody h3{font-size:2vh;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;margin:1.6vh 0 .6vh}
 #infobody h3:first-child{margin-top:0}
 #infobody table{width:100%;border-collapse:collapse;font-size:2.3vh}
@@ -2545,6 +2548,69 @@ body.infoup main{visibility:hidden}
   // ---------- "i" page: everything we know about the selected aircraft ----------
   var wikiSum = {}, extraInfo = {};   // article -> {text, url} | null ; hex -> /api/aircraft answer | null
   function fmtN(n, d) { return n == null || isNaN(n) ? "" : Number(n).toLocaleString("en-NZ", { maximumFractionDigits: d || 0 }); }
+  // "What it's used for" under the Wikipedia text: what this aircraft does if its callsign, category or
+  // owner tells us, otherwise what aircraft of this type are mainly used for.
+  var USE_OWNER = [
+    [/police/i, "Police work: patrols, searches and pursuits"],
+    [/rescue|ambulance|medical|life ?flight|emergency services|coastguard|search and rescue/i, "Rescue and air ambulance flights"],
+    [/defence|air force|\barmy\b|\bnavy\b|military/i, "Military flying"],
+    [/aero ?club|flying school|flight (training|school|academy)|aviation (college|academy|school)|pilot academy|massey|\bcollege\b|university/i, "Pilot training"],
+    [/skydiv|parachut/i, "Taking skydivers up"],
+    [/topdress|aerial work|agricult|fertili[sz]|spray|aerial application/i, "Topdressing and spraying farmland"],
+    [/glid|soaring/i, "Gliding"],
+    [/scenic|tours?\b|glacier|sightsee|safari/i, "Scenic and tourist flights"],
+    [/fire|forestry|rural fire/i, "Firefighting and forestry work"],
+    [/survey|mapping|aerial photo|geospatial|lidar/i, "Aerial survey and mapping"],
+    [/freight|cargo|parcel|post\b|courier/i, "Carrying freight and mail"],
+    [/air new zealand|airways|airlines|jetstar|qantas|virgin|sounds air|air chathams|barrier air|originair/i, "Airline passenger flights"],
+    [/charter|air taxi|executive|jet ?centre|aviation services/i, "Charter flights"],
+    [/heli|lift|utility|muster|farm|station\b/i, "Helicopter work: farm work, lifting and charter"]
+  ];
+  var HELI_LIGHT = { B06:1, B06T:1, R44:1, R66:1, AS50:1, AS55:1, EC20:1, EC30:1, H500:1, MD52:1, MD60:1, B407:1, B505:1, B427:1, A119:1 };
+  var HELI_TWIN = { EC35:1, EC45:1, BK17:1, EC55:1, H160:1, A109:1, A139:1, A169:1, A189:1, B412:1, B429:1, B430:1,
+    S76:1, S92:1, EXPL:1, EC75:1, AS65:1, B212:1, AS32:1, A149:1 };
+  var HELI_MIL = { NH90:1, H60:1, UH1:1, UH1Y:1, CH47:1, LYNX:1, A129:1 };
+  var MIL_TRANSPORT = { C17:1, C130:1, C30J:1, L100:1, A400:1, P8:1, P3:1, KC30:1, A332:1, K35R:1, C27J:1, C295:1 };
+  var UTILITY_TYPES = { C208:1, GA8:1, DHC2:1, DHC3:1, DHC6:1, BN2P:1, BN2T:1, TRIS:1, KODI:1, PC6T:1, N22:1, N24:1, P68:1, C206:1, C207:1, C185:1 };
+  function usedFor(f, owner, co) {
+    var t = f.type || "", cs = (f.flight || "").trim().toUpperCase(), c = f.cat, i;
+    // This aircraft: from its callsign or what the map already worked out
+    if (c === "res" || (co && RESCUE_CS.test(cs))) return { mine: 1, text: "Rescue, air ambulance or firefighting flights" + (co && co.op ? " for " + co.op : "") };
+    if (c === "pol") return { mine: 1, text: "Police work: patrols, searches and pursuits" };
+    if (c === "ant") return { mine: 1, text: "Antarctic or scientific research flights" };
+    if (TRAINER_CS.test(cs)) return { mine: 1, text: "Pilot training" };
+    if (c === "cgo") return { mine: 1, text: "Carrying freight and mail" };
+    if (c === "com" && AIRLINE_CS.test(cs)) return { mine: 1, text: "Airline passenger flights" };
+    if (owner) for (i = 0; i < USE_OWNER.length; i++) if (USE_OWNER[i][0].test(owner)) return { mine: 1, text: USE_OWNER[i][1] };
+    if (c === "mil" || c === "mtr") return { mine: 1, text: c === "mtr" ? "Training military pilots" : MIL_TRANSPORT[t] ? "Military transport, patrol and disaster relief" : "Military flying" };
+    // Otherwise: what this kind of aircraft is mainly used for
+    var u = "";
+    if (f.heli) u = t === "R22" || t === "S300" || t === "H269" || t === "G2CA" ? "pilot training, farm mustering and private flying"
+      : t === "KMAX" ? "heavy lifting and logging" : HELI_MIL[t] ? "military transport and search and rescue"
+      : HELI_TWIN[t] ? "rescue and air ambulance work, police, offshore oil and gas crew flights and VIP transport"
+      : HELI_LIGHT[t] ? "farm work (mustering, spraying), scenic flights, lifting loads, filming and private flying"
+      : "farm work, scenic flights, lifting loads and rescue";
+    else if (AG_TYPES[t]) u = "topdressing, crop spraying and sometimes firefighting";
+    else if (VINTAGE_TYPES[t]) u = "airshows, heritage flights and joyrides";
+    else if (DRONE_TYPES[t] || c === "drn") u = "surveying, filming and surveillance";
+    else if (MIL_TRAINER_TYPES[t]) u = "training military pilots";
+    else if (MIL_TRANSPORT[t] && !AIRLINER_TYPES[t]) u = "military transport, patrol and disaster relief";
+    else if (c === "gld" || GLIDER_TYPES[t]) u = "sport and recreational flying";
+    else if (/^(AT7|DH8|SF34|SB20)/.test(t)) u = "regional airline passenger flights";
+    else if (/^(A33|A34|A35|A38|B74|B76|B77|B78)/.test(t)) u = "long-haul passenger flights and freight";
+    else if (AIRLINER_TYPES[t]) u = "short and medium-haul airline passenger flights";
+    else if (BIZ_TYPES[t]) u = "business travel, charter flights and air ambulance work";
+    else if (UTILITY_TYPES[t]) u = "charter and scenic flights, skydiving, freight and flights into small airstrips";
+    else if (TRAINER_TYPES[t]) u = "pilot training and private flying";
+    else if (SMALL_TYPES[t] || f.type || f.desc) u = "private and recreational flying, flight training and small charters";
+    return u ? { mine: 0, text: u.charAt(0).toUpperCase() + u.slice(1) } : null;
+  }
+  function useHtml(f, owner, co) {
+    var u = usedFor(f, owner, co);
+    if (!u) return "";
+    return '<div class="use"><b>' + (u.mine ? "Used for: " : "Mainly used for: ") + "</b>" + esc(u.text) +
+      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>";
+  }
   function drawInfoPage(f) {
     var a = f.raw || {}, x = extraInfo[f.hex] || {}, rows = [];
     function sec(t) { rows.push("<h3>" + esc(t) + "</h3><table>"); }
@@ -2612,7 +2678,8 @@ body.infoup main{visibility:hidden}
 
     var ph = photoFor(f), art = f.type && TYPES[f.type] ? TYPES[f.type][1] : typeName(f), w = wikiSum[art];
     var left = (ph ? '<img class="ipic" alt="" referrerpolicy="no-referrer" src="' + esc(ph.src) + '">' : "") +
-      '<div class="wiki">' + (w && w.text ? esc(w.text) + "<small>From Wikipedia: " + esc(w.title) + "</small>" : w === undefined || w === "pending" ? "Looking up this type…" : "") + "</div>";
+      '<div class="wiki">' + (w && w.text ? esc(w.text) + "<small>From Wikipedia: " + esc(w.title) + "</small>" : w === undefined || w === "pending" ? "Looking up this type…" : "") + "</div>" +
+      useHtml(f, f.owner || x.owner || a.ownOp || "", co);
     $("infocs").textContent = f.callsign;
     $("infosub").textContent = [typeName(f), f.reg, f.country].filter(Boolean).join(" · ");
     // Each half is only rebuilt when its own text changed, so the photo isn't reloaded every poll,
