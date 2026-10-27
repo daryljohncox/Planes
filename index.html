@@ -347,6 +347,29 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 #hear{flex:0 0 auto;align-self:center;width:6vh;height:6vh;border:0;border-radius:1vh;background:#1d2632;color:var(--acc);cursor:pointer;display:flex;align-items:center;justify-content:center}
 #hear:active{background:#2a3646}
 #hear svg{width:3.8vh;height:3.8vh}
+/* "i" button 1 cm under the speaker: opens the full aircraft info page */
+#info{position:relative}
+#info .rte,#info .hist,#info .csn,#info .aps{padding-right:7vh}
+#infobtn{position:absolute;right:1.8vh;top:calc(7.4vh + 1cm);z-index:2;width:6vh;height:6vh;border:0;border-radius:1vh;background:#1d2632;color:var(--acc);
+  cursor:pointer;font:italic 700 4.2vh Georgia,"Times New Roman",serif;line-height:6vh;text-align:center;padding:0}
+#infobtn:active{background:#2a3646}
+#infopage{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);color:var(--txt)}
+#infopage[hidden]{display:none}
+#infopage .ih{flex:0 0 auto;display:flex;align-items:center;gap:1.6vh;padding:1.2vh 1.8vh;border-bottom:1px solid #1d2632}
+#infopage .ih b{font-size:4.4vh;font-weight:800;letter-spacing:.03em}
+#infopage .ih span{flex:1;min-width:0;font-size:2.4vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#infopage .ih button{flex:0 0 auto;border:0;background:#1d2632;color:#fff;font-size:3vh;width:7vh;height:7vh;border-radius:1vh;cursor:pointer}
+#infobody{flex:1;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:1.6vh 1.8vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:2vh;align-content:start}
+#infobody .ipic{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:1vh;background:#05080c;display:block}
+#infobody .wiki{font-size:2.3vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh}
+#infobody .wiki small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
+#infobody h3{font-size:2vh;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;margin:1.6vh 0 .6vh}
+#infobody h3:first-child{margin-top:0}
+#infobody table{width:100%;border-collapse:collapse;font-size:2.3vh}
+#infobody td{padding:.5vh .8vh;border-bottom:1px solid #1d2632;vertical-align:top}
+#infobody td:first-child{color:var(--dim);width:40%}
+#infobody .links a{display:inline-block;margin:0 1vh 1vh 0;padding:.8vh 1.4vh;border-radius:1vh;background:#1d2632;color:#9fd8ff;text-decoration:none;font-size:2.2vh}
+@media (max-aspect-ratio:1/1){#infobody{grid-template-columns:minmax(0,1fr)}}
 /* space station */
 .iss{position:relative;width:34px;height:34px;filter:drop-shadow(0 0 2px #000)}
 .iss svg{width:34px;height:34px}
@@ -431,6 +454,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     </div>
     <div class="info" id="info">
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div><button id="hear" type="button" aria-label="Read out"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button></div>
+      <button id="infobtn" type="button" aria-label="All about this aircraft">i</button>
       <div class="ty" id="ty">&nbsp;</div>
       <div class="rte" id="rte"></div>
       <div class="hist" id="hist"></div>
@@ -447,6 +471,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     <div class="empty" id="empty"></div>
   </section>
 </main>
+<div id="infopage" hidden>
+  <div class="ih"><b id="infocs"></b><span id="infosub"></span><button id="infoclose" type="button" aria-label="Close">✕</button></div>
+  <div id="infobody"></div>
+</div>
 
 <script>
 (function () {
@@ -1936,7 +1964,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
             dist: distKm(pLat, pLon, a.lat, a.lon),
             brg: bearing(pLat, pLon, a.lat, a.lon),
             homeDist: distKm(LAT, LON, a.lat, a.lon),
-            homeBrg: bearing(LAT, LON, a.lat, a.lon)
+            homeBrg: bearing(LAT, LON, a.lat, a.lon),
+            raw: a
           };
         }).sort(function (x, y) { return x.dist - y.dist; });
         recordTrails(aircraft);
@@ -1982,6 +2011,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     // pre-load photos for the nearest few so a tap shows one straight away
     aircraft.slice(0, PREFETCH_N).forEach(function (a) { photoFor(a, true); });
 
+    if (!f) $("infopage").hidden = true;
+    else if (!$("infopage").hidden) drawInfoPage(f);
     if (!f) {
       $("detail").style.display = "none";
       if (!aircraft.length) {
@@ -2508,6 +2539,105 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     e.stopPropagation(); unlockAudio();
     if (selLast) sayPlane(selLast, { urgent: true });
   });
+
+  // ---------- "i" page: everything we know about the selected aircraft ----------
+  var wikiSum = {}, extraInfo = {};   // article -> {text, url} | null ; hex -> /api/aircraft answer | null
+  function fmtN(n, d) { return n == null || isNaN(n) ? "" : Number(n).toLocaleString("en-NZ", { maximumFractionDigits: d || 0 }); }
+  function drawInfoPage(f) {
+    var a = f.raw || {}, x = extraInfo[f.hex] || {}, rows = [];
+    function sec(t) { rows.push("<h3>" + esc(t) + "</h3><table>"); }
+    function row(k, v) { if (v !== "" && v != null) rows.push("<tr><td>" + esc(k) + "</td><td>" + esc(v) + "</td></tr>"); }
+    function end() { rows.push("</table>"); }
+    var co = csOp((f.flight || "").toUpperCase());
+    sec("Identity");
+    row("Callsign", f.callsign);
+    row("Registration", f.reg || x.r || "");
+    row("Mode S code", (f.hex || "").toUpperCase());
+    row("Type", typeName(f) + (f.type ? " (" + f.type + ")" : ""));
+    row("Model", a.desc || x.desc ? titleCase(a.desc || x.desc) : "");
+    row("Owner", f.owner || x.owner || a.ownOp || "");
+    row("Built", a.year || "");
+    row("Operator", co ? co.name + " · " + co.op : "");
+    row("Registered in", f.country);
+    var kr = KEY.filter(function (k) { return k[0] === f.cat; })[0];
+    row("Kind", (kr ? kr[3] : "Private") + (f.heli && !/heli/i.test(kr ? kr[3] : "") ? " helicopter" : ""));
+    var flags = [];
+    if (a.dbFlags & 1) flags.push("military");
+    if (a.dbFlags & 2) flags.push("interesting");
+    if (a.dbFlags & 4) flags.push("privacy address (PIA)");
+    if (a.dbFlags & 8) flags.push("owner asked not to be tracked (LADD)");
+    row("Database flags", flags.join(", "));
+    row("Size class", a.category ? a.category + " · " + ({ A1: "light (under 7 t)", A2: "small (7–34 t)", A3: "large (34–136 t)", A4: "Boeing 757 size", A5: "heavy (over 136 t)", A6: "high performance", A7: "helicopter", B1: "glider", B2: "balloon / airship", B4: "microlight", B6: "drone", C1: "emergency vehicle", C2: "ground vehicle" }[a.category] || "") : "");
+    end();
+    sec("Right now");
+    row("Altitude", f.alt === "ground" ? "On the ground" : f.alt == null ? "" : fmtN(metres(f.alt)) + " m (" + fmtN(f.alt) + " ft)");
+    row("GPS altitude", a.alt_geom != null ? fmtN(metres(a.alt_geom)) + " m (" + fmtN(a.alt_geom) + " ft)" : "");
+    row("Climbing", f.vr ? (f.vr > 0 ? "Up " : "Down ") + fmtN(Math.abs(f.vr) * 0.3048 / 60, 1) + " m/s (" + fmtN(Math.abs(f.vr)) + " ft/min)" : "Level");
+    row("Ground speed", f.gs != null ? fmtN(f.gs * 1.852) + " km/h (" + fmtN(f.gs) + " knots)" : "");
+    row("Air speed", a.tas != null ? fmtN(a.tas * 1.852) + " km/h true" + (a.ias != null ? ", " + fmtN(a.ias * 1.852) + " km/h indicated" : "") : "");
+    row("Mach", a.mach != null ? fmtN(a.mach, 2) : "");
+    row("Track", f.track != null ? Math.round(f.track) + "° " + compass(f.track) : "");
+    row("Nose pointing", a.true_heading != null ? Math.round(a.true_heading) + "° true" : a.mag_heading != null ? Math.round(a.mag_heading) + "° magnetic" : "");
+    row("Banking", a.roll != null ? fmtN(Math.abs(a.roll), 1) + "° " + (a.roll > 0 ? "right" : a.roll < 0 ? "left" : "") : "");
+    row("Autopilot set to", [a.nav_altitude_mcp != null ? fmtN(metres(a.nav_altitude_mcp)) + " m (" + fmtN(a.nav_altitude_mcp) + " ft)" : "", a.nav_heading != null ? Math.round(a.nav_heading) + "°" : "", (a.nav_modes || []).join(" ")].filter(Boolean).join(" · "));
+    row("Pressure setting", a.nav_qnh != null ? fmtN(a.nav_qnh, 1) + " hPa" : "");
+    row("Wind up there", a.ws != null ? fmtN(a.ws * 1.852) + " km/h from " + Math.round(a.wd || 0) + "° " + compass(a.wd || 0) : "");
+    row("Outside air", a.oat != null ? a.oat + " °C" : "");
+    row("Squawk", f.sq ? f.sq + ({ "7500": " (hijack)", "7600": " (radio failure)", "7700": " (emergency)", "1200": " (VFR)", "2000": "" }[f.sq] || "") : "");
+    row("Emergency", f.emg);
+    row("From " + PLACE, f.homeDist.toFixed(1) + " km " + compass(f.homeBrg) + " (" + Math.round(f.homeBrg) + "°)");
+    row("Position", f.lat.toFixed(4) + ", " + f.lon.toFixed(4));
+    end();
+    sec("Flight");
+    row("Route", $("rte").textContent.trim());
+    row("History", $("hist").textContent.trim());
+    row("Airline code", $("csn").textContent.trim());
+    row("Airport", $("aps").textContent.trim());
+    end();
+    sec("Signal");
+    row("Picked up by", { adsb_icao: "ADS-B (its own GPS)", adsb_icao_nt: "ADS-B (non-transponder)", adsr_icao: "ADS-R relay", tisb_icao: "TIS-B (radar relay)", mlat: "MLAT (worked out by receivers)", mode_s: "Mode S only", adsc: "ADS-C satellite", other: "other" }[a.type] || a.type || "");
+    row("Signal strength", a.rssi != null ? fmtN(a.rssi, 1) + " dBFS" : "");
+    row("Messages heard", fmtN(a.messages));
+    row("Last heard", a.seen != null ? fmtN(a.seen, 1) + " s ago" : "");
+    row("Position accuracy", a.nac_p != null ? "NACp " + a.nac_p + (a.nac_p >= 8 ? " (within 93 m)" : a.nac_p >= 6 ? " (within 1 km)" : "") : "");
+    row("ADS-B version", a.version != null ? a.version : "");
+    end();
+    var links = [["Flightradar24", "https://www.flightradar24.com/" + encodeURIComponent(f.flight || f.reg || "")],
+      ["ADS-B Exchange", "https://globe.adsbexchange.com/?icao=" + f.hex],
+      ["adsb.lol", "https://adsb.lol/?icao=" + f.hex]];
+    if (f.reg) links.push(["Planespotters", "https://www.planespotters.net/search?q=" + encodeURIComponent(f.reg)]);
+    rows.push('<h3>More online</h3><div class="links">' + links.map(function (l) { return '<a href="' + esc(l[1]) + '" target="_blank" rel="noopener">' + esc(l[0]) + "</a>"; }).join("") + "</div>");
+
+    var ph = photoFor(f), art = f.type && TYPES[f.type] ? TYPES[f.type][1] : typeName(f), w = wikiSum[art];
+    var left = (ph ? '<img class="ipic" alt="" referrerpolicy="no-referrer" src="' + esc(ph.src) + '">' : "") +
+      '<div class="wiki">' + (w && w.text ? esc(w.text) + "<small>From Wikipedia: " + esc(w.title) + "</small>" : w === undefined || w === "pending" ? "Looking up this type…" : "") + "</div>";
+    $("infocs").textContent = f.callsign;
+    $("infosub").textContent = [typeName(f), f.reg, f.country].filter(Boolean).join(" · ");
+    var html = "<div>" + left + "</div><div>" + rows.join("") + "</div>";
+    if ($("infobody")._html !== html) { $("infobody")._html = html; var t = $("infobody").scrollTop; $("infobody").innerHTML = html; $("infobody").scrollTop = t; }
+
+    if (w === undefined && art && !/^Unknown|helicopter$|ambulance$/i.test(art)) {
+      wikiSum[art] = "pending";
+      getJSON("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(art.replace(/ /g, "_")))
+        .then(function (j) { wikiSum[art] = j && j.extract && j.type !== "disambiguation" ? { text: j.extract, title: j.title } : null; })
+        .catch(function () { wikiSum[art] = null; })
+        .then(function () { if (selLast && !$("infopage").hidden) drawInfoPage(selLast); });
+    } else if (w === undefined) wikiSum[art] = null;
+    if (extraInfo[f.hex] === undefined && /^[0-9a-f]{6}$/i.test(f.hex || "")) {
+      extraInfo[f.hex] = null;
+      getJSON((P.get("feed") || "/api/feed").replace(/feed$/, "aircraft") + "?hex=" + f.hex + "&reg=" + encodeURIComponent(f.reg || ""))
+        .then(function (j) { extraInfo[f.hex] = (j && j.ac) || null; if (selLast && selLast.hex === f.hex && !$("infopage").hidden) drawInfoPage(selLast); })
+        .catch(function () { /* nothing extra */ });
+    }
+  }
+  $("infobtn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (!selLast) return;
+    $("infopage").hidden = false;
+    $("infobody").scrollTop = 0;
+    drawInfoPage(selLast);
+  });
+  $("infoclose").addEventListener("click", function () { $("infopage").hidden = true; });
 
   // ---------- pop-up card ----------
   var cardT = null, cardHex = null;
