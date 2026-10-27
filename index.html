@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Planes Nearby</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg">
+<meta name="theme-color" content="#0d1117">
 <!--
   Live aircraft map for a Google Nest Hub (2nd gen, 1024x600).
   Data: adsb.lol (aircraft), Planespotters.net (actual photos), Wikipedia (generic type photos),
@@ -215,6 +218,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .eye{border:0;background:none;color:var(--dim);padding:0 .4vh;margin:-.6vh 0;cursor:pointer;line-height:0}
 .eye svg{width:3.2vh;height:3.2vh}
 .eye.on{color:#ffd23f;filter:drop-shadow(0 0 3px #ffd23f)}
+.eye.off{color:#ff6b6b}
 .grp b,.grp>span{flex:1}
 .grp>span{justify-content:flex-end}
 .fold{flex:0 0 auto;border:0;border-radius:.8vh;background:#1c2633;color:var(--txt);padding:0 1.6vh;margin:-.6vh 1vh;cursor:pointer;line-height:0}
@@ -1055,6 +1059,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     aircraft.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
+      if (mapOff[listGroup(a)] && !on) return;                 // eyes crossed out: those groups are hidden
       seen[a.hex] = true;
       var ic = iconFor(a, on);
       var m = markers[a.hex];
@@ -1074,8 +1079,12 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     });
     // reminder that the map is filtered; tapping it shows everything again
     var og = LIST_GROUPS.filter(function (g) { return mapOnly[g[0]]; }).map(function (g) { return g[1]; });
-    $("onlytag").hidden = !og.length;
-    if (og.length) $("onlytag").textContent = "Only " + (og.length > 3 ? og.length + " types" : og.join(", ")) + " showing · tap for all";
+    var hg = LIST_GROUPS.filter(function (g) { return mapOff[g[0]]; }).map(function (g) { return g[1]; });
+    var bits = [];
+    if (og.length) bits.push("Only " + (og.length > 3 ? og.length + " types" : og.join(", ")) + " showing");
+    if (hg.length) bits.push((hg.length > 3 ? hg.length + " types" : hg.join(", ")) + " hidden");
+    $("onlytag").hidden = !bits.length;
+    if (bits.length) $("onlytag").textContent = bits.join(" · ") + " · tap for all";
   }
 
   // ---------- airports (OurAirports data in airports.json) ----------
@@ -2061,8 +2070,14 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   var mapOnly = {};
   try { (sessionStorage.getItem("planes.only") || "").split(",").forEach(function (g) { if (g) mapOnly[g] = 1; }); } catch (e) { /* none */ }
   function onlyOn() { return Object.keys(mapOnly).length > 0; }
+  // Eye tapped once = crossed out, that group is hidden from the map; twice = lit (only those show); three times = back to normal
+  var mapOff = {};
+  try { (sessionStorage.getItem("planes.mapoff") || "").split(",").forEach(function (g) { if (g) mapOff[g] = 1; }); } catch (e) { /* none */ }
   var FOLD_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.6 8.3 12 15.7l7.4-7.4 1.8 1.8L12 19.3 2.8 10.1z"/></svg>';
-  var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C6.5 5 2.7 9.3 1.5 12c1.2 2.7 5 7 10.5 7s9.3-4.3 10.5-7C21.3 9.3 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
+  var EYE_PATH = '<path d="M12 5C6.5 5 2.7 9.3 1.5 12c1.2 2.7 5 7 10.5 7s9.3-4.3 10.5-7C21.3 9.3 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>';
+  var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor">' + EYE_PATH + '</svg>';
+  var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="currentColor">' + EYE_PATH +
+    '<path d="M3 3 21 21" stroke="var(--panel)" stroke-width="4.5"/><path d="M3 3 21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
   function renderList() {
     if (listTouch || listScrollT) { listPending = true; return; }
     listPending = false;
@@ -2070,12 +2085,12 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     $("sortbtn").textContent = by[0] + " first · tap to sort";
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
-      if (!inGroup.length && !mapOnly[g[0]]) return "";   // a group with its eye lit keeps its header (to switch it off)
+      if (!inGroup.length && !mapOnly[g[0]] && !mapOff[g[0]]) return "";   // a group with its eye lit or crossed keeps its header (to switch it back)
       var shut = !!listHidden[g[0]];
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + g[1] + '</b><button type="button" class="fold" aria-label="' + (shut ? "Show" : "Hide") +
         ' these in the list">' + FOLD_SVG + "</button><span>" +
-        (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly[g[0]] ? " on" : "") +
-        '" aria-label="Show only these on the map">' + EYE_SVG + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
+        (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly[g[0]] ? " on" : mapOff[g[0]] ? " off" : "") +
+        '" aria-label="Hide these, show only these, or show all on the map">' + (mapOff[g[0]] ? EYE_OFF_SVG : EYE_SVG) + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
     }).join("");
     if (html === listHtml) return;
     listHtml = html;
@@ -2117,7 +2132,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     if (grp && e.target.closest(".eye")) {
       var og = grp.getAttribute("data-g");
       listTouch = false; clearTimeout(listScrollT); listScrollT = null;
-      toggleOnly(og);
+      cycleEye(og);
       return;
     }
     if (grp) {
@@ -2146,13 +2161,20 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   }
   $("prevp").addEventListener("click", function () { stepPlane(-1); });
   $("nextp").addEventListener("click", function () { stepPlane(1); });
-  $("onlytag").addEventListener("click", function () { mapOnly = {}; saveOnly(); });
+  $("onlytag").addEventListener("click", function () { mapOnly = {}; mapOff = {}; saveOnly(); });
   function toggleOnly(g) {
-    if (mapOnly[g]) delete mapOnly[g]; else mapOnly[g] = 1;
+    if (mapOnly[g]) delete mapOnly[g]; else { mapOnly[g] = 1; delete mapOff[g]; }
+    saveOnly();
+  }
+  function cycleEye(g) {
+    if (mapOnly[g]) delete mapOnly[g];
+    else if (mapOff[g]) { delete mapOff[g]; mapOnly[g] = 1; }
+    else mapOff[g] = 1;
     saveOnly();
   }
   function saveOnly() {
     try { sessionStorage.setItem("planes.only", Object.keys(mapOnly).join(",")); } catch (e) { /* not saved */ }
+    try { sessionStorage.setItem("planes.mapoff", Object.keys(mapOff).join(",")); } catch (e) { /* not saved */ }
     render();
   }
 
@@ -2299,6 +2321,16 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   }
   document.addEventListener("pointerdown", unlockAudio, true);
   document.addEventListener("touchstart", unlockAudio, true);
+  // Phone held upright: the first tap goes full screen and turns the page sideways (even with rotation locked)
+  function goLandscape() {
+    if (window.innerHeight <= window.innerWidth || document.fullscreenElement) return;
+    var el = document.documentElement;
+    if (!el.requestFullscreen) return;
+    el.requestFullscreen({ navigationUI: "hide" }).then(function () {
+      if (screen.orientation && screen.orientation.lock) return screen.orientation.lock("landscape");
+    }).catch(function () { /* not allowed here */ });
+  }
+  document.addEventListener("click", goLandscape, true);
   // kind: "ding" (normal), "rare" (rising three notes), "alarm" (emergency), "space"
   var CHIMES = {
     ding: [[880, 0, .45], [698.5, .42, .7]],
