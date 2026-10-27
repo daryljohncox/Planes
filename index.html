@@ -1023,15 +1023,15 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       '</svg></span><span><b>' + k[3] + "</b>" + (k[4] ? "<small>" + k[4] + "</small>" : "") + "</span></div>";
   }).join("");
   function toggleKey(show) { $("key").hidden = !show; if (show) markKey(); }
-  // Tap a colour in the key: only that type on the map (same as the eye in the list); tap again for all
+  // Tap a colour in the key: adds / removes that type from the map filter (same as the eye in the list)
   function markKey() {
-    Array.prototype.forEach.call($("keyrows").querySelectorAll(".kpick"), function (r) { r.classList.toggle("on", r.getAttribute("data-g") === mapOnly); });
+    Array.prototype.forEach.call($("keyrows").querySelectorAll(".kpick"), function (r) { r.classList.toggle("on", !!mapOnly[r.getAttribute("data-g")]); });
   }
   $("keyrows").addEventListener("click", function (e) {
     var r = e.target.closest ? e.target.closest(".kpick") : null;
     if (!r) return;
     var g = r.getAttribute("data-g");
-    setMapOnly(mapOnly === g ? "" : g);
+    toggleOnly(g);
     toggleKey(false);
   });
   ["keybtn", "keyclose", "key"].forEach(function (id) {
@@ -1054,7 +1054,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     var seen = {};
     aircraft.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
-      if (mapOnly && !on && listGroup(a) !== mapOnly) return;   // eye on a list header: only that group shows
+      if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
       seen[a.hex] = true;
       var ic = iconFor(a, on);
       var m = markers[a.hex];
@@ -1073,9 +1073,9 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
     });
     // reminder that the map is filtered; tapping it shows everything again
-    var og = mapOnly && LIST_GROUPS.filter(function (g) { return g[0] === mapOnly; })[0];
-    $("onlytag").hidden = !og;
-    if (og) $("onlytag").textContent = "Only " + og[1] + " showing · tap for all";
+    var og = LIST_GROUPS.filter(function (g) { return mapOnly[g[0]]; }).map(function (g) { return g[1]; });
+    $("onlytag").hidden = !og.length;
+    if (og.length) $("onlytag").textContent = "Only " + (og.length > 3 ? og.length + " types" : og.join(", ")) + " showing · tap for all";
   }
 
   // ---------- airports (OurAirports data in airports.json) ----------
@@ -2057,9 +2057,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   try { listSort = localStorage.getItem("planes.sort") || "near"; } catch (e) { /* none */ }
   var listHidden = {};
   try { listHidden = JSON.parse(sessionStorage.getItem("planes.hidden") || "{}") || {}; } catch (e) { /* none */ }
-  // The eye on a header shows only that group on the map (tap again for all); also kept through the hourly reload
-  var mapOnly = "";
-  try { mapOnly = sessionStorage.getItem("planes.only") || ""; } catch (e) { /* none */ }
+  // Eyes on the headers: with any lit, the map shows only those groups (tap again to drop one); kept through the hourly reload
+  var mapOnly = {};
+  try { (sessionStorage.getItem("planes.only") || "").split(",").forEach(function (g) { if (g) mapOnly[g] = 1; }); } catch (e) { /* none */ }
+  function onlyOn() { return Object.keys(mapOnly).length > 0; }
   var FOLD_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.6 8.3 12 15.7l7.4-7.4 1.8 1.8L12 19.3 2.8 10.1z"/></svg>';
   var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C6.5 5 2.7 9.3 1.5 12c1.2 2.7 5 7 10.5 7s9.3-4.3 10.5-7C21.3 9.3 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
   function renderList() {
@@ -2069,11 +2070,11 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     $("sortbtn").textContent = by[0] + " first · tap to sort";
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
-      if (!inGroup.length && mapOnly !== g[0]) return "";   // the group shown alone on the map keeps its header (to switch it off)
+      if (!inGroup.length && !mapOnly[g[0]]) return "";   // a group with its eye lit keeps its header (to switch it off)
       var shut = !!listHidden[g[0]];
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + g[1] + '</b><button type="button" class="fold" aria-label="' + (shut ? "Show" : "Hide") +
         ' these in the list">' + FOLD_SVG + "</button><span>" +
-        (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly === g[0] ? " on" : "") +
+        (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly[g[0]] ? " on" : "") +
         '" aria-label="Show only these on the map">' + EYE_SVG + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
     }).join("");
     if (html === listHtml) return;
@@ -2116,7 +2117,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     if (grp && e.target.closest(".eye")) {
       var og = grp.getAttribute("data-g");
       listTouch = false; clearTimeout(listScrollT); listScrollT = null;
-      setMapOnly(mapOnly === og ? "" : og);
+      toggleOnly(og);
       return;
     }
     if (grp) {
@@ -2145,10 +2146,13 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
   }
   $("prevp").addEventListener("click", function () { stepPlane(-1); });
   $("nextp").addEventListener("click", function () { stepPlane(1); });
-  $("onlytag").addEventListener("click", function () { setMapOnly(""); });
-  function setMapOnly(g) {
-    mapOnly = g;
-    try { sessionStorage.setItem("planes.only", g); } catch (e) { /* not saved */ }
+  $("onlytag").addEventListener("click", function () { mapOnly = {}; saveOnly(); });
+  function toggleOnly(g) {
+    if (mapOnly[g]) delete mapOnly[g]; else mapOnly[g] = 1;
+    saveOnly();
+  }
+  function saveOnly() {
+    try { sessionStorage.setItem("planes.only", Object.keys(mapOnly).join(",")); } catch (e) { /* not saved */ }
     render();
   }
 
