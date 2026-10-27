@@ -9,7 +9,7 @@ const UA = { "User-Agent": "Mozilla/5.0 (nest-hub-planes)" };
 const AIR = /\b(planes?|aircraft|airliners?|helicopters?|choppers?|microlights?|gyrocopters?|gliders?|pilots?|flights?|jets?|cessna|seaplanes?|float ?planes?|air new zealand|jetstar|air nz|skydiv\w*|paraglid\w*|hot air balloons?|aero club)\b/i;
 const TROUBLE = /\b(crash\w*|emergenc\w*|forced landing|force-landed|mayday|ditch\w*|engine (failure|fail\w*|trouble)|propeller|prop broke|turned back|turns back|diverted|incident|bird ?strike|smoke|on fire|caught fire|missing|search for|rescued?|wreckage|crash-land\w*|hard landing|skid\w*|overran|went down|came down|plunged|taic|investigat\w*|safety scare|scare|mid-air|near miss|collid\w*)\b/i;
 // Not about an actual aircraft in trouble
-const NOT = /\b(drones?|flight (prices|deals|sale)|fares?|airfares?|strike action|price|share price|profit|loss|results|game|esports|video game|simulator|movie|film|review)\b/i;
+const NOT = /\b(arrest\w*|police (helicopter|eagle)|eagle helicopter|fleeing|offenders?|drones?|flight (prices|deals|sale)|fares?|airfares?|strike action|price|share price|profit|loss|results|game|esports|video game|simulator|movie|film|review)\b/i;
 
 const NZ_NEWS = [
   { src: "Google News", url: "https://news.google.com/rss/search?q=" + encodeURIComponent('(plane OR aircraft OR helicopter OR pilot OR microlight OR glider) (crash OR "emergency landing" OR "forced landing" OR mayday OR "engine failure" OR emergency OR incident) when:30d') + "&hl=en-NZ&gl=NZ&ceid=NZ:en", google: true },
