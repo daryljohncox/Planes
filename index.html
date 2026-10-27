@@ -3553,6 +3553,34 @@ body.infoup main{visibility:hidden}
       })
       .catch(function () { /* try again next time */ });
   }
+  // ---------- NZ-wide emergency watch: any plane squawking 7700 / 7600 / 7500 anywhere around NZ ----------
+  // The map's own feed only covers what's on screen, so this looks NZ-wide every 15 s. A plane the map can already
+  // see is left to voiceCheck; one further away gets the alarm, is announced from its nearest town, and the map
+  // jumps to it (unless you're already following a plane).
+  var EMG_WATCH_MS = 15000;
+  function emgWatch() {
+    fetch(FEED + "?sqk=1", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var now = Date.now();
+        (j.ac || []).filter(function (x) {
+          return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 120) && EMERG_SQUAWK[x.squawk];
+        }).map(withInfo).forEach(function (x) {
+          if (latest(x.hex, null)) return;
+          var seen = emgSeen[x.hex];
+          emgSeen[x.hex] = now;
+          if (seen && now - seen < ZONE_QUIET_MS) return;
+          var a = bgPlane(x, { lat: LAT, lon: LON });
+          if (VOICE.on) sayPlane(a, { chime: "alarm", urgent: true, kind: "emg", tag: "Emergency", prefix: "Emergency! ", body: function (b) {
+            var t = nearestTown(b.lat, b.lon), d = t ? distKm(t.lat, t.lon, b.lat, b.lon) : 0;
+            var where = !t ? whereNow(b) : d < 1.5 ? "over " + t.name : plainNum(d) + " kilometres " + dir8(bearing(t.lat, t.lon, b.lat, b.lon)) + " of " + t.name;
+            return [whoSays(b) + ", " + emgMeaning(b.sq, b.emg).replace(/ \(.*\)/, "").toLowerCase(), where, heightSpeed(b)].filter(Boolean).join(", ") + ".";
+          } });
+          if (!selHex) trackPlane(a.hex, a.lat, a.lon);
+        });
+      })
+      .catch(function () { /* try again next time */ });
+  }
   // ---------- Antarctic arrivals: look for an Antarctic flight again once it's out of range of NZ ----------
   // Most of the way down there are no receivers, so the plane drops off the feeds. Every 2 minutes for 10 hours,
   // look it up by hex anywhere in the world: if a receiver near the bases (or a satellite feed) picks it up,
@@ -3734,6 +3762,8 @@ body.infoup main{visibility:hidden}
   setInterval(southCheck, SOUTH_MS);
   setTimeout(resumeIce, 2000);
   setTimeout(milCheck, 9000);
+  setTimeout(emgWatch, 5000);
+  setInterval(emgWatch, EMG_WATCH_MS);
   setInterval(milCheck, MIL_MS);
   setTimeout(iceWatch, 15000);
   setInterval(iceWatch, ICE_WATCH_MS);

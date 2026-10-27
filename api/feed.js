@@ -62,6 +62,40 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ac: clean(ac), tried });
   }
 
+  // ?sqk=1: every plane squawking 7700 / 7600 / 7500 around New Zealand, from all three feeds put together,
+  // so the emergency alarm goes off wherever the map is looking
+  if (req.query.sqk) {
+    const lists = [];
+    ["7700", "7600", "7500"].forEach((c) => lists.push(
+      { url: `https://api.adsb.lol/v2/sqk/${c}`, list: "ac" },
+      { url: `https://opendata.adsb.fi/api/v2/sqk/${c}`, list: "aircraft" },
+      { url: `https://api.airplanes.live/v2/squawk/${c}`, list: "ac" }
+    ));
+    const seen = {}, ac = [];
+    await Promise.all(lists.map(async (s) => {
+      const host = new URL(s.url).host;
+      try {
+        const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(6000) });
+        tried.push(host + " " + up.status);
+        if (!up.ok) return;
+        const data = await up.json();
+        (data[s.list] || []).forEach((x) => {
+          // NZ and the sea around it (Kermadecs down to the Auckland Islands, Tasman to the Chathams)
+          if (typeof x.lat !== "number" || x.lat > -28 || x.lat < -53 || (x.lon < 160 && x.lon > -174) || !x.hex) return;
+          const old = seen[x.hex];
+          if (old && (old.seen_pos == null || (x.seen_pos != null && x.seen_pos >= old.seen_pos))) return;   // keep the freshest
+          if (old) ac.splice(ac.indexOf(old), 1);
+          seen[x.hex] = x; ac.push(x);
+        });
+      } catch (e) {
+        tried.push(host + " error");
+      }
+    }));
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "s-maxage=10, stale-while-revalidate=10");
+    return res.status(200).json({ ac: clean(ac), tried });
+  }
+
   for (const s of sources) {
     try {
       const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" } });
