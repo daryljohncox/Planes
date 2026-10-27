@@ -355,11 +355,13 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 #infobtn:active{background:#2a3646}
 #infopage{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);color:var(--txt)}
 #infopage[hidden]{display:none}
+/* while the info page is up, stop drawing the map and list underneath so its scrolling stays smooth */
+body.infoup main{visibility:hidden}
 #infopage .ih{flex:0 0 auto;display:flex;align-items:center;gap:1.6vh;padding:1.2vh 1.8vh;border-bottom:1px solid #1d2632}
 #infopage .ih b{font-size:4.4vh;font-weight:800;letter-spacing:.03em}
 #infopage .ih span{flex:1;min-width:0;font-size:2.4vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #infopage .ih button{flex:0 0 auto;border:0;background:#1d2632;color:#fff;font-size:3vh;width:7vh;height:7vh;border-radius:1vh;cursor:pointer}
-#infobody{flex:1;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:1.6vh 1.8vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:2vh;align-content:start}
+#infobody{flex:1;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:1.6vh 1.8vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:2vh;align-content:start;overscroll-behavior:contain;will-change:scroll-position}
 #infobody .ipic{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:1vh;background:#05080c;display:block}
 #infobody .wiki{font-size:2.3vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh}
 #infobody .wiki small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
@@ -473,7 +475,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 </main>
 <div id="infopage" hidden>
   <div class="ih"><b id="infocs"></b><span id="infosub"></span><button id="infoclose" type="button" aria-label="Close">✕</button></div>
-  <div id="infobody"></div>
+  <div id="infobody"><div id="infoleft"></div><div id="inforight"></div></div>
 </div>
 
 <script>
@@ -2011,7 +2013,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
     // pre-load photos for the nearest few so a tap shows one straight away
     aircraft.slice(0, PREFETCH_N).forEach(function (a) { photoFor(a, true); });
 
-    if (!f) $("infopage").hidden = true;
+    if (!f) closeInfo();
     else if (!$("infopage").hidden) drawInfoPage(f);
     if (!f) {
       $("detail").style.display = "none";
@@ -2613,8 +2615,14 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
       '<div class="wiki">' + (w && w.text ? esc(w.text) + "<small>From Wikipedia: " + esc(w.title) + "</small>" : w === undefined || w === "pending" ? "Looking up this type…" : "") + "</div>";
     $("infocs").textContent = f.callsign;
     $("infosub").textContent = [typeName(f), f.reg, f.country].filter(Boolean).join(" · ");
-    var html = "<div>" + left + "</div><div>" + rows.join("") + "</div>";
-    if ($("infobody")._html !== html) { $("infobody")._html = html; var t = $("infobody").scrollTop; $("infobody").innerHTML = html; $("infobody").scrollTop = t; }
+    // Each half is only rebuilt when its own text changed, so the photo isn't reloaded every poll,
+    // and nothing is rebuilt while a finger is on the page or it is still gliding (like the list).
+    if (infoTouch || infoScrollT) infoPending = true;
+    else {
+      infoPending = false;
+      setHtml($("infoleft"), left);
+      setHtml($("inforight"), rows.join(""));
+    }
 
     if (w === undefined && art && !/^Unknown|helicopter$|ambulance$/i.test(art)) {
       wikiSum[art] = "pending";
@@ -2630,14 +2638,27 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
         .catch(function () { /* nothing extra */ });
     }
   }
+  var infoTouch = false, infoScrollT = null, infoPending = false;
+  function setHtml(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
+  function infoSettled() {
+    clearTimeout(infoScrollT);
+    infoScrollT = setTimeout(function () { infoScrollT = null; if (infoPending && !infoTouch && selLast && !$("infopage").hidden) drawInfoPage(selLast); }, 700);
+  }
+  $("infobody").addEventListener("touchstart", function () { infoTouch = true; }, { passive: true });
+  $("infobody").addEventListener("touchend", function () { infoTouch = false; infoSettled(); }, { passive: true });
+  $("infobody").addEventListener("touchcancel", function () { infoTouch = false; infoSettled(); }, { passive: true });
+  $("infobody").addEventListener("scroll", infoSettled, { passive: true });
   $("infobtn").addEventListener("click", function (e) {
     e.stopPropagation();
     if (!selLast) return;
     $("infopage").hidden = false;
-    $("infobody").scrollTop = 0;
+    document.body.classList.add("infoup");
+    infoTouch = false; clearTimeout(infoScrollT); infoScrollT = null;
     drawInfoPage(selLast);
+    $("infobody").scrollTop = 0;
   });
-  $("infoclose").addEventListener("click", function () { $("infopage").hidden = true; });
+  $("infoclose").addEventListener("click", closeInfo);
+  function closeInfo() { $("infopage").hidden = true; document.body.classList.remove("infoup"); }
 
   // ---------- pop-up card ----------
   var cardT = null, cardHex = null;
