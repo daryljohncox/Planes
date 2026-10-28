@@ -522,7 +522,7 @@ body.infoup main{visibility:hidden}
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
   var FEED = P.get("feed") || "/api/feed";
   // Plane feeds often refuse Cloudflare's addresses, so when /api/feed fails try the Deno relay (if set)
-  var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "");
+  var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "https://planes.daryljohncox.deno.net/api/feed");
   function feedFetch(qs, opts) {
     var urls = (RELAY2 ? [FEED, RELAY2] : [FEED]);   // Deno only when Cloudflare fails, to stay inside its free allowance
     var i = 0;
