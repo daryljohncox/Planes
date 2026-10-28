@@ -380,6 +380,13 @@ body.infoup main{visibility:hidden}
 #infobody .use{font-size:2.3vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh;padding-top:1.2vh;border-top:1px solid #1d2632}
 #infobody .use b{color:var(--acc)}
 #infobody .use small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
+#infobody .fleet{font-size:2.2vh;line-height:1.45;color:#cfd8e3;margin-top:1.4vh;padding-top:1.2vh;border-top:1px solid #1d2632}
+#infobody .fleet>b{color:var(--acc);display:block}
+#infobody .fleet i{display:block;font-style:normal;color:#fff;margin-top:.4vh}
+#infobody .fleet ul{margin:.8vh 0 0;padding-left:2.2vh}
+#infobody .fleet li{margin-bottom:.6vh}
+#infobody .fleet li b{color:#fff}
+#infobody .fleet small{display:block;color:var(--dim);font-size:1.8vh;margin-top:.6vh}
 #infobody h3{font-size:2vh;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;margin:1.6vh 0 .6vh}
 #infobody h3:first-child{margin-top:0}
 #infobody table{width:100%;border-collapse:collapse;font-size:2.3vh}
@@ -2617,11 +2624,146 @@ body.infoup main{visibility:hidden}
     else if (SMALL_TYPES[t] || f.type || f.desc) u = "private and recreational flying, flight training and small charters";
     return u ? { mine: 0, text: u.charAt(0).toUpperCase() + u.slice(1) } : null;
   }
+  // More about NZ police and rescue aircraft on the "i" page: bare rego -> [group, line about this one].
+  // Facts from NZ Police, The Spinoff (2022), 111emergency.co.nz, the trusts' own reports and news (checked 2026-10-28).
+  var FLEET_INFO = {
+    ZKIPC: ["eagle", "Police 1 · Bell 429 · Auckland"], ZKIPB: ["eagle", "Police 2 · Bell 429 · Auckland"], ZKIPJ: ["eagle", "Police 3 · Bell 429 · Auckland"],
+    ZKHQC: ["north", "Sikorsky S-76C++ · NRES6 · Whangārei"], ZKHQO: ["north", "Sikorsky S-76C++ · NRES7 · Whangārei"],
+    ZKIHB: ["north", "Leonardo AW169 · NRES5 · Whangārei"], ZKHTQ: ["north", "Leonardo AW169 · NRES3 · Auckland (Ardmore), in service since March 2025"],
+    ZKHLH: ["north", "Leonardo AW169 · NRES4 · Auckland (Ardmore)"], ZKIZB: ["north", "Leonardo AW169 · NRES2 · Auckland (Ardmore)"],
+    ZKIRB: ["north", "Leonardo AW169 · NRES4 · Auckland (Ardmore)"], ZKHKZ: ["north", "Kawasaki BK117 B2 · NRES8 · Auckland (Ardmore), being retired as the AW169s arrive"],
+    ZKHLF: ["north", "Kawasaki BK117 B2 · NRES9 · Auckland, used to be Wellington's Life Flight helicopter"],
+    ZKIXN: ["waikato", "Airbus H145 · CFL01 (Air 1 Waikato) · Hamilton"], ZKIXO: ["tect", "Airbus H145 · CFL02 · Tauranga, used to fly from Hamilton"],
+    ZKIXD: ["greenlea", "Airbus H145 · CFL03 · Taupō, used to fly from Dunedin and Tauranga"],
+    ZKHCX: ["gisborne", "MBB BK117 B2 · CFL12 (Air 1 Tairāwhiti) · Gisborne, used to fly from Taupō"], ZKIXV: ["gisborne", "Airbus H145 · Air 1 Tairāwhiti · Gisborne"],
+    ZKIXM: ["hb", "Airbus H145 D3 · CFL06 (Air 1 Te Matau) · Hastings, the new five-blade helicopter that replaces the BK117"],
+    ZKHIQ: ["hb", "MBB BK117 B2 · Hastings, the Lowe Walker helicopter flown since 2018"],
+    ZKHES: ["taranaki", "MBB BK117 B2 · CFL05 (Air 1 Taranaki) · New Plymouth, used to fly from Auckland and Tauranga"],
+    ZKIIX: ["palmy", "MBB BK117 B2 · CFL04 (Air 1 Manawatū) · Palmerston North, used to fly from New Plymouth, Tauranga and Gisborne"],
+    ZKIXS: ["wgtn", "Airbus H145 D3 · CFL08 (Air 1 Te Upoko) · Wellington"],
+    ZKIRU: ["relief", "Kawasaki BK117 B2 · CFL11 · central North Island spare, used to fly from Hamilton and Wellington"],
+    ZKHEP: ["relief", "MBB BK117 B2 · CFL11 · central North Island spare"],
+    ZKIGC: ["nelson", "Airbus H145 D2 · AMD9 (Air 1 Nelson) · Nelson"], ZKHGW: ["nelson", "Kawasaki BK117 B2 · AMD5 (Air 2 Nelson) · Nelson"],
+    ZKHGU: ["nelson", "MBB BK117 B2 · Air 2 Nelson · Nelson"],
+    ZKIGD: ["chch", "Airbus H145 D3 · AMD1 (Air 1 Christchurch) · Christchurch"], ZKIGB: ["chch", "Airbus H145 D2 · AMD8 (Air 2 Christchurch) · Christchurch"],
+    ZKIGS: ["chch", "MBB BK117 B2 · AMD2 (Air 3 Christchurch) · Christchurch"], ZKHJC: ["chch", "Kawasaki BK117 B2 · Christchurch, used to be Air 1 Greymouth"],
+    ZKIGA: ["greymouth", "Airbus H145 · AirMed 7 · ex-Rega (Swiss Air Rescue), the first of GCH's four Swiss H145s, arrived December 2025"],
+    ZKICU: ["otago", "Airbus H145 D3 · Air 1 Dunedin · Taieri"], ZKIDU: ["otago", "Airbus H145 D3 · Air 2 Dunedin · Taieri"],
+    ZKIDH: ["otago", "Airbus H145 D3 · Air 3 Dunedin · Taieri"], ZKIWD: ["otago", "Eurocopter EC145 · Air 4 Dunedin · Taieri, IFR-capable"],
+    ZKIGG: ["otago", "Eurocopter EC145 · Air 5 Dunedin · Taieri"], ZKIWG: ["otago", "Kawasaki BK117 B2 · Air 6 Dunedin · Taieri, IFR-capable, sometimes carries the winch"],
+    ZKHJK: ["otago", "Kawasaki BK117 B2 · Air 7 Dunedin · Taieri"], ZKIID: ["otago", "Eurocopter EC145 · Dunedin"],
+    ZKHUP: ["otago", "Kawasaki BK117 B2 · Air 1 Queenstown · IFR-capable, fitted with the 76 m winch"],
+    ZKIWL: ["otago", "MBB BK117 B1 · Air 2 Queenstown"], ZKIME: ["otago", "Kawasaki BK117 B2 · Air 3 Queenstown"],
+    ZKHEV: ["teanau", "MBB BK117 B2 · Air 1 Te Anau · Te Anau"]
+  };
+  var RESCUE_HOURS = "Hours: the trusts don't publish hours for each helicopter. All NZ air ambulances together flew 13,026 hours in the year to October 2023, and demand rose 21% in three years.";
+  var FLEET_GROUP = {
+    eagle: ["NZ Police Air Support Unit \"Eagle\"", [
+      "Job: the eyes in the sky for Auckland police. Tracks offenders on foot or in cars and talks ground units in for the arrest, and finds missing people on land and at sea.",
+      "Kit: FLIR infrared camera that sees body heat in the dark or under bush, night-vision cameras, gyro-stabilised binoculars, a Nightsun searchlight, GPS moving map and radios to police, fire and air traffic control.",
+      "Crew: a civilian pilot from Advanced Flight Ltd plus two Tactical Flight Officers (sworn police) who run the cameras and talk to ground units.",
+      "Hours: about 3,300 hours a year planned, around 8 to 9 hours a day. On call 24/7 since 2017, with about 3 hours a night between 9 pm and 7 am.",
+      "Jobs: over 7,600 incidents in the year to June 2022, helping find an offender in about two-thirds. About 15% are burglaries, alarms, prowlers and trespass.",
+      "Area: nearly all of Auckland, sometimes into Northland or Waikato. Busiest over Ōtara and Manurewa, rarely over the North Shore or west of the Waitākere Ranges. A 2020 five-week trial in Christchurch had 346 jobs and 210 arrests.",
+      "Base: Pikes Point, Onehunga, since July 2019 (Mechanics Bay from 1988).",
+      "Aircraft: twin-engine Bell 429, top speed nearly 300 km/h, usually about 300 m (1,000 ft) over the city, can fly Auckland to Wellington without refuelling. Burns 290 to 340 litres of fuel an hour.",
+      "Cost: about $12.4 million a year to run (2022), a quarter of it fuel.",
+      "History: a Bell JetRanger in 1988, two AS355 Squirrels from 1989 (a third in 2017), then three Bell 429s from July 2019."]],
+    north: ["Northern Rescue Helicopter (Auckland Westpac and Northland)", [
+      "Job: accidents, medical emergencies, hospital transfers and search and rescue on land and at sea.",
+      "Who: Northern Rescue Helicopter Ltd, set up in 2021 by the Auckland Rescue Helicopter Trust and the Northland Emergency Services Trust.",
+      "Area: Coromandel to Cape Reinga, about 1.85 million people, from bases at Ardmore (Auckland) and Whangārei.",
+      "Jobs: Northland alone averages 1,000 to 1,200 missions a year.",
+      "Fleet: moving to five Leonardo AW169s with big cabins that change quickly between stretcher and medical set-ups. A near-new one cost over $18.5 million (Health NZ and ACC). The S-76s and BK117 are being retired.",
+      RESCUE_HOURS]],
+    waikato: ["Waikato Westpac Rescue Helicopter", [
+      "Job: hospital transfers, medical emergencies, crashes and rural rescues, with a critical care flight paramedic on board.",
+      "Area: Waikato, King Country and Coromandel. The Coromandel (Whangamatā, Whitianga) gets the most call-outs.",
+      "Jobs: 754 missions in 2023: over 400 hospital transfers, over 100 medical, 77 rural or remote, 47 crashes and 6 rescues, including a winch rescue of a hunter and his dog in Pureora Forest.",
+      "Runs 24/7 with a pilot, crewman and paramedic. Run by the Philips Search and Rescue Trust.",
+      RESCUE_HOURS]],
+    tect: ["TECT Rescue Helicopter (Bay of Plenty)", [
+      "Job: hospital transfers, medical emergencies, rural and remote rescues around the Bay of Plenty. Crews use night-vision goggles to find patients in the dark.",
+      "Jobs: about 40 missions a month (39 in April 2022, mostly hospital transfers and medical).",
+      "Run by the Philips Search and Rescue Trust.",
+      RESCUE_HOURS]],
+    greenlea: ["Greenlea Rescue Helicopter (Taupō)", [
+      "Job: rural and remote rescues around Lake Taupō and the central plateau (tramping, hunting and ski-field injuries), plus hospital transfers.",
+      "Jobs: about 40 missions a month (39 in April 2022: 15 transfers, 13 rural or remote, 3 rescues).",
+      "Run by the Philips Search and Rescue Trust.",
+      RESCUE_HOURS]],
+    palmy: ["Grassroots Trust Rescue Helicopter (Palmerston North)", [
+      "Job: rural, remote and search and rescue work, hospital transfers and crashes, with a critical care flight paramedic.",
+      "Area: Manawatū, Whanganui and Ruapehu, often flying patients to Palmerston North, Whanganui or Wellington hospitals.",
+      "Jobs: 407 missions in 2025: 142 rural, remote or search and rescue, 103 hospital transfers, 38 crashes. Uses its winch where it can't land, like the Whanganui River.",
+      "Run by the Philips Search and Rescue Trust.",
+      RESCUE_HOURS]],
+    hb: ["Lowe Corporation Hawke's Bay Rescue Helicopter", [
+      "Job: hospital transfers, accidents, medical emergencies and search and rescue around Hawke's Bay, and anywhere in NZ when needed.",
+      "Jobs: 352 missions in 2025 (379 in 2024): 160 hospital transfers, 100 accidents, 73 medical, 19 search and rescue.",
+      "Runs 24/7 with 12-hour crew shifts. Free to the patient.",
+      "Fleet: the BK117 flown since 2018 is being replaced by an Airbus H145 D3 in 2026, with more fuel for longer range and room for more than one patient.",
+      RESCUE_HOURS]],
+    taranaki: ["Taranaki Rescue Helicopter", [
+      "Job: accidents, medical emergencies, hospital transfers and search and rescue around Taranaki, including Mt Taranaki and the coast.",
+      RESCUE_HOURS]],
+    gisborne: ["Tairāwhiti (Gisborne) Rescue Helicopter", [
+      "Job: accidents, medical emergencies and hospital transfers around the East Coast, where roads are long and hospitals far apart.",
+      RESCUE_HOURS]],
+    wgtn: ["Life Flight Westpac Rescue Helicopter (Wellington)", [
+      "Job: search and rescue, car crash victims, injured trampers in the bush and rescues far from a hospital. Sometimes helps police, the bomb squad and firefighters.",
+      "Life Flight cared for 1,844 people in time-critical need in 2025 (helicopter and planes), about one in five a baby or child.",
+      "Fleet: an H145 replaced the BK117 that flew for over 20 years.",
+      RESCUE_HOURS]],
+    relief: ["Central North Island relief helicopter", [
+      "Job: the spare. It fills in at any central North Island rescue base while that base's own helicopter is in maintenance.",
+      RESCUE_HOURS]],
+    nelson: ["Nelson Marlborough Rescue Helicopter (GCH Aviation)", [
+      "Job: accidents, medical emergencies, hospital transfers and search and rescue across the top of the South Island, Golden Bay and the Marlborough Sounds.",
+      "Who: flown by GCH Aviation, backed by the Nelson Marlborough Rescue Helicopter Trust.",
+      "Jobs: GCH's three bases (Christchurch, Greymouth, Nelson) do about 1,500 call-outs a year: 40% accidents, 28% medical (mostly heart), 20% hospital transfers, 12% search and rescue.",
+      "Fleet: four ex-Swiss (Rega) H145s are replacing the BK117s across GCH's bases in 2025 and 2026, and will make Nelson IFR-capable (able to fly in cloud).",
+      RESCUE_HOURS]],
+    chch: ["Westpac Rescue Helicopter (Christchurch, GCH Aviation)", [
+      "Job: accidents, medical emergencies, hospital transfers and search and rescue across Canterbury, the West Coast and beyond.",
+      "Who: flown by GCH Aviation (Garden City Helicopters), backed by the Canterbury West Coast Air Rescue Trust (founded 1989). 13 pilots and 43 crew and paramedics.",
+      "Jobs: about 1,500 call-outs a year across GCH's three bases: 40% accidents, 28% medical (mostly heart), 20% hospital transfers, 12% search and rescue.",
+      "Kit: Fenn night-vision goggles (168 night-vision missions in 2025), winch (59 winch missions in 2025), ventilators and heart monitors. Christchurch is GCH's only IFR base, with new IFR helipads at Geraldine and more coming.",
+      "Christchurch runs one helicopter 24/7 and a second from 8 am to 6 pm every day.",
+      RESCUE_HOURS]],
+    greymouth: ["ROA Mining Rescue Helicopter (West Coast, GCH Aviation)", [
+      "Job: accidents, medical emergencies, hospital transfers and search and rescue on the West Coast, with lots of bush, mountain and river rescues.",
+      "Who: flown by GCH Aviation, backed by the Canterbury West Coast Air Rescue Trust.",
+      "Jobs: about 1,500 call-outs a year across GCH's three bases: 40% accidents, 28% medical, 20% hospital transfers, 12% search and rescue.",
+      "Kit: night-vision goggles and winch. The ex-Swiss H145s will make Greymouth IFR-capable.",
+      RESCUE_HOURS]],
+    otago: ["Otago Southland Rescue Helicopter (HeliOtago)", [
+      "Job: accidents, medical emergencies, hospital transfers, mountain and sea rescues, with two paramedics on board (at least one intensive care).",
+      "Area: south of the Waitaki River to Stewart Island and the subantarctic islands, west to Haast Pass. About 28% of NZ's land, the biggest area of any rescue operator.",
+      "Hours: about 600 flying hours and 400 missions a year (Wikipedia). Airborne in about 5 minutes by day and 15 at night.",
+      "Kit: night-vision goggles (first used in NZ here), IFR routes across the lower South Island, a 76 m winch on some BK117s, a 30 million candlepower searchlight and a baby intensive-care incubator.",
+      "Bases: Taieri Airfield (Dunedin) and Queenstown. Cruises about 230 km/h, range about 460 km (900 km with extra tanks).",
+      "Record: in 2009 it helped rescue an injured crewman from the ship Bremen about 815 km south of Invercargill."]],
+    teanau: ["Te Anau rescue helicopter (Southern Lakes Helicopters)", [
+      "Job: rescues in Fiordland, Stewart Island, parts of Southland and the Southern Ocean: trampers, hunters, boaties and crashes.",
+      "Kit: night-vision ready, so it can fly rescues in the dark.",
+      "Works with the Otago Southland rescue service when needed.",
+      RESCUE_HOURS]]
+  };
+  function fleetHtml(f) {
+    var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg];
+    if (!fi && f.cat === "pol" && /^ZK/.test(reg)) fi = ["eagle", ""];
+    var g = fi && FLEET_GROUP[fi[0]];
+    if (!g) return "";
+    return '<div class="fleet"><b>' + esc(g[0]) + "</b>" + (fi[1] ? "<i>This one: " + esc(fi[1]) + "</i>" : "") +
+      "<ul>" + g[1].map(function (s) { var i = s.indexOf(": "); return i > 0 && i < 12 ? "<li><b>" + esc(s.slice(0, i)) + ":</b> " + esc(s.slice(i + 2)) + "</li>" : "<li>" + esc(s) + "</li>"; }).join("") +
+      "</ul><small>From NZ Police, the rescue trusts, news reports and 111emergency.co.nz</small></div>";
+  }
   function useHtml(f, owner, co) {
     var u = usedFor(f, owner, co);
     if (!u) return "";
     return '<div class="use"><b>' + (u.mine ? "Used for: " : "Mainly used for: ") + "</b>" + esc(u.text) +
-      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>";
+      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>" + fleetHtml(f);
   }
   function drawInfoPage(f) {
     var a = f.raw || {}, x = extraInfo[f.hex] || {}, rows = [];
