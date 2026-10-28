@@ -521,46 +521,23 @@ body.infoup main{visibility:hidden}
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
   var FEED = P.get("feed") || "/api/feed";
+  // Plane feeds often refuse Cloudflare's addresses, so ask the Deno relay first (when set) and fall back to /api/feed
+  var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "");
+  function feedFetch(qs, opts) {
+    var urls = (RELAY2 ? [RELAY2, FEED] : [FEED]);
+    var i = 0;
+    function next() {
+      var u = urls[i++] + qs;
+      return fetch(u, opts).then(function (r) { if (!r.ok && i < urls.length) return next(); return r; }, function (e) { if (i < urls.length) return next(); throw e; });
+    }
+    return next();
+  }
   // Current search area – starts at home, follows the map when it's panned/zoomed
   var cLat = LAT, cLon = LON, cR = RADIUS_NM, away = false;
   function apiUrl(p) {
     p = p || [cLat, cLon, cR];
     var lon = ((p[1] + 540) % 360) - 180;   // the map can sit past the date line (a route drawn over it)
     return FEED + "?lat=" + p[0].toFixed(2) + "&lon=" + lon.toFixed(2) + "&r=" + Math.round(p[2]);
-  }
-  // Try the plane feeds straight from this browser first (a normal home connection, so they don't refuse it the way they
-  // refuse Cloudflare's shared addresses); fall back to our relay. If the browser is blocked (CORS), skip this for 10 min.
-  var directOff = 0, feedWhy = "";   // feedWhy: last failure reason, shown next to the busy message
-  function directFeed(p) {
-    p = p || [cLat, cLon, cR];
-    var lat = p[0].toFixed(2), lon = (((p[1] + 540) % 360) - 180).toFixed(2), r = Math.min(250, Math.round(p[2]));
-    var srcs = [
-      ["https://api.adsb.lol/v2/point/" + lat + "/" + lon + "/" + r, "ac"],
-      ["https://api.airplanes.live/v2/point/" + lat + "/" + lon + "/" + r, "ac"],
-      ["https://opendata.adsb.fi/api/v2/lat/" + lat + "/lon/" + lon + "/dist/" + r, "aircraft"]
-    ];
-    var i = 0, blocked = 0;
-    function next() {
-      if (i >= srcs.length) { if (blocked === srcs.length) directOff = Date.now() + 600000; return Promise.reject(new Error("direct feeds failed")); }
-      var s = srcs[i++], ctl = window.AbortController ? new AbortController() : null;
-      var t = ctl && setTimeout(function () { ctl.abort(); }, 5000);
-      return fetch(s[0], { cache: "no-store", signal: ctl ? ctl.signal : undefined })
-        .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-        .then(function (d) {
-          var ac = (d && d[s[1]]) || [];
-          ac.forEach(function (x) {   // blank callsigns arrive as "@@@@@@@@"
-            if (typeof x.flight === "string" && x.flight.indexOf("@") >= 0) { var f = x.flight.replace(/@/g, "").trim(); if (f) x.flight = f; else delete x.flight; }
-          });
-          return { ac: ac };
-        })
-        .catch(function (e) { clearTimeout(t); if (e instanceof TypeError) blocked++; feedWhy = "direct " + (e && e.message || e); return next(); });
-    }
-    return next();
-  }
-  function feedPart(p) {
-    var relay = function () { return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).catch(function (e) { feedWhy = "relay " + (e && e.message || e) + (directOff > Date.now() ? " (direct blocked)" : ""); throw e; }); };
-    if (Date.now() < directOff || P.get("feed")) return relay();
-    return directFeed(p).catch(relay);
   }
   var cParts = null;   // views too big for one 250 nm search (all of NZ): searched as a north and a south half
 
@@ -1995,7 +1972,7 @@ body.infoup main{visibility:hidden}
     var parts = cParts || [null], okParts = 0;
     Promise.all(parts.map(function (p, i) {
       var key = (cParts ? "p" : "h") + i;
-      return feedPart(p)
+      return feedFetch(apiUrl(p).slice(FEED.length), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (x) { okParts++; partLast[key] = { t: Date.now(), x: x }; return x; })
         .catch(function (e) {
           var l = partLast[key];
@@ -2046,7 +2023,7 @@ body.infoup main{visibility:hidden}
         render();
         voiceCheck(aircraft);
       })
-      .catch(function () { setStatus("Plane feed busy – retrying" + (feedWhy ? " (" + feedWhy + ")" : "")); });
+      .catch(function () { setStatus("Plane feed busy – retrying"); });
   }
 
   // ---------- render ----------
@@ -3552,7 +3529,7 @@ body.infoup main{visibility:hidden}
       rw.insertAdjacentHTML("beforeend", '<span class="' + cls + '"><br>' + txt + "</span>");
     }
     note("now", "Finding…");
-    fetch(FEED + "?hex=" + encodeURIComponent(hex), { cache: "no-store" })
+    feedFetch("?hex=" + encodeURIComponent(hex), { cache: "no-store" })
       .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
       .then(function (j) {
         var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 120); })[0];
@@ -3943,7 +3920,7 @@ body.infoup main{visibility:hidden}
     drawSiren();
     if (VOICE.eagle === false) return;
     EAGLE_REGS.forEach(function (reg) {
-      fetch(FEED + "?reg=" + reg, { cache: "no-store" })
+      feedFetch("?reg=" + reg, { cache: "no-store" })
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
           var x = (j.ac || []).filter(function (x) { return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 60); })[0];
@@ -4003,7 +3980,7 @@ body.infoup main{visibility:hidden}
   // ---------- south scan: anything flying south of NZ goes on the rare list and is announced ----------
   var SOUTH = { lat: -50.5, lon: 169 }, SOUTH_R_NM = 250, SOUTH_MS = 60000;
   function southCheck() {
-    fetch(FEED + "?lat=" + SOUTH.lat + "&lon=" + SOUTH.lon + "&r=" + SOUTH_R_NM, { cache: "no-store" })
+    feedFetch("?lat=" + SOUTH.lat + "&lon=" + SOUTH.lon + "&r=" + SOUTH_R_NM, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
         (j.ac || []).filter(function (x) {
@@ -4046,7 +4023,7 @@ body.infoup main{visibility:hidden}
   }
   function chcCheck() {
     if (VOICE.chc === false) return;
-    fetch(FEED + "?lat=" + CHC.lat.toFixed(2) + "&lon=" + CHC.lon.toFixed(2) + "&r=" + CHC_R_NM, { cache: "no-store" })
+    feedFetch("?lat=" + CHC.lat.toFixed(2) + "&lon=" + CHC.lon.toFixed(2) + "&r=" + CHC_R_NM, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
         var now = Date.now();
@@ -4093,7 +4070,7 @@ body.infoup main{visibility:hidden}
   var MIL_MS = 60000;
   function milCheck() {
     if (VOICE.chc === false) return;
-    fetch(FEED + "?mil=1", { cache: "no-store" })
+    feedFetch("?mil=1", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
         (j.ac || []).filter(function (x) {
@@ -4114,7 +4091,7 @@ body.infoup main{visibility:hidden}
   // jumps to it (unless you're already following a plane).
   var EMG_WATCH_MS = 15000;
   function emgWatch() {
-    fetch(FEED + "?sqk=1", { cache: "no-store" })
+    feedFetch("?sqk=1", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
         var now = Date.now();
@@ -4148,7 +4125,7 @@ body.infoup main{visibility:hidden}
     rareList.filter(function (r) {
       return r.why === "Antarctic flight" && now - (r.last || r.t) < ICE_WATCH_FOR && !r.iceDown && !latest(r.hex, null);
     }).slice(0, 3).forEach(function (r) {
-      fetch(FEED + "?hex=" + encodeURIComponent(r.hex), { cache: "no-store" })
+      feedFetch("?hex=" + encodeURIComponent(r.hex), { cache: "no-store" })
         .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
         .then(function (j) {
           var x = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 300); })[0];
@@ -4188,7 +4165,7 @@ body.infoup main{visibility:hidden}
     var rec = null;
     try { rec = JSON.parse(sessionStorage.getItem("planes.ice") || "null"); } catch (e) { /* none */ }
     if (!rec || Date.now() - rec.t > 8 * 3600000) return;
-    fetch(FEED + "?hex=" + encodeURIComponent(rec.hex), { cache: "no-store" })
+    feedFetch("?hex=" + encodeURIComponent(rec.hex), { cache: "no-store" })
       .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
       .then(function (j) {
         var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && p.alt_baro !== "ground" && (p.seen_pos == null || p.seen_pos < 300); })[0];
