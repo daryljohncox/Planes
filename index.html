@@ -521,10 +521,10 @@ body.infoup main{visibility:hidden}
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
   var FEED = P.get("feed") || "/api/feed";
-  // Plane feeds often refuse Cloudflare's addresses, so ask the Deno relay first (when set) and fall back to /api/feed
+  // Plane feeds often refuse Cloudflare's addresses, so when /api/feed fails try the Deno relay (if set)
   var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "");
   function feedFetch(qs, opts) {
-    var urls = (RELAY2 ? [RELAY2, FEED] : [FEED]);
+    var urls = (RELAY2 ? [FEED, RELAY2] : [FEED]);   // Deno only when Cloudflare fails, to stay inside its free allowance
     var i = 0;
     function next() {
       var u = urls[i++] + qs;
