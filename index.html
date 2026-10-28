@@ -480,6 +480,7 @@ body.infoup main{visibility:hidden}
       <div class="top"><div class="cs" id="cs">—</div><div class="idx" id="idx"></div><button id="hear" type="button" aria-label="Read out"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button></div>
       <button id="infobtn" type="button" aria-label="All about this aircraft">i</button>
       <div class="ty" id="ty">&nbsp;</div>
+      <div class="ty" id="spec"></div>
       <div class="rte" id="rte"></div>
       <div class="hist" id="hist"></div>
       <div class="csn" id="csn"></div>
@@ -2061,6 +2062,9 @@ body.infoup main{visibility:hidden}
     if (f.owner) line += " · " + f.owner;
     if (f.country) line += " · " + f.country;
     $("ty").textContent = line;
+    var pf = perfOf(f.type || "");
+    $("spec").textContent = [pf.pob ? "Up to " + fmtN(pf.pob) + " aboard" : "", pf.top ? "top speed " + fmtN(pf.top) + " km/h" : "", pf.range ? "range " + fmtN(pf.range) + " km" : ""].filter(Boolean).join(" · ");
+    $("spec").style.display = $("spec").textContent ? "" : "none";
     var st = gone ? null : airportStatus(f);
     if (gone) {
       var gr = goneRouteHtml(f);
@@ -2870,8 +2874,38 @@ body.infoup main{visibility:hidden}
     H500: ["4–5", 240, 500], MD52: ["4–5", 230, 400], H269: ["2", 140, 350], EC20: ["5", 220, 700], EC30: ["7", 240, 610], B407: ["6", 245, 600],
     B505: ["5", 230, 560], EC35: ["6–7", 250, 630], EC45: ["9", 245, 650], BK17: ["7–9", 230, 540], B429: ["7", 270, 760], B412: ["13", 230, 650],
     B212: ["14", 190, 440], A109: ["6–7", 285, 900], A119: ["7", 245, 950], A169: ["10", 270, 820], A139: ["15", 300, 1060], S76: ["12", 280, 700],
-    KMAX: ["1 (lifts 2.7 t)", 150, 500]
+    KMAX: ["1 (lifts 2.7 t)", 150, 500],
+    C30J: ["up to 128 troops", 640, 5200], C130: ["up to 92 troops", 540, 3800], P8: ["9 crew", 815, 7500], TEX2: ["2", 510, 1600], NH90: ["up to 18", 260, 800]
   };
+  var TYPE_TOP = {   // top speed km/h (rounded maker figures)
+    A319: 870, A320: 870, A20N: 870, A321: 870, A21N: 870, A332: 910, A333: 910, A339: 910, A359: 945, A35K: 945, A388: 945, BCS3: 870,
+    B737: 875, B738: 875, B739: 875, B38M: 875, B39M: 875, B752: 915, B763: 915, B772: 945, B77L: 945, B77W: 945, B744: 990, B748: 990, B788: 955, B789: 955, B78X: 955,
+    E190: 890, E75L: 890, AT72: 520, AT75: 520, AT76: 520, DH8C: 530, DH8D: 670, SF34: 530, B190: 540, SW4: 520, J32: 550, CVLT: 590,
+    C208: 345, PC12: 530, BE20: 535, B350: 580, BE9L: 460, BN2P: 280, P68: 320, PA31: 420, DHC2: 255, DHC6: 340, PC6T: 230, GA8: 260, KODI: 340, P750: 315,
+    C150: 200, C152: 205, C172: 230, C182: 280, C206: 280, C210: 325, C180: 275, C185: 285, P28A: 230, P28R: 280, PA32: 280, P32R: 310,
+    PA18: 210, PA38: 200, PA34: 370, PA44: 310, DA20: 260, DA40: 285, DA42: 365, P208: 250, SR20: 300, SR22: 340, BE58: 380, BE36: 330,
+    C310: 385, C421: 475, CT4: 300, FU24: 230, CRES: 300, AT8T: 370, CL60: 870, CL64: 870, GLEX: 950, C25A: 770,
+    R22: 190, R44: 240, R66: 260, B06: 225, AS50: 285, AS55: 285, H500: 280, MD52: 280, H269: 165, EC20: 260, EC30: 285, B407: 260,
+    B505: 230, EC35: 285, EC45: 270, BK17: 250, B429: 285, B412: 260, B212: 240, A109: 310, A119: 280, A169: 305, A139: 310, S76: 285, KMAX: 185,
+    C30J: 670, C130: 590, P8: 905, TEX2: 585, NH90: 300
+  };
+  var TYPE_POB = {   // most people it can carry, pilots and cabin crew included (rounded)
+    A319: 166, A320: 186, A20N: 200, A321: 227, A21N: 251, A332: 417, A333: 451, A339: 472, A359: 451, A35K: 492, A388: 873, BCS3: 166,
+    B737: 154, B738: 195, B739: 227, B38M: 217, B39M: 227, B752: 246, B763: 361, B772: 451, B77L: 326, B77W: 563, B744: 676, B748: 620, B788: 369, B789: 431, B78X: 451,
+    E190: 119, E75L: 92, AT72: 82, AT75: 82, AT76: 82, DH8C: 59, DH8D: 94, SF34: 40, B190: 21, SW4: 21, J32: 21, CVLT: 60,
+    C208: 14, PC12: 11, BE20: 15, B350: 13, BE9L: 9, BN2P: 10, P68: 7, PA31: 10, DHC2: 8, DHC6: 21, PC6T: 11, GA8: 8, KODI: 10, P750: 17,
+    C150: 2, C152: 2, C172: 4, C182: 4, C206: 6, C210: 6, C180: 4, C185: 6, P28A: 4, P28R: 4, PA32: 7, P32R: 7,
+    PA18: 2, PA38: 2, PA34: 7, PA44: 4, DA20: 2, DA40: 4, DA42: 4, P208: 2, SR20: 5, SR22: 5, BE58: 6, BE36: 6,
+    C310: 6, C421: 8, CT4: 2, FU24: 2, CRES: 2, AT8T: 1, CL60: 21, CL64: 21, GLEX: 21, C25A: 9,
+    R22: 2, R44: 4, R66: 5, B06: 5, AS50: 7, AS55: 6, H500: 5, MD52: 5, H269: 3, EC20: 5, EC30: 8, B407: 7,
+    B505: 5, EC35: 8, EC45: 11, BK17: 10, B429: 8, B412: 15, B212: 15, A109: 8, A119: 8, A169: 12, A139: 17, S76: 14, KMAX: 1,
+    C30J: 131, C130: 97, TEX2: 2, NH90: 22
+  };
+  var TYPE_FERRY = { FU24: 800, CRES: 900, AT8T: 1300 };   // ag types: range with the hopper empty
+  function perfOf(t) {
+    var tf = TYPE_FACTS[t];
+    return { pob: TYPE_POB[t] || 0, top: TYPE_TOP[t] || 0, cruise: tf ? tf[1] : 0, range: (tf && tf[2]) || TYPE_FERRY[t] || 0 };
+  }
   function hoursFor(f, c, t) {
     if (f.heli) return HELI_TWIN[t] ? "400 to 800 hours a year (rescue, offshore and police twins)" : t === "R22" || t === "R44" ? "100 to 600 hours a year (private ones far less than training and farm ones)" : "300 to 600 hours a year if it's a working helicopter, under 100 if private";
     if (c === "gld" || GLIDER_TYPES[t]) return "50 to 150 hours a year, mostly on summer weekends";
@@ -2941,6 +2975,11 @@ body.infoup main{visibility:hidden}
     if (a.dbFlags & 4) flags.push("privacy address (PIA)");
     if (a.dbFlags & 8) flags.push("owner asked not to be tracked (LADD)");
     row("Database flags", flags.join(", "));
+    var pf = perfOf(f.type || "");
+    row("Max people", pf.pob ? fmtN(pf.pob) + " including pilots" : "");
+    row("Top speed", pf.top ? "about " + fmtN(pf.top) + " km/h" : "");
+    row("Cruise speed", pf.cruise ? "about " + fmtN(pf.cruise) + " km/h" : "");
+    row("Max range", pf.range ? "about " + fmtN(pf.range) + " km without refuelling" : "");
     row("Size class", a.category ? a.category + " · " + ({ A1: "light (under 7 t)", A2: "small (7–34 t)", A3: "large (34–136 t)", A4: "Boeing 757 size", A5: "heavy (over 136 t)", A6: "high performance", A7: "helicopter", B1: "glider", B2: "balloon / airship", B4: "microlight", B6: "drone", C1: "emergency vehicle", C2: "ground vehicle" }[a.category] || "") : "");
     end();
     sec("Right now");
