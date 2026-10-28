@@ -101,7 +101,7 @@ module.exports = async (req, res) => {
 
   for (const s of sources) {
     try {
-      const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" } });
+      const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(5000) });
       tried.push(new URL(s.url).host + " " + up.status);
       if (!up.ok) continue;
       const data = await up.json();
