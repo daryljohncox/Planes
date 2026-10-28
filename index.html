@@ -530,7 +530,7 @@ body.infoup main{visibility:hidden}
   }
   // Try the plane feeds straight from this browser first (a normal home connection, so they don't refuse it the way they
   // refuse Cloudflare's shared addresses); fall back to our relay. If the browser is blocked (CORS), skip this for 10 min.
-  var directOff = 0;
+  var directOff = 0, feedWhy = "";   // feedWhy: last failure reason, shown next to the busy message
   function directFeed(p) {
     p = p || [cLat, cLon, cR];
     var lat = p[0].toFixed(2), lon = (((p[1] + 540) % 360) - 180).toFixed(2), r = Math.min(250, Math.round(p[2]));
@@ -553,12 +553,12 @@ body.infoup main{visibility:hidden}
           });
           return { ac: ac };
         })
-        .catch(function (e) { clearTimeout(t); if (e instanceof TypeError) blocked++; return next(); });
+        .catch(function (e) { clearTimeout(t); if (e instanceof TypeError) blocked++; feedWhy = "direct " + (e && e.message || e); return next(); });
     }
     return next();
   }
   function feedPart(p) {
-    var relay = function () { return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); };
+    var relay = function () { return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).catch(function (e) { feedWhy = "relay " + (e && e.message || e) + (directOff > Date.now() ? " (direct blocked)" : ""); throw e; }); };
     if (Date.now() < directOff || P.get("feed")) return relay();
     return directFeed(p).catch(relay);
   }
@@ -2046,7 +2046,7 @@ body.infoup main{visibility:hidden}
         render();
         voiceCheck(aircraft);
       })
-      .catch(function () { setStatus("Plane feed busy – retrying"); });
+      .catch(function () { setStatus("Plane feed busy – retrying" + (feedWhy ? " (" + feedWhy + ")" : "")); });
   }
 
   // ---------- render ----------
