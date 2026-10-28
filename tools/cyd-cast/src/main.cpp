@@ -23,7 +23,7 @@
 #include <XPT2046_Touchscreen.h>
 
 // ---------- settings (defaults; changeable on the Wi-Fi setup page) ----------
-static String mapUrl = "https://planes-steel.vercel.app/";
+static String mapUrl = "https://planes-3g7.pages.dev/";
 static String hubIp = "10.0.0.75";          // preferred Hub; checked to really be a Nest Hub before casting
 
 static const char *DASHCAST_APP = "84912283";  // DashCast receiver (what catt uses for websites)
