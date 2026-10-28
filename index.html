@@ -528,6 +528,40 @@ body.infoup main{visibility:hidden}
     var lon = ((p[1] + 540) % 360) - 180;   // the map can sit past the date line (a route drawn over it)
     return FEED + "?lat=" + p[0].toFixed(2) + "&lon=" + lon.toFixed(2) + "&r=" + Math.round(p[2]);
   }
+  // Try the plane feeds straight from this browser first (a normal home connection, so they don't refuse it the way they
+  // refuse Cloudflare's shared addresses); fall back to our relay. If the browser is blocked (CORS), skip this for 10 min.
+  var directOff = 0;
+  function directFeed(p) {
+    p = p || [cLat, cLon, cR];
+    var lat = p[0].toFixed(2), lon = (((p[1] + 540) % 360) - 180).toFixed(2), r = Math.min(250, Math.round(p[2]));
+    var srcs = [
+      ["https://api.adsb.lol/v2/point/" + lat + "/" + lon + "/" + r, "ac"],
+      ["https://api.airplanes.live/v2/point/" + lat + "/" + lon + "/" + r, "ac"],
+      ["https://opendata.adsb.fi/api/v2/lat/" + lat + "/lon/" + lon + "/dist/" + r, "aircraft"]
+    ];
+    var i = 0, blocked = 0;
+    function next() {
+      if (i >= srcs.length) { if (blocked === srcs.length) directOff = Date.now() + 600000; return Promise.reject(new Error("direct feeds failed")); }
+      var s = srcs[i++], ctl = window.AbortController ? new AbortController() : null;
+      var t = ctl && setTimeout(function () { ctl.abort(); }, 5000);
+      return fetch(s[0], { cache: "no-store", signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (d) {
+          var ac = (d && d[s[1]]) || [];
+          ac.forEach(function (x) {   // blank callsigns arrive as "@@@@@@@@"
+            if (typeof x.flight === "string" && x.flight.indexOf("@") >= 0) { var f = x.flight.replace(/@/g, "").trim(); if (f) x.flight = f; else delete x.flight; }
+          });
+          return { ac: ac };
+        })
+        .catch(function (e) { clearTimeout(t); if (e instanceof TypeError) blocked++; return next(); });
+    }
+    return next();
+  }
+  function feedPart(p) {
+    var relay = function () { return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); };
+    if (Date.now() < directOff || P.get("feed")) return relay();
+    return directFeed(p).catch(relay);
+  }
   var cParts = null;   // views too big for one 250 nm search (all of NZ): searched as a north and a south half
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
@@ -1961,7 +1995,7 @@ body.infoup main{visibility:hidden}
     var parts = cParts || [null], okParts = 0;
     Promise.all(parts.map(function (p, i) {
       var key = (cParts ? "p" : "h") + i;
-      return fetch(apiUrl(p), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      return feedPart(p)
         .then(function (x) { okParts++; partLast[key] = { t: Date.now(), x: x }; return x; })
         .catch(function (e) {
           var l = partLast[key];
