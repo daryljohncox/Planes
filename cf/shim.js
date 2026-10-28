@@ -25,8 +25,19 @@ export function wrap(handler) {
     } catch (e) {
       return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
     }
+    // When every upstream feed fails, answer with the last good copy (up to 5 min old) instead of an error
+    const staleKey = new Request(url.toString() + (url.search ? "&" : "?") + "__stale=1", { method: "GET" });
+    if (get && status >= 500) {
+      const old = await caches.default.match(staleKey);
+      if (old) return old;
+    }
     const out = new Response(body, { status, headers });
-    if (get && status === 200 && /s-maxage=\d+/.test(headers.get("Cache-Control") || "")) waitUntil(caches.default.put(key, out.clone()));
+    if (get && status === 200 && /s-maxage=\d+/.test(headers.get("Cache-Control") || "")) {
+      waitUntil(caches.default.put(key, out.clone()));
+      const keep = new Response(out.clone().body, { status, headers: new Headers(headers) });
+      keep.headers.set("Cache-Control", "public, max-age=300");
+      waitUntil(caches.default.put(staleKey, keep));
+    }
     return out;
   };
 }
