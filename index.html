@@ -2744,6 +2744,22 @@ body.infoup main{visibility:hidden}
       "Kit: night-vision goggles (first used in NZ here), IFR routes across the lower South Island, a 76 m winch on some BK117s, a 30 million candlepower searchlight and a baby intensive-care incubator.",
       "Bases: Taieri Airfield (Dunedin) and Queenstown. Cruises about 230 km/h, range about 460 km (900 km with extra tanks).",
       "Record: in 2009 it helped rescue an injured crewman from the ship Bremen about 815 km south of Invercargill."]],
+    flydoc: ["NZ Flying Doctor Service (GCH Aviation)", [
+      "Job: flying intensive-care patients between hospitals, plus babies needing neonatal care, and carrying blood and medical supplies around the South Island and Chathams.",
+      "Crew: two pilots plus intensive care flight nurses (20 of them), with a neonatal and midwifery team. 14 full-time pilots.",
+      "Jobs: about 1,500 patients a year. In 2020 it flew 1,207 missions and over 2,000 flying hours.",
+      "Hours: over 2,000 flying hours a year (2020), and rising.",
+      "Area: the whole South Island and the Chatham Islands (926 km out to sea), and the North Island when needed. Christchurch to Greymouth takes 30 to 35 minutes.",
+      "Bases: Christchurch Airport (two King Air B200Cs) and Nelson Airport (a King Air B200). Runs 24/7, all year.",
+      "Fleet: four Beechcraft King Air 200s, twin turboprops with enough fuel to reach the Chathams and come back if they can't land.",
+      "Who: run by GCH Aviation (Garden City Helicopters, Christchurch, founded 1983) under a Health NZ contract. The trust raises about $3 million a year to cover the gap."]],
+    lifeplane: ["Life Flight air ambulance (Wellington)", [
+      "Job: flying sick and injured patients between hospitals around NZ, including intensive care, newborn babies in incubators and patients up to 280 kg.",
+      "Jobs: over 1,500 patients a year, about 32 a week. Each plane usually does 1 to 2 missions a day averaging 5 hours, roughly 1,500 to 3,000 hours a year across the fleet.",
+      "Kit: an extra-wide rear door and a crane (designed by Australia's Royal Flying Doctor Service, lifts 300 kg) to load stretchers and incubators.",
+      "Fleet: five King Air B200Cs, three bought from the Royal Flying Doctor Service (NSW) in 2023 for about $7 million to replace two Jetstream 32s. Smaller, so they can land at strips like Wairoa and Greymouth.",
+      "Bases: Wellington (three planes) and Hamilton (one, since 2024), plus a spare. Runs 24/7.",
+      "Maintenance: Fieldair in Palmerston North."]],
     teanau: ["Te Anau rescue helicopter (Southern Lakes Helicopters)", [
       "Job: rescues in Fiordland, Stewart Island, parts of Southland and the Southern Ocean: trampers, hunters, boaties and crashes.",
       "Kit: night-vision ready, so it can fly rescues in the dark.",
@@ -2808,21 +2824,98 @@ body.infoup main{visibility:hidden}
     var mil = /^NZ\d{4}$/.test(reg) || /^KIW/.test((f.flight || "").trim().toUpperCase());
     return mil ? RNZAF_TYPE[f.type] || "" : "";
   }
-  function fleetHtml(f) {
+  // Everything else: NZ airline facts by callsign, plus specs for the type and typical yearly hours for its kind.
+  // Specs are rounded maker figures; hours are typical industry figures for that kind of aircraft, not this one.
+  var AIRLINE_INFO = [
+    [/^(ANZ|NZM|RLK)\d/, ["Air New Zealand", [
+      "Job: NZ's national airline. Flies about 20 NZ towns and cities and around 30 overseas destinations across the Tasman, Pacific Islands, Asia and North America.",
+      "Fleet: about 110 aircraft. Boeing 787-9 Dreamliners and 777-300ERs long-haul, Airbus A320/A321neos on domestic, Tasman and Pacific routes, ATR 72-600s and Dash 8 Q300s on regional routes.",
+      "Passengers: around 16 million a year.",
+      "Regional flights are flown by Air Nelson (Q300s, Nelson base) and Mount Cook Airline (ATR 72s, Christchurch base), both owned by Air NZ."]]],
+    [/^JST\d/, ["Jetstar", [
+      "Job: low-cost airline owned by Qantas. Flies NZ's main domestic routes (Auckland, Wellington, Christchurch, Queenstown, Dunedin, Nelson, Napier, New Plymouth) and across the Tasman.",
+      "Fleet in NZ: Airbus A320 and A320neo jets, with A321neos on longer flights."]]],
+    [/^QFA\d/, ["Qantas", [
+      "Job: Australia's national airline. In NZ it flies Tasman routes from Auckland, Wellington, Christchurch and Queenstown, plus some long-haul flights through Auckland.",
+      "Fleet: mostly Boeing 737-800s across the Tasman; 787s, A330s and A380s on long-haul."]]],
+    [/^VOZ\d/, ["Virgin Australia", ["Job: Australian airline flying Boeing 737s across the Tasman to Auckland, Wellington, Christchurch and Queenstown."]]],
+    [/^SDA\d/, ["Sounds Air", [
+      "Job: small regional airline across Cook Strait and the top of the South Island: Wellington, Picton, Nelson, Blenheim, Westport, Wānaka, Kaikōura and more.",
+      "Fleet: Cessna Caravans (12 seats) and Pilatus PC-12s (8 seats). Picton to Wellington takes about 25 minutes, far quicker than the ferry."]]],
+    [/^CVA\d/, ["Air Chathams", [
+      "Job: lifeline airline for the Chatham Islands, about 800 km east of Christchurch, plus regional routes such as Auckland to Whanganui, Whakatāne and Kapiti.",
+      "Fleet: ATR 72s, Saab 340s and Metroliners, and one of the last Convair 580s still carrying passengers in the world."]]]
+  ];
+  var TYPE_FACTS = {   // seats, cruise km/h, range km
+    A319: ["124–156", 830, 6900], A320: ["150–180", 830, 6100], A20N: ["165–194", 830, 6300], A321: ["185–220", 830, 5900], A21N: ["200–244", 830, 7400],
+    A332: ["250–290", 870, 13400], A333: ["280–330", 870, 11700], A339: ["260–300", 870, 13300], A359: ["300–350", 900, 15000], A35K: ["350–410", 900, 16100],
+    A388: ["500–575", 900, 15000], BCS3: ["130–160", 830, 6300],
+    B737: ["126–149", 840, 6000], B738: ["162–189", 840, 5400], B739: ["180–215", 840, 5000], B38M: ["162–200", 840, 6500], B39M: ["178–220", 840, 6100],
+    B752: ["200–230", 850, 7200], B763: ["220–260", 850, 11000], B772: ["300–400", 900, 9700], B77L: ["300–320", 900, 15800], B77W: ["340–400", 900, 13600],
+    B744: ["400–420", 910, 13400], B748: ["410 (mostly freighters)", 910, 14300], B788: ["240", 900, 13500], B789: ["250–300", 900, 14000], B78X: ["300–330", 900, 11900],
+    E190: ["96–114", 830, 4500], E75L: ["76–88", 830, 4000],
+    AT72: ["68–72", 510, 1500], AT75: ["68–72", 510, 1500], AT76: ["68–72", 510, 1500], DH8C: ["50", 530, 1500], DH8D: ["74–78", 660, 2000],
+    SF34: ["34", 520, 1700], B190: ["19", 520, 1200], SW4: ["19", 500, 1800], J32: ["19", 480, 1200], CVLT: ["50", 550, 3500],
+    C208: ["9–13", 300, 1700], PC12: ["6–9", 500, 3400], BE20: ["7–9", 500, 3300], B350: ["8–11", 560, 3300], BE9L: ["6", 450, 2400],
+    BN2P: ["9", 260, 1400], P68: ["6", 300, 2000], PA31: ["6–8", 380, 1600], DHC2: ["6–7", 230, 730], DHC6: ["19", 300, 1400], PC6T: ["10", 210, 900],
+    GA8: ["8", 230, 1300], KODI: ["9", 320, 2000], P750: ["9–17", 300, 2000],
+    C150: ["2", 180, 700], C152: ["2", 190, 770], C172: ["4", 220, 1200], C182: ["4", 270, 1700], C206: ["6", 270, 1300], C210: ["6", 310, 1600],
+    C180: ["4", 260, 1500], C185: ["6", 270, 1500], P28A: ["4", 220, 1000], P28R: ["4", 250, 1400], PA32: ["6", 260, 1300], P32R: ["6", 290, 1600],
+    PA18: ["2", 170, 740], PA38: ["2", 180, 870], PA34: ["6", 320, 1500], PA44: ["4", 290, 1300], DA20: ["2", 240, 1000], DA40: ["4", 260, 1300],
+    DA42: ["4", 300, 1700], P208: ["2", 220, 1000], SR20: ["4", 290, 1300], SR22: ["4–5", 330, 1900], BE58: ["4–6", 370, 2700], BE36: ["6", 320, 1700],
+    C310: ["5–6", 350, 1600], C421: ["6–8", 400, 2400], CT4: ["2", 240, 1200],
+    FU24: ["1 (plus up to 1 t of fertiliser)", 190, 0], CRES: ["1 (plus about 1.5 t of fertiliser)", 250, 0], AT8T: ["1 (plus about 3,000 litres)", 300, 0],
+    CL60: ["9–12", 850, 7500], CL64: ["9–12", 850, 7500], GLEX: ["13–19", 900, 11000], C25A: ["6", 700, 2400],
+    R22: ["2", 175, 400], R44: ["4", 200, 550], R66: ["5", 220, 600], B06: ["5", 210, 690], AS50: ["6", 245, 660], AS55: ["6", 225, 700],
+    H500: ["4–5", 240, 500], MD52: ["4–5", 230, 400], H269: ["2", 140, 350], EC20: ["5", 220, 700], EC30: ["7", 240, 610], B407: ["6", 245, 600],
+    B505: ["5", 230, 560], EC35: ["6–7", 250, 630], EC45: ["9", 245, 650], BK17: ["7–9", 230, 540], B429: ["7", 270, 760], B412: ["13", 230, 650],
+    B212: ["14", 190, 440], A109: ["6–7", 285, 900], A119: ["7", 245, 950], A169: ["10", 270, 820], A139: ["15", 300, 1060], S76: ["12", 280, 700],
+    KMAX: ["1 (lifts 2.7 t)", 150, 500]
+  };
+  function hoursFor(f, c, t) {
+    if (f.heli) return HELI_TWIN[t] ? "400 to 800 hours a year (rescue, offshore and police twins)" : t === "R22" || t === "R44" ? "100 to 600 hours a year (private ones far less than training and farm ones)" : "300 to 600 hours a year if it's a working helicopter, under 100 if private";
+    if (c === "gld" || GLIDER_TYPES[t]) return "50 to 150 hours a year, mostly on summer weekends";
+    if (VINTAGE_TYPES[t]) return "20 to 50 hours a year, saved for airshows and good weather";
+    if (AG_TYPES[t]) return "400 to 800 hours a year, busiest in the autumn and spring topdressing seasons";
+    if (/^(A33|A34|A35|A38|B74|B76|B77|B78)/.test(t)) return "4,500 to 5,000 hours a year (12 to 14 hours a day)";
+    if (/^(AT7|DH8|SF34|SB20|CVLT|B190|SW4|J32)/.test(t)) return "2,000 to 2,500 hours a year (6 to 8 short flights a day)";
+    if (AIRLINER_TYPES[t]) return "3,000 to 3,500 hours a year (8 to 10 hours a day)";
+    if (MIL_TRAINER_TYPES[t]) return "300 to 500 hours a year";
+    if (c === "trn" || TRAINER_TYPES[t]) return "500 to 1,000 hours a year at a flight school, under 150 if privately owned";
+    if (BIZ_TYPES[t]) return "300 to 500 hours a year";
+    if (UTILITY_TYPES[t]) return "500 to 1,000 hours a year";
+    if (SMALL_TYPES[t] || f.type) return "50 to 150 hours a year if privately owned";
+    return "";
+  }
+  function genericGroup(f) {
+    var cs = (f.flight || "").trim().toUpperCase(), t = f.type || "", c = f.cat, i, out = [];
+    for (i = 0; i < AIRLINE_INFO.length; i++) if (AIRLINE_INFO[i][0].test(cs)) { out = AIRLINE_INFO[i][1][1].slice(); var title = AIRLINE_INFO[i][1][0]; break; }
+    var tf = TYPE_FACTS[t], nm = typeName(f);
+    if (tf) out.push("Aircraft: the " + nm + " seats " + tf[0] + ", cruises about " + fmtN(tf[1]) + " km/h" + (tf[2] ? " and can fly about " + fmtN(tf[2]) + " km without refuelling." : "."));
+    var h = hoursFor(f, c, t);
+    if (h) out.push("Hours: a typical " + (nm || "aircraft like this") + " flies " + h + ".");
+    if (!out.length) return null;
+    return [title || "About the " + (nm || "aircraft"), out];
+  }
+  function fleetHtml(f, owner) {
     var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg], rg;
     if (!fi && f.cat === "pol" && /^ZK/.test(reg)) fi = ["eagle", ""];
+    var cs = (f.flight || "").trim().toUpperCase(), own = owner || f.owner || "";
+    if (!fi && (/^FDC\d/.test(cs) || /flying doctor/i.test(own))) fi = ["flydoc", ""];
+    if (!fi && !f.heli && (/^LFT\d/.test(cs) || /life ?flight/i.test(own))) fi = ["lifeplane", ""];
     if (!fi && (rg = rnzafGroup(f, reg))) fi = [rg, RNZAF_SQN[rg] + (reg ? " · " + reg : "")];
-    var g = fi && FLEET_GROUP[fi[0]];
+    var g = fi && FLEET_GROUP[fi[0]], gen = !g;
+    if (!g) { g = genericGroup(f); fi = ["", ""]; }
     if (!g) return "";
     return '<div class="fleet"><b>' + esc(g[0]) + "</b>" + (fi[1] ? "<i>This one: " + esc(fi[1]) + "</i>" : "") +
       "<ul>" + g[1].map(function (s) { var i = s.indexOf(": "); return i > 0 && i < 12 ? "<li><b>" + esc(s.slice(0, i)) + ":</b> " + esc(s.slice(i + 2)) + "</li>" : "<li>" + esc(s) + "</li>"; }).join("") +
-      "</ul><small>" + (RNZAF_SQN[fi[0]] ? "From NZDF, Wikipedia and news reports" : "From NZ Police, the rescue trusts, news reports and 111emergency.co.nz") + "</small></div>";
+      "</ul><small>" + (gen ? "Rounded maker figures and typical hours for this kind of aircraft, not this one" : RNZAF_SQN[fi[0]] ? "From NZDF, Wikipedia and news reports" : "From NZ Police, the operators and trusts, news reports and 111emergency.co.nz") + "</small></div>";
   }
   function useHtml(f, owner, co) {
     var u = usedFor(f, owner, co);
     if (!u) return "";
     return '<div class="use"><b>' + (u.mine ? "Used for: " : "Mainly used for: ") + "</b>" + esc(u.text) +
-      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>" + fleetHtml(f);
+      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>" + fleetHtml(f, owner);
   }
   function drawInfoPage(f) {
     var a = f.raw || {}, x = extraInfo[f.hex] || {}, rows = [];
