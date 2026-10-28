@@ -10,7 +10,7 @@ Firmware for an ESP32 "Cheap Yellow Display" (ESP32-2432S028R, 2.8" ILI9341) tha
 
 ## Install
 
-Easiest: open https://planes-steel.vercel.app/cyd/ in Chrome on a computer and press Install. The image there (`cyd/planecast-cyd.bin`) is built and committed by `.github/workflows/cyd-firmware.yml` on every push to main that touches this folder.
+Easiest: open https://planes-3g7.pages.dev/cyd/ in Chrome on a computer and press Install. The image there (`cyd/planecast-cyd.bin`) is built and committed by `.github/workflows/cyd-firmware.yml` on every push to main that touches this folder.
 
 From source: `pio run -d tools/cyd-cast -t upload`, then `pio device monitor` for the log.
 
