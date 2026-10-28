@@ -562,7 +562,7 @@ body.infoup main{visibility:hidden}
     EC30:["Airbus H130","Eurocopter EC130"], B407:["Bell 407","Bell 407"], A119:["AW119 Koala","AgustaWestland AW119 Koala"], A139:["AW139","AgustaWestland AW139"], TEX2:["T-6 Texan II","Beechcraft T-6 Texan II"],
     C30J:["C-130J Super Hercules","Lockheed Martin C-130J Super Hercules"],
     C130:["C-130 Hercules","Lockheed C-130 Hercules"], P8:["P-8A Poseidon","Boeing P-8 Poseidon"],
-    NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"],
+    NH90:["NH90","NHIndustries NH90"], A109:["AW109","AgustaWestland AW109"], H2:["SH-2G Super Seasprite","Kaman SH-2G Super Seasprite"],
     AS50:["AS350 Squirrel","Eurocopter AS350 Écureuil"], EC35:["EC135","Eurocopter EC135"],
     B06:["Bell 206","Bell 206"], R22:["Robinson R22","Robinson R22"], R44:["Robinson R44","Robinson R44"],
     CL60:["Challenger 600","Bombardier Challenger 600 series"], GLEX:["Global Express","Bombardier Global Express"],
@@ -2750,14 +2750,73 @@ body.infoup main{visibility:hidden}
       "Works with the Otago Southland rescue service when needed.",
       RESCUE_HOURS]]
   };
+  // RNZAF aircraft: serial prefix (NZ4801 ...) or type code -> group. Facts from NZDF, Wikipedia and news (checked 2026-10-28).
+  var RNZAF_SERIAL = [[/^NZ48\d\d$/, "p8"], [/^NZ757\d$/, "b757"], [/^NZ701\d$/, "c130"], [/^NZ33\d\d$/, "nh90"], [/^NZ34\d\d$/, "a109"],
+    [/^NZ36\d\d$/, "sh2"], [/^NZ14\d\d$/, "t6"], [/^NZ23\d\d$/, "ka350"]];
+  var RNZAF_TYPE = { P8: "p8", B752: "b757", C30J: "c130", NH90: "nh90", A109: "a109", H2: "sh2", TEX2: "t6", B350: "ka350" };
+  var RNZAF_SQN = {
+    p8: "No. 5 Squadron · Ohakea", b757: "No. 40 Squadron · Auckland (Whenuapai)", c130: "No. 40 Squadron · Auckland (Whenuapai)",
+    nh90: "No. 3 Squadron · Ohakea", a109: "No. 3 Squadron · Ohakea", sh2: "No. 6 Squadron · Auckland (Whenuapai)",
+    t6: "No. 14 Squadron and Central Flying School · Ohakea", ka350: "No. 42 Squadron · Ohakea"
+  };
+  var RNZAF_NOTE = "Ohakea is about 20 km south of Marton, so Ohakea aircraft are often overhead.";
+  Object.assign(FLEET_GROUP, {
+    p8: ["RNZAF Boeing P-8A Poseidon", [
+      "Job: maritime patrol. Watches NZ's huge ocean area, the Pacific and the Southern Ocean for illegal fishing, smuggling and ships in trouble, and does long-range search and rescue.",
+      "Also: anti-submarine warfare, and patrols that check North Korea sanctions are being kept.",
+      "Fleet: 4 (NZ4801 to NZ4804), arrived 2022 and 2023, replacing the P-3K2 Orions flown since 1966.",
+      "Aircraft: based on the Boeing 737-800, top speed about 900 km/h, range over 7,500 km. Crew of about 9.",
+      "Weapons: can carry torpedoes and Harpoon anti-ship missiles, which the RNZAF has test-fired.",
+      RNZAF_NOTE]],
+    b757: ["RNZAF Boeing 757-200", [
+      "Job: long-range transport for troops and cargo, disaster relief, and flying the Prime Minister and trade delegations overseas. Also flies to Antarctica (Phoenix Airfield, McMurdo).",
+      "Fleet: 2 (NZ7571 and NZ7572), built 1993, bought 2003, fitted with a big cargo door in 2008 to 2010.",
+      "Known for: breakdowns on PM trips, which pushed the government to replace them.",
+      "Replacement: two Airbus A321XLRs on a lease-to-buy deal, arriving 2028."]],
+    c130: ["RNZAF C-130J-30 Super Hercules", [
+      "Job: the Air Force workhorse. Carries troops, vehicles and cargo, drops paratroopers and supplies, flies medical evacuations, Pacific disaster relief and search and rescue, and supports Antarctica New Zealand.",
+      "Fleet: 5 (NZ7011 to NZ7015), delivered September to December 2024. They replaced the C-130H Hercules flown for 60 years (1965 to 2025).",
+      "Aircraft: four Rolls-Royce engines, cruises up to 675 km/h, carries up to 21 tonnes or 128 passengers. Can fly into Antarctica's cold and the tropics in the same week.",
+      "Same aircraft as Australia, the US, Canada, Germany and France fly, so they work easily together."]],
+    nh90: ["RNZAF NH90 helicopter", [
+      "Job: medium utility helicopter. Moves Army troops and gear, search and rescue, disaster relief and medical evacuations. Can carry up to 18 soldiers, or lift loads under the belly.",
+      "Fleet: 8, arrived 2011 to 2013, replacing the Bell UH-1H Iroquois (Hueys).",
+      "Known for: rescuing people off rooftops in Hawke's Bay and Tairāwhiti after Cyclone Gabrielle (2023). Night-vision and de-icing equipped.",
+      RNZAF_NOTE]],
+    a109: ["RNZAF AW109 light helicopter", [
+      "Job: trains Air Force helicopter pilots and crew, and does light utility work like moving people, surveillance and some search and rescue.",
+      "Fleet: 5, arrived 2011, replacing the Bell 47 Sioux trainers.",
+      RNZAF_NOTE]],
+    sh2: ["RNZAF SH-2G(I) Super Seasprite", [
+      "Job: Navy helicopter. Flies off the frigates and ships, hunts submarines, watches for ships, and does search and rescue and supply runs.",
+      "Crew: Air Force pilots with Navy observers. Can carry torpedoes and Penguin anti-ship missiles.",
+      "Fleet: 5 in service, from 10 ex-Australian Seasprites bought in 2013 to replace the older SH-2G(NZ).",
+      "Replacement: 5 MH-60R Seahawks, due 2027."]],
+    t6: ["RNZAF T-6C Texan II", [
+      "Job: pilot training. Every new Air Force pilot learns to fly here (the Wings course) before moving to bigger aircraft.",
+      "Also: the Black Falcons aerobatic display team flies them.",
+      "Fleet: 11, arrived 2014 and 2015, replacing the CT-4E Airtrainers.",
+      "Aircraft: single turboprop, two seats (instructor behind the student), top speed about 585 km/h.",
+      RNZAF_NOTE]],
+    ka350: ["RNZAF Beechcraft King Air 350", [
+      "Job: multi-engine pilot training for crews heading to the Hercules, 757 or Poseidon, plus light transport. Two are fitted for maritime surveillance.",
+      "Fleet: 4, flying with KIW callsigns.",
+      RNZAF_NOTE]]
+  });
+  function rnzafGroup(f, reg) {
+    for (var i = 0; i < RNZAF_SERIAL.length; i++) if (RNZAF_SERIAL[i][0].test(reg)) return RNZAF_SERIAL[i][1];
+    var mil = /^NZ\d{4}$/.test(reg) || /^KIW/.test((f.flight || "").trim().toUpperCase());
+    return mil ? RNZAF_TYPE[f.type] || "" : "";
+  }
   function fleetHtml(f) {
-    var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg];
+    var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg], rg;
     if (!fi && f.cat === "pol" && /^ZK/.test(reg)) fi = ["eagle", ""];
+    if (!fi && (rg = rnzafGroup(f, reg))) fi = [rg, RNZAF_SQN[rg] + (reg ? " · " + reg : "")];
     var g = fi && FLEET_GROUP[fi[0]];
     if (!g) return "";
     return '<div class="fleet"><b>' + esc(g[0]) + "</b>" + (fi[1] ? "<i>This one: " + esc(fi[1]) + "</i>" : "") +
       "<ul>" + g[1].map(function (s) { var i = s.indexOf(": "); return i > 0 && i < 12 ? "<li><b>" + esc(s.slice(0, i)) + ":</b> " + esc(s.slice(i + 2)) + "</li>" : "<li>" + esc(s) + "</li>"; }).join("") +
-      "</ul><small>From NZ Police, the rescue trusts, news reports and 111emergency.co.nz</small></div>";
+      "</ul><small>" + (RNZAF_SQN[fi[0]] ? "From NZDF, Wikipedia and news reports" : "From NZ Police, the rescue trusts, news reports and 111emergency.co.nz") + "</small></div>";
   }
   function useHtml(f, owner, co) {
     var u = usedFor(f, owner, co);
