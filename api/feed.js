@@ -1,5 +1,5 @@
 // Vercel serverless relay: fetches nearby aircraft for the Nest Hub page.
-// Tries adsb.lol first, then adsb.fi. With ?hex= it looks up one aircraft instead. Answers are edge-cached for 5 s.
+// Tries adsb.lol first, then adsb.fi, then airplanes.live (Cloudflare's shared addresses get 429/403 from the first two). With ?hex= it looks up one aircraft instead. Answers are edge-cached for 5 s.
 module.exports = async (req, res) => {
   const num = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
   const lat = num(req.query.lat, -40.07);
@@ -12,13 +12,16 @@ module.exports = async (req, res) => {
   const reg = /^[A-Z0-9]{1,3}-?[A-Z0-9]{2,6}$/i.test(req.query.reg || "") ? req.query.reg.toUpperCase() : null;
   const sources = reg ? [
     { url: `https://api.adsb.lol/v2/registration/${reg}`, list: "ac" },
-    { url: `https://opendata.adsb.fi/api/v2/registration/${reg}`, list: "aircraft" }
+    { url: `https://opendata.adsb.fi/api/v2/registration/${reg}`, list: "aircraft" },
+    { url: `https://api.airplanes.live/v2/reg/${reg}`, list: "ac" }
   ] : hex ? [
     { url: `https://api.adsb.lol/v2/hex/${hex}`, list: "ac" },
-    { url: `https://opendata.adsb.fi/api/v2/hex/${hex}`, list: "aircraft" }
+    { url: `https://opendata.adsb.fi/api/v2/hex/${hex}`, list: "aircraft" },
+    { url: `https://api.airplanes.live/v2/hex/${hex}`, list: "ac" }
   ] : [
     { url: `https://api.adsb.lol/v2/point/${lat}/${lon}/${r}`, list: "ac" },
-    { url: `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`, list: "aircraft" }
+    { url: `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`, list: "aircraft" },
+    { url: `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`, list: "ac" }
   ];
   const tried = [];
   // A plane sending a blank callsign comes through as "@@@@@@@@" (character 0 in ADS-B): treat it as none
