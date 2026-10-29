@@ -1177,9 +1177,12 @@ body.infoup main{visibility:hidden}
     if (!near.length) return null;
     if (a.alt === "ground") return near[0].d < 5 ? { icon: "●", text: "On ground at", ap: near[0] } : null;
     if (a.alt == null) return null;
+    // military aircraft usually land at their own airbase (Ohakea): try those first and allow a wider approach angle
+    var milAc = a.cat === "mil";
+    if (milAc) near = near.filter(function (x) { return x.mil; }).concat(near.filter(function (x) { return !x.mil; }));
     for (var i = 0; i < near.length; i++) {
       var ap = near[i], agl = a.alt - ap.elev, km = ap.d;
-      var ahead = a.track == null ? true : Math.abs(((bearing(a.lat, a.lon, ap.lat, ap.lon) - a.track + 540) % 360) - 180) < 70;
+      var ahead = a.track == null ? true : Math.abs(((bearing(a.lat, a.lon, ap.lat, ap.lon) - a.track + 540) % 360) - 180) < (milAc && ap.mil ? 100 : 70);
       if (a.vr < -300 && (ahead || km < 4) && agl < 1500 + km * 400) return { icon: "↘", text: "Arriving", ap: ap };
       if (a.vr > 300 && km < 20 && agl < 6000 && (!ahead || km < 4)) return { icon: "↗", text: "Departing", ap: ap };
       if (Math.abs(a.vr) <= 300 && km < 10 && agl < 2000) return { icon: "○", text: "In circuit at", ap: ap };
