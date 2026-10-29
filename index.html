@@ -1152,10 +1152,10 @@ body.infoup main{visibility:hidden}
   }
 
   // ---------- airports (OurAirports data in airports.json) ----------
-  // Entries: [code, name, lat, lon, elevation_ft, tier]  tier 1 = large, 2 = medium, 3 = small airfield
+  // Entries: [code, name, lat, lon, elevation_ft, tier, [runway headings, degrees true]]  tier 1 = large, 2 = medium, 3 = small airfield
   var AIRPORTS = [], aptLayer = null;
   var MIL_APT = /air ?force|air ?base|airbase|rnzaf|raaf|military|naval air|\bbase\b/i;
-  function apt(r) { return { code: r[0], name: r[1], lat: r[2], lon: r[3], elev: r[4], tier: r[5], mil: MIL_APT.test(r[1]) }; }
+  function apt(r) { return { code: r[0], name: r[1], lat: r[2], lon: r[3], elev: r[4], tier: r[5], rw: r[6] || null, mil: MIL_APT.test(r[1]) }; }
 
   // airports within km of a point (quick lat/lon box first, then real distance)
   function airportsNear(lat, lon, km, maxTier) {
@@ -1167,6 +1167,18 @@ body.infoup main{visibility:hidden}
       if (d <= km) { var a = apt(r); a.d = d; out.push(a); }
     }
     return out.sort(function (x, y) { return x.d - y.d; });
+  }
+
+  // Is the plane lined up with one of the airport's runways? Landing: flying along the runway and out on its
+  // approach side. Taking off: flying along it, past the far end. No runway data = no opinion (true).
+  function onRunway(a, ap, landing) {
+    if (!ap.rw || a.track == null) return true;
+    var out = bearing(ap.lat, ap.lon, a.lat, a.lon);   // airport -> plane
+    for (var i = 0; i < ap.rw.length; i++) {
+      var h = ap.rw[i], side = landing ? (h + 180) % 360 : h;
+      if (chcAngle(a.track, h) < (landing ? 40 : 60) && chcAngle(out, side) < (landing ? 55 : 70)) return true;
+    }
+    return false;
   }
 
   // Best guess at what a low plane is doing near an airport. Returns {icon, text, ap} or null.
@@ -1183,8 +1195,8 @@ body.infoup main{visibility:hidden}
     for (var i = 0; i < near.length; i++) {
       var ap = near[i], agl = a.alt - ap.elev, km = ap.d;
       var ahead = a.track == null ? true : Math.abs(((bearing(a.lat, a.lon, ap.lat, ap.lon) - a.track + 540) % 360) - 180) < (milAc && ap.mil ? 100 : 70);
-      if (a.vr < -300 && (ahead || km < 4) && agl < 1500 + km * 400) return { icon: "↘", text: "Arriving", ap: ap };
-      if (a.vr > 300 && km < 20 && agl < 6000 && (!ahead || km < 4)) return { icon: "↗", text: "Departing", ap: ap };
+      if (a.vr < -300 && (ahead || km < 4) && agl < 1500 + km * 400 && (km < 2 || onRunway(a, ap, true))) return { icon: "↘", text: "Arriving", ap: ap };
+      if (a.vr > 300 && km < 20 && agl < 6000 && (!ahead || km < 4) && (km < 6 || onRunway(a, ap, false))) return { icon: "↗", text: "Departing", ap: ap };
       if (Math.abs(a.vr) <= 300 && km < 10 && agl < 2000) return { icon: "○", text: "In circuit at", ap: ap };
     }
     return null;
