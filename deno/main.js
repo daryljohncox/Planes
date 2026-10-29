@@ -1,8 +1,10 @@
 // Deno Deploy relay: runs the Vercel-style api/feed.js unchanged, for when the feeds refuse Cloudflare's addresses.
-// Entry point for the Deno Deploy app. Answers are cached in memory for the handler's s-maxage.
+// Entry point for the Deno Deploy app. Answers are cached in memory for at least MIN_TTL seconds (this is only the fallback, so a little stale is fine
+// and it keeps the free Deno allowance (memory time) from running out).
 import { createRequire } from "node:module";
 const handler = createRequire(import.meta.url)("../api/feed.js");
 const cache = new Map();
+const MIN_TTL = 25;
 
 Deno.serve(async (request) => {
   const url = new URL(request.url);
@@ -27,7 +29,7 @@ Deno.serve(async (request) => {
   const m = /s-maxage=(\d+)/.exec(headers.get("Cache-Control") || "");
   if (status === 200 && m) {
     if (cache.size > 200) cache.clear();
-    cache.set(key, { body, headers, until: Date.now() + m[1] * 1000 });
+    cache.set(key, { body, headers, until: Date.now() + Math.max(m[1], MIN_TTL) * 1000 });
   }
   return new Response(body, { status, headers });
 });
