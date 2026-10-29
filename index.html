@@ -259,6 +259,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .csn:empty{display:none}
 .aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
 .rt .apsl{color:#9fd8ff}
+.rt .lap{color:#ffd27a;font-weight:700}
 .row .ri svg{width:100%;height:100%}
 .row .rm{flex:1;min-width:0}
 .row .rc{display:block;font-size:3vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1758,9 +1759,25 @@ body.infoup main{visibility:hidden}
     try { sessionStorage.setItem("planes.trails", JSON.stringify(keep)); } catch (e) { /* too big or not allowed */ }
   }
   var traceCache = {};   // hex -> { pts, at } | "pending"
+  // Lap count for planes flying round in circles (holding patterns, orbits, helicopters): add up each poll's change of
+  // heading; 360 degrees one way is a lap. Straight flying for 2.5 minutes (a racetrack leg is about a minute) starts over.
+  var turns = {};        // hex -> { trk, sum, still: ms of not turning, at: ms }
+  function trackTurns(a, now) {
+    if (a.alt === "ground" || a.track == null) { delete turns[a.hex]; return; }
+    var t = turns[a.hex];
+    if (!t) { turns[a.hex] = { trk: a.track, sum: 0, still: 0, at: now }; return; }
+    var d = ((a.track - t.trk + 540) % 360) - 180, dt = now - t.at;
+    if (dt < 1000) return;
+    if (Math.abs(d) < 2) { t.still += dt; if (t.still > 150000) t.sum = 0; }
+    else { t.still = 0; if (t.sum * d < 0 && Math.abs(d) > 20) t.sum = 0; t.sum += d; }
+    t.trk = a.track; t.at = now;
+  }
+  function lapsOf(a) { var t = turns[a.hex]; return t ? Math.floor(Math.abs(t.sum) / 360) : 0; }
+  function lapText(n) { return "Circling · " + n + (n === 1 ? " lap" : " laps"); }
   function recordTrails(list) {
     var now = Date.now(), t = Math.round(now / 1000);
     list.forEach(function (a) {
+      trackTurns(a, now);
       var tr = trails[a.hex] || (trails[a.hex] = { pts: [], seen: now });
       var last = tr.pts[tr.pts.length - 1];
       if (!last || last[0] !== a.lat || last[1] !== a.lon) tr.pts.push([a.lat, a.lon, t, a.alt]);
@@ -1768,6 +1785,7 @@ body.infoup main{visibility:hidden}
       tr.seen = now;
     });
     Object.keys(trails).forEach(function (hex) { if (now - trails[hex].seen > TRAIL_KEEP_MS && hex !== selHex) delete trails[hex]; });
+    Object.keys(turns).forEach(function (hex) { if (now - turns[hex].at > 120000) delete turns[hex]; });
   }
   // Flightradar24's track of the plane's live flight (or, for a plane that has gone, the flight it was on
   // when last seen), fetched by the Hub itself (adsb.lol & co. refuse the Vercel relay). Same point format as /api/trace.
@@ -2110,6 +2128,8 @@ body.infoup main{visibility:hidden}
     var co = csOp(f.flight.toUpperCase());
     $("csn").textContent = co ? co.code + " = " + co.name + " · " + co.op : "";
     $("aps").textContent = gone && gone.gone.hunt ? "🚨 Hunted over " + gone.gone.hunt : gone ? "★ Rare: " + gone.gone.why + (gone.gone.with && gone.gone.with.length ? " · flying alongside " + gone.gone.with.join(", ") : "") : st ? st.icon + " " + st.text + " " + st.ap.name + (st.ap.code ? " (" + st.ap.code + ")" : "") : "";
+    var lps = gone ? 0 : lapsOf(f);
+    if (lps) $("aps").textContent += ($("aps").textContent ? " · " : "") + "⟳ " + lapText(lps);
     $("sAlt").innerHTML = altHtml(f);
     $("sDist").innerHTML = f.homeDist.toFixed(1) + "<small>km " + compass(f.homeBrg) + "</small>";
     $("sHdg").innerHTML = f.track == null ? "—" : arrow(f.track) + Math.round(f.track) + "°<small>" + compass(f.track) + "</small>";
@@ -2204,6 +2224,8 @@ body.infoup main{visibility:hidden}
       var ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
       var st = airportStatus(a), oh = overheadIn(a);
       if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
+      var lp = lapsOf(a);
+      if (lp) ty = '<span class="lap">⟳ ' + lp + (lp === 1 ? " lap" : " laps") + "</span> · " + ty;
       if (oh) ty = '<span class="ovh">Overhead ' + (oh < 1 ? "now" : "in " + Math.round(oh) + " min") + "</span> · " + ty;
       return '<button type="button" class="row" data-hex="' + esc(a.hex) + '">' +
         '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg></span>' +
