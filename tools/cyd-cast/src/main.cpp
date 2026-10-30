@@ -399,7 +399,7 @@ body{min-height:100vh;background:#081020;color:#fff;font-family:system-ui,-apple
 #big{font-size:44px;font-weight:700}
 #small{font-size:19px}
 #ip{font-size:15px;color:#8a8a8a}
-.btns{display:flex;gap:14px}
+.btns{display:flex;gap:14px;margin-bottom:20mm}
 button{flex:1;height:88px;border:0;border-radius:16px;background:#303030;color:#fff;font:600 26px system-ui,sans-serif}
 button:active{filter:brightness(1.4)}
 button.go{background:#2bd432;color:#000}
