@@ -440,7 +440,7 @@ body.infoup main{visibility:hidden}
       <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
       <button id="zoomni" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
       <button id="zoomnz" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
-      <button id="zoomcont" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Continents</span></button>
+      <button id="zoomcont" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Continents</span><b id="contcount"></b></button>
     </div>
     <div id="stepbtns">
       <button id="stepin" class="mbtn" type="button" aria-label="Zoom in 25 km">+</button>
@@ -763,7 +763,7 @@ body.infoup main{visibility:hidden}
 
   // ---------- map ----------
   var map = null, markers = {};
-  var mapFollow = null, mapUnfollow = null;   // set up once the map exists
+  var mapFollow = null, mapUnfollow = null, mapHoldClear = function () {};   // set up once the map exists
   var trailLine = null, trailCase = null, iceLine = null;
   if (typeof L === "undefined") {
     setStatus("Map library didn't load");
@@ -889,7 +889,7 @@ body.infoup main{visibility:hidden}
       }
     }
     // Keep the followed plane centred. Pans done by the page itself don't trigger an extra fetch.
-    var autoPan = false;
+    var autoPan = false, holdUntil = 0;   // dragging off a followed plane holds the view for 30 s after you stop
     // Flight path of the selected plane: dark casing under an orange line
     trailCase = L.polyline([], { color: "#000", weight: 6, opacity: 0.35, interactive: false }).addTo(map);
     trailLine = L.polyline([], { color: "#ff6a00", weight: 3, opacity: 0.95, interactive: false }).addTo(map);
@@ -897,14 +897,15 @@ body.infoup main{visibility:hidden}
     iceLine = L.polyline([], { color: "#39ff14", weight: 3, opacity: 0.9, dashArray: "2 8", lineCap: "round", interactive: false }).addTo(map);
     mapFollow = function (a, now) {
       var pt = map.latLngToContainerPoint([a.lat, a.lon]), mid = map.getSize().divideBy(2);
-      if (!moving && pt.distanceTo(mid) > 2) { autoPan = true; map.panTo([a.lat, a.lon], { animate: !now, duration: 0.8 }); }
+      if (!moving && Date.now() > holdUntil && pt.distanceTo(mid) > 2) { autoPan = true; map.panTo([a.lat, a.lon], { animate: !now, duration: 0.8 }); }
       touched(false);
     };
     mapUnfollow = function () { touched(true); };
+    mapHoldClear = function () { holdUntil = 0; };
     var refetchT = null;
     map.on("move", function () { if (!(selHex && selLast)) { ring.setLatLng(map.getCenter()); ring25.setLatLng(map.getCenter()); } });
-    map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); });
-    map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; touched(!auto && !selHex); if (renderLater) render(); });
+    map.on("movestart zoomstart", function () { moving = true; clearTimeout(idleT); if (!autoPan && selHex) holdUntil = Infinity; });
+    map.on("moveend zoomend", function () { moving = false; var auto = autoPan; autoPan = false; if (!auto && selHex) holdUntil = Date.now() + 30000; touched(!auto && !selHex); if (renderLater) render(); });
     L.DomEvent.on(homeBtn, "click", function (e) { L.DomEvent.stop(e); setView(""); goHome(); });
     L.DomEvent.disableClickPropagation(homeBtn);
     // Zoom-out buttons: Marton with 2x the home distance to the edge, the North Island, all of New Zealand
@@ -1991,7 +1992,7 @@ body.infoup main{visibility:hidden}
   // zoom: from the plane / rare lists – also zoom to the same distance as the home view
   var homeZoom;   // set when the map starts
   function select(hex, zoom) {
-    selHex = hex; selLast = null;
+    selHex = hex; selLast = null; mapHoldClear();
     for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === hex) selLast = aircraft[i];
     if (selLast && zoom && map && homeZoom) map.setView([selLast.lat, selLast.lon], homeZoom, { animate: false });
     if (selLast) { follow(selLast, false); poll(); }
@@ -2487,8 +2488,14 @@ body.infoup main{visibility:hidden}
     B57: "NASA WB-57", Q4: "Global Hawk drone", Q9: "Reaper drone", MI26: "Mi-26 giant helicopter", V22: "Osprey", KC10: "KC-10 tanker", C5M: "C-5 Galaxy",
     B17: "B-17 Flying Fortress", B24: "B-24 Liberator", B29: "B-29 Superfortress", LANC: "Lancaster bomber", MOSQ: "de Havilland Mosquito",
     SPIT: "Spitfire", HURI: "Hurricane", P38: "P-38 Lightning", B25: "B-25 Mitchell", F4U: "Corsair", JU52: "Junkers Ju 52", PBY5: "Catalina", P3: "P-3 Orion",
-    ZEPP: "Zeppelin airship", SHIP: "Airship", CL2T: "CL-415 water bomber", S64: "Air-Crane helicopter"
+    ZEPP: "Zeppelin airship", SHIP: "Airship", CL2T: "CL-415 water bomber", S64: "Air-Crane helicopter",
+    A225: "Antonov An-225", AN12: "Antonov An-12", AN24: "Antonov An-24", AN26: "Antonov An-26", AN28: "Antonov An-28", AN30: "Antonov An-30",
+    AN32: "Antonov An-32", AN38: "Antonov An-38", AN72: "Antonov An-72", AN74: "Antonov An-74", A140: "Antonov An-140", A148: "Antonov An-148",
+    A158: "Antonov An-158", AN70: "Antonov An-70", AN2: "Antonov An-2", E7WW: "Wedgetail radar plane", E2: "Hawkeye radar plane", F117: "F-117 stealth fighter"
   };
+  // Every Antonov counts as rare, wherever it is
+  var ANTONOV_RE = /^(AN\d{1,3}|A1[24]\d|A225)$/;
+  function isAntonov(t, desc) { return !!(t && ANTONOV_RE.test(t)) || /antonov/i.test(desc || ""); }
   // Military aircraft that aren't for carrying people or cargo count as rare too (spy planes, fighters, bombers, radar planes,
   // tankers, attack helicopters). These transport / utility / trainer types are left out.
   var MIL_PLAIN = {
@@ -2497,9 +2504,15 @@ body.infoup main{visibility:hidden}
     A332: 1, A339: 1, B752: 1, B762: 1, B763: 1, B772: 1, B77W: 1, B744: 1, B737: 1, B738: 1, A319: 1, A320: 1, A321: 1, F900: 1, F2TH: 1, FA7X: 1, FA50: 1, LJ35: 1, LJ45: 1, LJ60: 1, C25A: 1, C25B: 1, C25C: 1, C510: 1, C525: 1, C550: 1, C650: 1, C680: 1, GALX: 1, G280: 1, H25B: 1, E55P: 1, PC24: 1, SF34: 1, SW4: 1, JS31: 1, JS32: 1, B462: 1, RJ85: 1, CRJ2: 1, E190: 1, E170: 1, SB20: 1, AT76: 1, AT75: 1, AT45: 1, AT72: 1, DH8A: 1, DH8B: 1, D328: 1, F27: 1, F50: 1, F100: 1,
     TEX2: 1, T6: 1, T38: 1, PC21: 1, PC9: 1, PC7: 1, HAWK: 1, M346: 1, L39: 1, L159: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, SR22: 1, S22T: 1, P28A: 1, PA28: 1, C152: 1, C150: 1, DA40: 1, DA42: 1, EC35: 1, EC45: 1, EC30: 1, A109: 1, A139: 1, NH90: 1, H60: 1, S70: 1, UH1: 1, H1: 1, B412: 1, B06: 1, B407: 1, EC20: 1, AS50: 1, AS55: 1, AS32: 1, S76: 1, H47: 1, H53: 1, H53S: 1, MI8: 1, MI17: 1, S61: 1, S92: 1, R44: 1, R22: 1, R66: 1, BK17: 1, MD52: 1, MD60: 1, MI26: 1, H500: 1, AS65: 1, EC55: 1, EC75: 1, A119: 1, A169: 1
   };
+  // Only the special ones count: bombers, spy and radar planes, stealth jets, drones, research jets
+  var MIL_SPECIAL = {
+    B1: 1, B2: 1, B52: 1, B21: 1, H6: 1, TU95: 1, TU16: 1, TU22: 1, T160: 1, TU60: 1,
+    U2: 1, R135: 1, RC13: 1, E6: 1, E3TF: 1, E3CF: 1, E8: 1, E7WW: 1, E2: 1, E767: 1, KJ20: 1, KJ50: 1, A50: 1, A60: 1, B57: 1, WC13: 1, P8: 1, P1: 1,
+    F22: 1, F35: 1, F117: 1, SU57: 1, J20: 1, J35: 1, Q4: 1, Q9: 1, RQ4: 1, MQ9: 1, A10: 1, V22: 1, AC13: 1, C130S: 1, MI26: 1
+  };
   function milRare(x) {
-    if (!x.t || !(x.dbFlags & 1) || x.alt_baro === "ground" || MIL_PLAIN[x.t]) return false;
-    return true;
+    if (!x.t || !(x.dbFlags & 1) || x.alt_baro === "ground") return false;
+    return !!MIL_SPECIAL[x.t] || isAntonov(x.t, x.desc);
   }
   var CONTINENTS = [   // [name, south, west, north, east]
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
@@ -2509,6 +2522,8 @@ body.infoup main{visibility:hidden}
   // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS; });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
+  // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
+  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && lat > -58 && lat < -8 && (lon > 155 || lon < -150); }
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
     return "Elsewhere";
@@ -2532,10 +2547,16 @@ body.infoup main{visibility:hidden}
       r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
       r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
       r.cont = contOf(a); r.last = now;
-      noteRare(a, why);   // the rare list gets the world's finds too, not only planes near the map
+      if (nearNZ(a.lat, a.lon)) noteRare(a, why);   // only finds near NZ go on the Rare list
     });
     contList = contList.filter(function (r) { return now - r.last < CONT_DAYS_MS; }).sort(function (x, y) { return y.t - x.t; });
     store.set("cont", contList);
+    contCount();
+  }
+  function contCount() {   // today's finds on the button, like the Rare planes count
+    var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    var n = contList.filter(function (r) { return r.t >= d0.getTime(); }).length;
+    $("contcount").textContent = n ? n : "";
   }
   function contRow(r) {
     var live = Date.now() - r.last < SCAN_EVERY_MS * 1.6;
@@ -2549,11 +2570,13 @@ body.infoup main{visibility:hidden}
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
       var names = CONTINENTS.map(function (c) { return c[0]; }).concat(["Elsewhere"]);
-      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
+      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every Antonov and the special military ones (spy planes, radar planes, bombers, stealth jets, drones). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
         names.map(function (n) {
-          var cnt = contList.filter(function (r) { return r.cont === n; }).length;
+          var all = contList.filter(function (r) { return r.cont === n; }), cnt = all.length;
+          var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+          var today = all.filter(function (r) { return r.t >= d0.getTime(); }).length;
           if (n === "Elsewhere" && !cnt) return "";
-          return '<button type="button" class="rr" data-cont="' + esc(n) + '"><span class="rm"><span class="rc">' + esc(n) + '</span></span><span class="rw">' + (scanAt || cnt ? cnt + " found" : "") + "</span></button>";
+          return '<button type="button" class="rr" data-cont="' + esc(n) + '"><span class="rm"><span class="rc">' + esc(n) + '</span></span><span class="rw">' + (scanAt || cnt ? today + " today<br>" + cnt + " in 30 days" : "") + "</span></button>";
         }).join("");
       return;
     }
@@ -3614,7 +3637,7 @@ body.infoup main{visibility:hidden}
     DH82: "Vintage Tiger Moth", DH83: "Vintage", DH84: "Vintage", DH89: "Vintage", DH60: "Vintage", DHC1: "Vintage Chipmunk",
     MOSQ: "Warbird", VAMP: "Vintage jet", L39: "Jet trainer", L29: "Jet trainer", JPRO: "Vintage jet", MIG: "Warbird",
     HUNT: "Vintage jet", STRK: "Vintage jet", A4: "Vintage jet", PITS: "Aerobatic", EXTR: "Aerobatic", E300: "Aerobatic",
-    B74S: "Rare 747SP", A124: "Giant", A225: "Giant", AN12: "Unusual", IL76: "Unusual",
+    B74S: "Rare 747SP", IL76: "Unusual",
     C5M: "Giant", C17: "Big military", A400: "Big military", B52: "Bomber", K35R: "Tanker", KC2: "Tanker", A332M: "Tanker",
     E3TF: "Radar plane", E7WW: "Radar plane", BLCF: "Dreamlifter", BELF: "Beluga", A3ST: "Beluga", A337: "Beluga XL",
     CONC: "Concorde", GLF6: "Business jet", GL7T: "Business jet", BBJ: "Business jet", ZEPP: "Airship", SHIP: "Airship",
@@ -3624,10 +3647,11 @@ body.infoup main{visibility:hidden}
     B1: "Bomber", B2: "Bomber", F35: "Fighter", F18: "Fighter", F18S: "Fighter", E18G: "Fighter", F16: "Fighter", F15: "Fighter",
     F22: "Fighter", EUFI: "Fighter", RFAL: "Fighter", MIR2: "Fighter", HAWK: "Jet trainer", PC21: "Jet trainer", M339: "Vintage jet",
     V22: "Osprey", H47: "Chinook", H53: "Big helicopter", H53S: "Big helicopter", S61: "Big helicopter", MI8: "Big helicopter",
-    C27J: "Military", C295: "Military", CN35: "Military", AN22: "Giant", AN26: "Unusual", AN30: "Unusual", AN72: "Unusual",
+    C27J: "Military", C295: "Military", CN35: "Military", 
     IL18: "Unusual", IL62: "Unusual", IL96: "Unusual", T154: "Unusual", T204: "Unusual", SGUP: "Super Guppy", SU95: "Russian airliner", MC21: "Russian airliner",
     C919: "Chinese airliner", AJ27: "Chinese airliner", C909: "Chinese airliner", Y8: "Chinese military", Y9: "Chinese military",
     H6: "Chinese bomber", KJ20: "Radar plane", AG60: "Chinese flying boat", MA60: "Chinese plane", MA70: "Chinese plane",
+    AN2: "Antonov", AN24: "Antonov", AN28: "Antonov", AN32: "Antonov", AN38: "Antonov", AN74: "Antonov", AN70: "Antonov", A140: "Antonov", A148: "Antonov", A158: "Antonov", AN12: "Antonov", AN22: "Antonov", AN26: "Antonov", AN30: "Antonov", AN72: "Antonov", A124: "Antonov", A225: "Antonov",
     L101: "Classic", B741: "Classic 747", B742: "Classic 747", B743: "Classic 747", B703: "Classic", B722: "Classic",
     DC85: "Classic", DC86: "Classic", DC87: "Classic", GA7C: "Business jet", LANC: "Warbird", P38: "Warbird", B24: "Warbird", B29: "Warbird", TBM: "Warbird",
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica",
@@ -3635,6 +3659,7 @@ body.infoup main{visibility:hidden}
   };
   function rareWhy(a) {
     if (a.cat === "emg") return "Emergency";
+    if (isAntonov(a.type, a.desc)) return "Antonov";
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
     if (a.cat === "ant") return a.ice ? "Antarctic flight" : "Research";
     if (southOfNZ(a)) return "South of NZ";
@@ -3665,6 +3690,7 @@ body.infoup main{visibility:hidden}
     rareList.slice().reverse().forEach(function (r) {
       var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || "");
       if (m && !RARE_TYPES[m[1]] && !NOT_TYPE.test(r.why || "")) return;
+      if (!nearNZ(r.lat, r.lon) && !/^(Emergency|Antarctic flight|Research|South of NZ)$/.test(r.why || "") && typeof r.lat === "number" && r.lat > -60) return;   // world finds from before the Rare list went NZ-only
       if (r.why === "South of NZ" && isAirliner({ cat: r.cat, type: m ? m[1] : r.type })) return;
       for (var i = kept.length - 1; i >= 0; i--) {
         var k = kept[i];
@@ -3680,6 +3706,7 @@ body.infoup main{visibility:hidden}
     });
     if (kept.length !== rareList.length) { rareList = kept.reverse(); store.set("rare", rareList); }
   })();
+  contCount();
   function rareCount() {   // today's rare planes on the button
     var d0 = new Date(); d0.setHours(0, 0, 0, 0);
     var n = rareList.filter(function (r) { return r.t >= d0.getTime() && r.why !== "Emergency"; }).length;
