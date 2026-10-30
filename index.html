@@ -2623,6 +2623,33 @@ body.infoup main{visibility:hidden}
   }
   setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 20000);
 
+  // Smooth scrolling for the side panels (rare, emergencies, hunt, continents): a redraw is skipped when nothing changed,
+  // and while a finger is on the panel or it is still gliding the new rows wait until 0.7 s after it stops
+  function smoothPane(el) {
+    var desc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), last = null, pend = null, touch = false, scrolled = false, t = null, appliedAt = 0;
+    function apply(h) {
+      var top = el.scrollTop;
+      desc.set.call(el, h); last = h; appliedAt = Date.now();
+      el.scrollTop = top;
+    }
+    function flush() { if (pend !== null) { var h = pend; pend = null; apply(h); } }
+    function settle() { clearTimeout(t); t = setTimeout(function () { t = null; if (!touch) flush(); }, 700); }
+    Object.defineProperty(el, "innerHTML", {
+      configurable: true,
+      get: function () { return desc.get.call(el); },
+      set: function (h) {
+        if (h === last) { pend = null; return; }
+        if ((touch && scrolled) || t) { pend = h; return; }
+        apply(h);
+      }
+    });
+    el.addEventListener("touchstart", function () { touch = true; scrolled = false; }, { passive: true });
+    el.addEventListener("touchend", function () { touch = false; if (scrolled) settle(); else flush(); }, { passive: true });
+    el.addEventListener("touchcancel", function () { touch = false; if (scrolled) settle(); else flush(); }, { passive: true });
+    el.addEventListener("scroll", function () { if (Date.now() - appliedAt < 100) return; scrolled = true; settle(); }, { passive: true });
+  }
+  ["rarerows", "emgrows", "huntrows", "controws"].forEach(function (id) { smoothPane($(id)); });
+
   // Hold a plane in the rare / continent list for 3 seconds to mark it with an x (hold more to mark more),
   // then the bin at the top of the panel deletes the marked ones
   var delSel = {}, holdFired = 0;
