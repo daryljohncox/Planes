@@ -2504,10 +2504,12 @@ body.infoup main{visibility:hidden}
     A332: 1, A339: 1, B752: 1, B762: 1, B763: 1, B772: 1, B77W: 1, B744: 1, B737: 1, B738: 1, A319: 1, A320: 1, A321: 1, F900: 1, F2TH: 1, FA7X: 1, FA50: 1, LJ35: 1, LJ45: 1, LJ60: 1, C25A: 1, C25B: 1, C25C: 1, C510: 1, C525: 1, C550: 1, C650: 1, C680: 1, GALX: 1, G280: 1, H25B: 1, E55P: 1, PC24: 1, SF34: 1, SW4: 1, JS31: 1, JS32: 1, B462: 1, RJ85: 1, CRJ2: 1, E190: 1, E170: 1, SB20: 1, AT76: 1, AT75: 1, AT45: 1, AT72: 1, DH8A: 1, DH8B: 1, D328: 1, F27: 1, F50: 1, F100: 1,
     TEX2: 1, T6: 1, T38: 1, PC21: 1, PC9: 1, PC7: 1, HAWK: 1, M346: 1, L39: 1, L159: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, SR22: 1, S22T: 1, P28A: 1, PA28: 1, C152: 1, C150: 1, DA40: 1, DA42: 1, EC35: 1, EC45: 1, EC30: 1, A109: 1, A139: 1, NH90: 1, H60: 1, S70: 1, UH1: 1, H1: 1, B412: 1, B06: 1, B407: 1, EC20: 1, AS50: 1, AS55: 1, AS32: 1, S76: 1, H47: 1, H53: 1, H53S: 1, MI8: 1, MI17: 1, S61: 1, S92: 1, R44: 1, R22: 1, R66: 1, BK17: 1, MD52: 1, MD60: 1, MI26: 1, H500: 1, AS65: 1, EC55: 1, EC75: 1, A119: 1, A169: 1
   };
-  // Only the special ones count: bombers, spy and radar planes, stealth jets, drones, research jets
+  // Special and combat aircraft count: bombers, spy and radar planes, fighters and attack jets, attack helicopters, drones, research jets
   var MIL_SPECIAL = {
     B1: 1, B2: 1, B52: 1, B21: 1, H6: 1, TU95: 1, TU16: 1, TU22: 1, T160: 1, TU60: 1,
     U2: 1, R135: 1, RC13: 1, E6: 1, E3TF: 1, E3CF: 1, E8: 1, E7WW: 1, E2: 1, E767: 1, KJ20: 1, KJ50: 1, A50: 1, A60: 1, B57: 1, WC13: 1, P8: 1, P1: 1,
+    F4: 1, F5: 1, F14: 1, F15: 1, F16: 1, F18: 1, F18H: 1, F18S: 1, E18G: 1, F104: 1, F111: 1, F15E: 1, EUFI: 1, TOR: 1, RFAL: 1, MIR2: 1, MIR4: 1, MIRA: 1, JAGR: 1, GRIP: 1, JAS3: 1,
+    SU24: 1, SU25: 1, SU27: 1, SU30: 1, SU34: 1, SU35: 1, MG25: 1, MG29: 1, MG31: 1, J10: 1, J11: 1, JF17: 1, FA50: 1, AV8: 1, HAR: 1, A4: 1, A7: 1, LCA: 1, H64: 1, AH64: 1, TIGR: 1, MI24: 1, MI28: 1, KA52: 1,
     F22: 1, F35: 1, F117: 1, SU57: 1, J20: 1, J35: 1, Q4: 1, Q9: 1, RQ4: 1, MQ9: 1, A10: 1, V22: 1, AC13: 1, C130S: 1, MI26: 1
   };
   function milRare(x) {
@@ -2570,7 +2572,7 @@ body.infoup main{visibility:hidden}
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
       var names = CONTINENTS.map(function (c) { return c[0]; }).concat(["Elsewhere"]);
-      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every Antonov and the special military ones (spy planes, radar planes, bombers, stealth jets, drones). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
+      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every Antonov and the special and combat military ones (spy planes, radar planes, bombers, fighters, attack jets, drones). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
         names.map(function (n) {
           var all = contList.filter(function (r) { return r.cont === n; }), cnt = all.length;
           var d0 = new Date(); d0.setHours(0, 0, 0, 0);
