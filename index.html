@@ -2540,24 +2540,32 @@ body.infoup main{visibility:hidden}
   function ban(hex) { bans[hex] = Date.now(); store.set("bans", bans); }
   function banned(hex) { return bans[hex] && Date.now() - bans[hex] < 6 * 3600000; }
   Object.keys(bans).forEach(function (h) { if (Date.now() - bans[h] >= 6 * 3600000) delete bans[h]; });
-  function mergeScan(found) {
-    var now = Date.now(), at = {};
-    contList.forEach(function (r) { at[r.hex] = r; });
-    found.forEach(function (a) {
-      if (banned(a.hex)) return;
-      var r = at[a.hex], why = WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare");
-      if (!r || now - r.last > 6 * 3600000) {
-        if (r) contList.splice(contList.indexOf(r), 1);
-        r = at[a.hex] = { hex: a.hex, t: now }; contList.push(r);
-      }
-      r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
-      r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
-      r.cont = contOf(a); r.last = now;
-      if (nearNZ(a.lat, a.lon)) noteRare(a, why);   // only finds near NZ go on the Rare list
-    });
+  function contNote(a, why, at) {   // add or refresh one plane on the Continents list
+    var now = Date.now(), r = at[a.hex];
+    if (!r || now - r.last > 6 * 3600000) {
+      if (r) contList.splice(contList.indexOf(r), 1);
+      r = at[a.hex] = { hex: a.hex, t: now }; contList.push(r);
+    }
+    r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
+    r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
+    r.cont = contOf(a); r.last = now;
+  }
+  function contSave() {
+    var now = Date.now();
     contList = contList.filter(function (r) { return now - r.last < CONT_DAYS_MS; }).sort(function (x, y) { return y.t - x.t; });
     store.set("cont", contList);
     contCount();
+  }
+  function contIndex() { var at = {}; contList.forEach(function (r) { at[r.hex] = r; }); return at; }
+  function mergeScan(found) {
+    var at = contIndex();
+    found.forEach(function (a) {
+      if (banned(a.hex)) return;
+      var why = WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare");
+      contNote(a, why, at);
+      if (nearNZ(a.lat, a.lon)) noteRare(a, why);   // only finds near NZ go on the Rare list
+    });
+    contSave();
   }
   function contCount() {   // today's finds on the button, like the Rare planes count
     var d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -3770,7 +3778,10 @@ body.infoup main{visibility:hidden}
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
-    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) return false;   // the Rare list is only for planes within 3000 km
+    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 3000 km; rare planes seen further away go on the Continents list
+      if (why !== "Emergency") { contNote(a, why, contIndex()); contSave(); if (!$("contpanel").hidden) drawContinents(); }
+      return false;
+    }
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
