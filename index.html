@@ -3566,27 +3566,29 @@ body.infoup main{visibility:hidden}
       rw.insertAdjacentHTML("beforeend", '<span class="' + cls + '"><br>' + txt + "</span>");
     }
     note("now", "Finding…");
+    var rec = rareList.filter(function (x) { return x.hex === hex; })[0];
+    // Show where it was last seen (and say why, if the feed let us down)
+    function lastSeen(why) {
+      if (!rec) { note("gone", why || "Not flying now"); return; }
+      try {
+        showPop(null);
+        if (selHex) unselect();
+        showGone(rec);
+        setStatus(why ? why + " – showing last seen" : "");
+      } catch (e2) { note("gone", "Couldn't show it"); }
+    }
     feedFetch("?hex=" + encodeURIComponent(hex), { cache: "no-store" })
-      .then(function (x) { return x.ok ? x.json() : { ac: [] }; })
+      .then(function (x) { return x.ok ? x.json() : { ac: [], bad: x.status }; })
       .then(function (j) {
         var a = (j.ac || []).filter(function (p) { return p.lat != null && p.lon != null && (p.seen_pos == null || p.seen_pos < 120); })[0];
-        if (!a || !map) {
-          // Not in the air (or out of receiver range): show where it was last seen, if we know
-          var rec = rareList.filter(function (x) { return x.hex === hex; })[0];
-          if (!rec) { note("gone", "Not flying now"); return; }
-          showPop(null);
-          if (selHex) unselect();
-          setStatus("");
-          showGone(rec);
-          return;
-        }
+        if (!a || !map) { lastSeen(j.bad ? "Plane feed failed (HTTP " + j.bad + ")" : ""); return; }
         showPop(null);
         if (selHex) unselect();
         pendingHex = hex;
         map.setView([a.lat, a.lon], homeZoom || map.getZoom(), { animate: false });
         setTimeout(function () { pendingHex = null; }, 30000);   // give up if the area feed never shows it
       })
-      .catch(function () { note("gone", "Couldn't look it up"); });
+      .catch(function () { lastSeen("Plane feed unreachable"); });
   });
 
   // ---------- deciding what to announce (runs after every feed update) ----------
