@@ -3779,7 +3779,7 @@ body.infoup main{visibility:hidden}
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
     if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 3000 km; rare planes seen further away go on the Continents list
-      if (why !== "Emergency") { contNote(a, why, contIndex()); contSave(); if (!$("contpanel").hidden) drawContinents(); }
+      contNote(a, why, contIndex()); contSave(); if (!$("contpanel").hidden) drawContinents();
       return false;
     }
     for (var i = 0; i < rareList.length; i++) {
