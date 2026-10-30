@@ -107,6 +107,9 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .pl svg g.sh>*{stroke:rgba(0,0,0,.45);stroke-width:4.4px}   /* soft dark edge under the outline, like the old shadow */
 .pl span{position:absolute;top:27px;left:50%;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:0 4px;border-radius:3px;white-space:nowrap}
 .pl.on svg{color:var(--acc);transform-origin:center}
+.dense .pl:not(.on):not(.emg) span{display:none}
+.dense .pl svg g.sh{display:none}
+.dense .pl svg{transition:none}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
@@ -839,7 +842,7 @@ body.infoup main{visibility:hidden}
     }
     function setView(k) {
       viewKey = k;
-      renderList();
+      renderList(true);
       try { sessionStorage.setItem("planes.view", k); } catch (e) { /* not saved */ }
     }
     function goHome() {
@@ -1143,6 +1146,8 @@ body.infoup main{visibility:hidden}
   function drawMap(featured) {
     if (!map) return;
     var seen = {};
+    // lots of planes: drop the callsign labels and soft edges (the selected plane keeps its label) so panning stays smooth
+    document.body.classList.toggle("dense", aircraft.length > 40);
     aircraft.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
@@ -1181,13 +1186,27 @@ body.infoup main{visibility:hidden}
   function apt(r) { return { code: r[0], name: r[1], lat: r[2], lon: r[3], elev: r[4], tier: r[5], rw: r[6] || null, mil: MIL_APT.test(r[1]) }; }
 
   // airports within km of a point (quick lat/lon box first, then real distance)
+  // The airport list is bucketed into 1-degree squares so a lookup only checks the few airports nearby
+  // (looping all 7,500 for every plane made the Hub lag when the screen was full of planes)
+  var aptGrid = null, aptGridFor = null;
+  function aptCell(lat, lon) { return Math.floor(lat) + "," + Math.floor(lon); }
   function airportsNear(lat, lon, km, maxTier) {
+    if (aptGridFor !== AIRPORTS) {
+      aptGrid = {}; aptGridFor = AIRPORTS;
+      AIRPORTS.forEach(function (r) { (aptGrid[aptCell(r[2], r[3])] = aptGrid[aptCell(r[2], r[3])] || []).push(r); });
+    }
     var dLat = km / 111, dLon = km / (111 * Math.max(0.2, Math.cos(rad(lat)))), out = [];
-    for (var i = 0; i < AIRPORTS.length; i++) {
-      var r = AIRPORTS[i];
-      if (r[5] > maxTier || Math.abs(r[2] - lat) > dLat || Math.abs(r[3] - lon) > dLon) continue;
-      var d = distKm(lat, lon, r[2], r[3]);
-      if (d <= km) { var a = apt(r); a.d = d; out.push(a); }
+    for (var la = Math.floor(lat - dLat); la <= Math.floor(lat + dLat); la++) {
+      for (var lo = Math.floor(lon - dLon); lo <= Math.floor(lon + dLon); lo++) {
+        var cell = aptGrid[la + "," + lo];
+        if (!cell) continue;
+        for (var i = 0; i < cell.length; i++) {
+          var r = cell[i];
+          if (r[5] > maxTier || Math.abs(r[2] - lat) > dLat || Math.abs(r[3] - lon) > dLon) continue;
+          var d = distKm(lat, lon, r[2], r[3]);
+          if (d <= km) { var a = apt(r); a.d = d; out.push(a); }
+        }
+      }
     }
     return out.sort(function (x, y) { return x.d - y.d; });
   }
@@ -1207,6 +1226,7 @@ body.infoup main{visibility:hidden}
   // Best guess at what a low plane is doing near an airport. Returns {icon, text, ap} or null.
   function airportStatus(a) {
     if (!AIRPORTS.length || a.lat == null) return null;
+    if (typeof a.alt === "number" && a.alt > 16000) return null;   // cruising: not arriving, departing or in a circuit (and skips the lookup)
     var fast = a.gs != null && a.gs > 180;                 // airliners/jets: ignore small airfields
     var near = airportsNear(a.lat, a.lon, 30, fast ? 2 : 3);
     if (!near.length) return null;
@@ -2215,8 +2235,12 @@ body.infoup main{visibility:hidden}
   var EYE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor">' + EYE_PATH + '</svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="currentColor">' + EYE_PATH +
     '<path d="M3 3 21 21" stroke="var(--panel)" stroke-width="4.5"/><path d="M3 3 21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
-  function renderList() {
+  var listAt = 0;
+  function renderList(force) {
     if (listTouch || listScrollT) { listPending = true; return; }
+    // a full screen of planes: rebuilding the whole list every poll is what made the Hub lag, so every 15 s is enough
+    if (!force && aircraft.length > 40 && Date.now() - listAt < 15000 && listHtml) return;
+    listAt = Date.now();
     listPending = false;
     var by = SORTS[listSort] || SORTS.near;
     $("sortbtn").textContent = by[0] + " first · tap to sort";
@@ -2261,7 +2285,7 @@ body.infoup main{visibility:hidden}
     listSort = keys[(keys.indexOf(listSort) + 1) % keys.length];
     try { localStorage.setItem("planes.sort", listSort); } catch (e) { /* not saved */ }
     listTouch = false; clearTimeout(listScrollT); listScrollT = null;
-    renderList();
+    renderList(true);
     $("rows").scrollTop = 0;
   });
   $("rows").addEventListener("click", function (e) {
@@ -2279,7 +2303,7 @@ body.infoup main{visibility:hidden}
       if (listHidden[g]) delete listHidden[g]; else listHidden[g] = 1;
       try { sessionStorage.setItem("planes.hidden", JSON.stringify(listHidden)); } catch (e2) { /* not saved */ }
       listTouch = false; clearTimeout(listScrollT); listScrollT = null;
-      renderList();
+      renderList(true);
     }
   });
   $("back").addEventListener("click", unselect);
