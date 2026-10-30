@@ -530,6 +530,7 @@ body.infoup main{visibility:hidden}
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
   if (MAP_STYLE !== "dark") document.body.classList.add("lightmap");
+  var FOLLOW_MS = 3000;    // poll interval while following a plane
   var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
@@ -2041,7 +2042,7 @@ body.infoup main{visibility:hidden}
     return x ? Object.assign({}, a, { t: x.t || a.t, desc: a.desc || x.desc || "", r: a.r || x.r || "", owner: x.owner || "" }) : a;
   }
 
-  var pollSeq = 0, partLast = {};
+  var pollSeq = 0, partLast = {}, selFix = null;
   function poll() {
     var seq = ++pollSeq, pLat = cLat, pLon = cLon;
     // Each part falls back to its last good answer if the feed fails once, so one busy request doesn't blank the map
@@ -2093,7 +2094,10 @@ body.infoup main{visibility:hidden}
         if (okParts) lastOk = Date.now();   // reused answers don't count as fresh
         setStatus("");
         if (selHex) {
-          for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) { selLast = aircraft[i]; follow(selLast, false); }
+          for (var i = 0; i < aircraft.length; i++) if (aircraft[i].hex === selHex) {
+            selLast = aircraft[i]; follow(selLast, false);
+            selFix = { lat: selLast.lat, lon: selLast.lon, at: Date.now() - (selLast.raw.seen_pos || 0) * 1000 };   // when the plane was really at this spot
+          }
         }
         if (pendingHex && !selHex && latest(pendingHex, null)) { var ph = pendingHex; pendingHex = null; select(ph, true); return; }
         render();
@@ -4563,7 +4567,20 @@ body.infoup main{visibility:hidden}
   $("homeName").textContent = PLACE;
   $("distName").textContent = PLACE;
   poll();
-  setInterval(poll, REFRESH_MS);
+  setInterval(function () { if (!(selHex && selLast)) poll(); }, REFRESH_MS);
+  // The plane you're following: fresh fix every 3 s, and in between it keeps gliding along its heading
+  setInterval(function () { if (selHex && selLast) poll(); }, FOLLOW_MS);
+  setInterval(function () {
+    var a = selHex && selLast, f = selFix;
+    if (!a || !f || a.alt === "ground" || !(a.gs > 5) || a.track == null) return;
+    var dt = Math.min(15, (Date.now() - f.at) / 1000), d = a.gs * 0.514444 * dt / 6371000, br = a.track * Math.PI / 180,
+        la = f.lat * Math.PI / 180, lo = f.lon * Math.PI / 180,
+        la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(br)),
+        lo2 = lo + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2)),
+        p = { lat: la2 * 180 / Math.PI, lon: lo2 * 180 / Math.PI };
+    if (markers[a.hex]) markers[a.hex].setLatLng([p.lat, p.lon]);
+    if (mapFollow) mapFollow({ lat: p.lat, lon: p.lon }, true);
+  }, 500);
   tick();
   setInterval(tick, 1000);
   setInterval(hourly, 15000);

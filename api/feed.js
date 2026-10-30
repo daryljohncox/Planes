@@ -132,7 +132,7 @@ module.exports = async (req, res) => {
       if (!up.ok) continue;
       const data = await up.json();
       res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Cache-Control", "s-maxage=5, stale-while-revalidate=5");
+      res.setHeader("Cache-Control", "s-maxage=2, stale-while-revalidate=2");
       return res.status(200).json({ ac: clean(data[s.list] || []), src: new URL(s.url).host });
     } catch (e) {
       tried.push(new URL(s.url).host + " error");
