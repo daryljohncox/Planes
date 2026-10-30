@@ -33,6 +33,31 @@ module.exports = async (req, res) => {
     return x;
   });
 
+  // ?types=A124,B2,...: every plane of those types anywhere in the world (the "Continents" scan for very rare aircraft).
+  // adsb.lol first, airplanes.live as the backup for each type; the page asks for a handful of types at a time
+  if (req.query.types) {
+    const codes = String(req.query.types).toUpperCase().split(",").filter((c) => /^[A-Z0-9]{2,4}$/.test(c)).slice(0, 8);
+    const seen = {}, ac = [];
+    await Promise.all(codes.map(async (c) => {
+      for (const s of [`https://api.adsb.lol/v2/type/${c}`, `https://api.airplanes.live/v2/type/${c}`]) {
+        const host = new URL(s).host;
+        try {
+          const up = await fetch(s, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(3000) });
+          tried.push(host + " " + c + " " + up.status);
+          if (!up.ok) continue;
+          const data = await up.json();
+          (data.ac || data.aircraft || []).forEach((x) => { if (x.hex && typeof x.lat === "number" && !seen[x.hex]) { seen[x.hex] = 1; ac.push(x); } });
+          return;
+        } catch (e) {
+          tried.push(host + " " + c + " error");
+        }
+      }
+    }));
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=60");
+    return res.status(200).json({ ac: clean(ac), tried });
+  }
+
   // ?mil=1: every military plane over the South Pacific and Antarctica, from the military lists of all three
   // feeds put together (each one misses some), so an Antarctic flight one feed leaves out still gets caught
   if (req.query.mil) {

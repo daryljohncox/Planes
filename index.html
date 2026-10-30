@@ -433,6 +433,7 @@ body.infoup main{visibility:hidden}
       <button id="zoom2" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
       <button id="zoomni" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
       <button id="zoomnz" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M7 10h6"/></svg><span></span></button>
+      <button id="zoomcont" class="mbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Continents</span></button>
     </div>
     <div id="stepbtns">
       <button id="stepin" class="mbtn" type="button" aria-label="Zoom in 25 km">+</button>
@@ -458,6 +459,10 @@ body.infoup main{visibility:hidden}
     <div id="rarepanel" class="pop" hidden>
       <div class="kh"><span class="ktabs"><button type="button" data-tab="rare">Rare planes</button><button type="button" data-tab="emg">Emergencies<b id="emgcount"></b></button></span><button class="popclose" type="button" aria-label="Close">✕</button></div>
       <div class="pb" id="rarerows"></div>
+    </div>
+    <div id="contpanel" class="pop" hidden>
+      <div class="kh"><span id="conttitle">Rare plane scan</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="pb" id="controws"></div>
     </div>
     <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
     <div id="issbadge" hidden></div>
@@ -2420,20 +2425,101 @@ body.infoup main{visibility:hidden}
 
   // Panels on the right (voice settings, rare list): only one open at a time
   function showPop(id) {
-    ["voicepanel", "rarepanel", "huntpanel", "emgpanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
+    ["voicepanel", "rarepanel", "huntpanel", "emgpanel", "contpanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
     if (id === "rarepanel" && !$(id).hidden) drawRareList();
     if (id === "huntpanel" && !$(id).hidden) drawHuntList();
+    if (id === "contpanel" && !$(id).hidden) drawContinents();
   }
-  [["voicebtn", "voicepanel"], ["rarebtn", "rarepanel"]].forEach(function (b) {
+  [["voicebtn", "voicepanel"], ["rarebtn", "rarepanel"], ["zoomcont", "contpanel"]].forEach(function (b) {
     $(b[0]).addEventListener("click", function (e) { e.stopPropagation(); showPop(b[1]); });
   });
   Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
     b.addEventListener("click", function (e) { e.stopPropagation(); showPop(null); });
   });
-  ["mapbtns2", "voicepanel", "rarepanel", "huntpanel", "emgpanel", "card", "issbadge"].forEach(function (id) {
+  ["mapbtns2", "voicepanel", "rarepanel", "huntpanel", "emgpanel", "contpanel", "card", "issbadge"].forEach(function (id) {
     ["mousedown", "touchstart", "pointerdown", "dblclick", "wheel", "click"].forEach(function (ev) {
       $(id).addEventListener(ev, function (e) { e.stopPropagation(); });
     });
+  });
+
+  // ---------- Continents: scan a continent for very rare aircraft ----------
+  // Asks the relay for every plane of each very rare type anywhere in the world (a few types per request),
+  // keeps the answer for 3 minutes, and shows the ones inside the continent you picked. Tap one to go to it.
+  var WORLD_RARE = {
+    A124: "Giant Antonov An-124", AN22: "Antonov An-22 Antheus", A3ST: "Airbus Beluga", A337: "Beluga XL", BLCF: "Boeing Dreamlifter",
+    SGUP: "Super Guppy", B74S: "Boeing 747SP", CONC: "Concorde", L101: "Lockheed TriStar", DC10: "DC-10", DC85: "DC-8", DC86: "DC-8", DC87: "DC-8",
+    B703: "Boeing 707", B722: "Boeing 727", IL62: "Ilyushin Il-62", IL18: "Ilyushin Il-18",
+    B2: "B-2 stealth bomber", B1: "B-1B bomber", B52: "B-52 bomber", U2: "U-2 spy plane", R135: "RC-135 spy plane", E6: "E-6 Mercury",
+    E3TF: "AWACS radar plane", E3CF: "AWACS radar plane", E8: "JSTARS radar plane", F22: "F-22 Raptor", F35: "F-35", A10: "A-10 Warthog",
+    B57: "NASA WB-57", Q4: "Global Hawk drone", Q9: "Reaper drone", MI26: "Mi-26 giant helicopter", V22: "Osprey", KC10: "KC-10 tanker", C5M: "C-5 Galaxy",
+    B17: "B-17 Flying Fortress", B24: "B-24 Liberator", B29: "B-29 Superfortress", LANC: "Lancaster bomber", MOSQ: "de Havilland Mosquito",
+    SPIT: "Spitfire", HURI: "Hurricane", P38: "P-38 Lightning", B25: "B-25 Mitchell", F4U: "Corsair", JU52: "Junkers Ju 52", PBY5: "Catalina", P3: "P-3 Orion",
+    ZEPP: "Zeppelin airship", SHIP: "Airship", CL2T: "CL-415 water bomber", S64: "Air-Crane helicopter"
+  };
+  var CONTINENTS = [   // [name, south, west, north, east]
+    ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
+    ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
+  ];
+  var scanAll = null, scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "";
+  function inContinent(c, a) { return a.lat >= c[1] && a.lat <= c[3] && a.lon >= c[2] && a.lon <= c[4]; }
+  function drawContinents() {
+    if (!contSel) {
+      $("conttitle").textContent = "Scan for rare planes";
+      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, stealth bombers, spy planes, WWII bombers and other one-of-a-kind aircraft.</div>' +
+        CONTINENTS.map(function (c) {
+          var n = scanAll ? scanAll.filter(function (a) { return inContinent(c, a); }).length : null;
+          return '<button type="button" class="rr" data-cont="' + esc(c[0]) + '"><span class="rm"><span class="rc">' + esc(c[0]) + '</span></span><span class="rw">' + (n == null ? "" : n + " found") + "</span></button>";
+        }).join("");
+      return;
+    }
+    var c = CONTINENTS.filter(function (x) { return x[0] === contSel; })[0];
+    $("conttitle").textContent = contSel;
+    var head = '<button type="button" class="act" data-cont="">← Continents</button>';
+    if (!scanAll) {
+      $("controws").innerHTML = head + '<div class="note">' + (scanBusy ? "Scanning the world… " + scanDone + " of " + scanTotal : "The scan didn't work – check the connection and try again.") + "</div>";
+      return;
+    }
+    var list = scanAll.filter(function (a) { return inContinent(c, a); }).sort(function (a, b) { return (a.alt === "ground") - (b.alt === "ground"); });
+    $("controws").innerHTML = head + (scanBusy ? '<div class="note">Still scanning… ' + scanDone + " of " + scanTotal + "</div>" : "") +
+      (!list.length ? '<div class="note">' + (scanBusy ? "" : "No very rare aircraft are flying over " + esc(contSel) + " right now. Tap the continent again later.") + "</div>" : list.map(function (a) {
+        return '<button type="button" class="rr" data-hex="' + esc(a.hex) + '" data-lat="' + a.lat + '" data-lon="' + a.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(a.callsign) +
+          '</span><span class="rt">' + esc(WORLD_RARE[a.type] || "Rare") + " · " + esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : "")) + '</span></span><span class="rw">' +
+          esc(a.country || "") + "<br>" + (a.alt === "ground" ? "On the ground" : typeof a.alt === "number" ? plainNum(metres(a.alt)) + " m" : "") + "</span></button>";
+      }).join(""));
+  }
+  function worldScan(force) {
+    if (scanBusy || (!force && scanAll && Date.now() - scanAt < 180000)) return;
+    var codes = Object.keys(WORLD_RARE), batches = [], i, found = [], seen = {};
+    for (i = 0; i < codes.length; i += 6) batches.push(codes.slice(i, i + 6));
+    scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0; scanAll = force ? scanAll : null;
+    var next = 0;
+    function worker() {
+      if (next >= batches.length) return Promise.resolve();
+      var b = batches[next++];
+      return feedFetch("?types=" + b.join(","), { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) {
+          (j.ac || []).forEach(function (x) {
+            if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300)) return;
+            seen[x.hex] = 1; found.push(bgPlane(x, { lat: LAT, lon: LON }));
+          });
+        })
+        .catch(function () { scanErr++; })
+        .then(function () { scanDone++; if (!$("contpanel").hidden && contSel) { scanAll = found.slice(); drawContinents(); } return worker(); });
+    }
+    Promise.all([worker(), worker(), worker()]).then(function () {
+      scanBusy = false;
+      if (found.length || scanErr < scanTotal) { scanAll = found; scanAt = Date.now(); }
+      if (!$("contpanel").hidden) drawContinents();
+    });
+  }
+  $("controws").addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-cont],[data-hex]") : null;
+    if (!t) return;
+    if (t.hasAttribute("data-hex")) { trackPlane(t.getAttribute("data-hex"), +t.getAttribute("data-lat"), +t.getAttribute("data-lon")); return; }
+    contSel = t.getAttribute("data-cont") || "";
+    if (contSel) worldScan(false);
+    drawContinents();
   });
 
   // ---------- sound: chimes (Web Audio) and the voice (api/tts.js, else the device's own voice) ----------
