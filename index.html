@@ -2507,7 +2507,7 @@ body.infoup main{visibility:hidden}
   ];
   var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "";
   // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
-  var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 10 * 60000;
+  var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS; });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
@@ -2548,7 +2548,7 @@ body.infoup main{visibility:hidden}
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
       var names = CONTINENTS.map(function (c) { return c[0]; }).concat(["Elsewhere"]);
-      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 10 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
+      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
         names.map(function (n) {
           var cnt = contList.filter(function (r) { return r.cont === n; }).length;
           if (n === "Elsewhere" && !cnt) return "";
