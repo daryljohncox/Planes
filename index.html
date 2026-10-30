@@ -3104,6 +3104,93 @@ body.infoup main{visibility:hidden}
     if (!out.length) return null;
     return [title || "About the " + (nm || "aircraft"), out];
   }
+  // Type history for the "About the …" box: ICAO type -> [first flight, came from, replaced by, did you know].
+  // Maker and Wikipedia figures, rounded; add types here as they turn up.
+  var TYPE_HISTORY = {
+    BE20: ["1972", "King Air 100 (the 200 added a T-tail and a bigger cabin)", "King Air 250 (2011) and the stretched 350", "Over 7,000 King Airs of all models have been built since 1964; the 200 series is the best-selling twin turboprop of its size and flies air ambulance, survey and charter jobs worldwide."],
+    B350: ["1988", "King Air 200", "", "A stretched King Air 200 with a longer cabin and winglets; the RNZAF uses them to train aircrew."],
+    BE9L: ["1964", "Queen Air piston twin (given turboprops)", "King Air 100 and 200", "The first King Air: a Queen Air with turboprop engines and a pressurised cabin."],
+    C172: ["1955", "Cessna 170 (tailwheel)", "Still built as the 172S", "The most-built aircraft in history, over 44,000 of them."],
+    C152: ["1977", "Cessna 150", "Production ended in 1985; flight schools moved to the 172 and Tecnam", "Around 7,500 built, mostly as two-seat trainers."],
+    C150: ["1957", "Cessna 140", "Cessna 152", "Over 23,000 built; the 'Aerobat' version can loop and roll."],
+    C182: ["1956", "Cessna 180 (tailwheel)", "Still built today", "Over 23,000 built; popular for skydiving and bush flying."],
+    C206: ["1962", "Cessna 205", "T206H Turbo Stationair", "Big cargo doors make it a favourite for skydiving and small-strip freight."],
+    C208: ["1982", "None: Cessna's first single turboprop", "Grand Caravan EX", "Over 2,600 built; FedEx flies hundreds of them as feeder freighters."],
+    PC12: ["1991", "None: Pilatus's first single turboprop", "PC-12 NGX (2019)", "Over 1,800 built, Swiss-made; the Royal Flying Doctor Service flies many."],
+    P28A: ["1960", "Piper Tri-Pacer", "Piper Archer", "The PA-28 family has had over 32,000 built."],
+    P28R: ["1964", "PA-28 Cherokee (with retractable gear)", "Piper Arrow", "Retractable undercarriage makes it a common step up for pilots."],
+    PA34: ["1971", "Piper Twin Comanche", "Seneca V", "A popular twin-engine trainer and light charter plane."],
+    BE58: ["1960", "Beechcraft Baron 55 (the 58 flew in 1969)", "Baron G58", "V-tail Bonanzas were its cousins; the Baron has been in production since 1961."],
+    DA40: ["1997", "Diamond DA20 Katana (composite two-seater)", "DA40 NG diesel", "Built from glass-fibre composites; popular with flight schools."],
+    SR22: ["2001", "SR20", "SR22T and G7", "Has a parachute for the whole airframe."],
+    R22: ["1975", "None: Frank Robinson's first helicopter", "R44 (a four-seat version)", "The world's best-selling light helicopter; mustering and training are its jobs."],
+    R44: ["1990", "R22", "R66 turbine (2010)", "More than 6,000 built; the best-selling light helicopter in the world."],
+    B06: ["1966", "Bell OH-4 (lost the US Army contest, then redesigned)", "Bell 407", "Over 7,000 built; the first helicopter to fly around the world solo was a JetRanger."],
+    B407: ["1994", "Bell 206L LongRanger", "Bell 505 in the light class", "Four-bladed rotor makes it smoother and quieter than the JetRanger."],
+    AS50: ["1974", "Alouette III", "H125 (the same helicopter renamed)", "In 2005 an AS350 B3 landed on the summit of Mount Everest."],
+    EC35: ["1994", "BO 105", "H135", "Fenestron tail rotor is built into the tail fin for safety and noise."],
+    BK17: ["1979", "BO 105 (German MBB with Japan's Kawasaki)", "EC145 (H145)", "Jointly built by Germany and Japan; clamshell rear doors suit stretchers."],
+    EC45: ["1999", "BK117 C-2", "H145 with five-blade rotor", "A bigger BK117; the H145 D3 is the five-bladed one used by many NZ rescue trusts."],
+    A109: ["1971", "None: Agusta's first twin-turbine helicopter", "AW109 Trekker", "The RNZAF's training helicopter; fast and fully retractable undercarriage."],
+    NH90: ["1995", "Sea King and Iroquois replaced in many forces", "None yet", "RNZAF flies 8 as troop and utility transports."],
+    H500: ["1963", "Hughes OH-6 Cayuse (Army scout)", "MD 500", "Made famous by Magnum, P.I."],
+    S92: ["1998", "S-61 Sea King", "None yet", "Offshore oil crews and rescue services use it; it's one of the most reliable large helicopters."],
+    A320: ["1987", "A300 and A310", "A320neo (2016)", "First airliner with fly-by-wire controls."],
+    A20N: ["2014", "A320ceo", "None yet", "Newer engines use about 15% less fuel."],
+    A321: ["1993", "A320 (stretched)", "A321neo", "A stretched A320."],
+    B738: ["1997", "737-300 and 737-700", "737 MAX 8 (2016)", "737 family is the best-selling jet airliner of all time."],
+    B737: ["1967", "None: Boeing's first twin-engine short-haul jet", "737 MAX", "Over 11,000 built."],
+    B788: ["2009", "767", "787-9 and 787-10 stretches", "Made largely of carbon-fibre composite, which allows a lower cabin altitude."],
+    B789: ["2013", "787-8", "787-10", "A stretched 787-8; Air NZ flies it on the Pacific and to Asia."],
+    B77W: ["2003", "777-300", "777X", "The biggest twin-engine jet airliner in service for years."],
+    A333: ["1992", "A300", "A330neo", "Twin-engine and widely used on regional long haul."],
+    A359: ["2013", "A330", "A350-1000", "The newer A350 uses carbon-fibre composites like the 787."],
+    AT72: ["1988", "ATR 42", "ATR 72-600", "Air New Zealand Link flies many of the regional routes."],
+    DH8D: ["1998", "Dash 8-300", "None", "Q400 is quiet with active noise cancelling inside."],
+    SF34: ["1983", "None: Saab's first airliner", "Production ended 1999", "Many are now freighters."],
+    B190: ["1982", "Beech 99", "Production ended 2002", "Carries up to 19 passengers."],
+    DHC2: ["1947", "None: de Havilland Canada's first bush plane", "Turbine Otter and Twin Otter", "Over 1,600 built; many still fly on floats."],
+    DHC6: ["1965", "DHC-3 Otter", "Series 400", "Short takeoff makes it a bush and ski plane in places like Antarctica."],
+    BN2P: ["1965", "None: Britten-Norman's first design", "Still built as the Islander", "Over 1,200 built; fits eight passengers."],
+    P68: ["1970", "None: Italian-built twin", "Observer", "Often used for aerial photography and survey."],
+    GA8: ["1990", "None: Australian utility plane", "Still built", "Built in Victoria, Australia as a rugged bush plane."],
+    FU24: ["1954", "Fletcher FU-24 (US design)", "Cresco and later the PAC 750XL", "Built in Hamilton NZ from 1954; about 300 were made and nearly all topdressed."],
+    CRES: ["1979", "FU-24 (re-engined with a turboprop)", "PAC 750XL", "Built in Hamilton; the turbine gives more power for loads."],
+    P750: ["2001", "Fletcher FU-24 and Cresco topdressers", "None yet", "Built in Hamilton, NZ, as an all-purpose utility; used for skydiving and cargo."],
+    PA25: ["1959", "Piper PA-18 Super Cub", "Replaced by turboprop topdressers like the Fletcher", "Many NZ ag pilots started their jobs on Pawnees."],
+    C130: ["1954", "None: new tactical airlifter", "C-130J Super Hercules (1996)", "Longest continuously produced military aircraft in history."],
+    C30J: ["1996", "C-130H Hercules", "None yet", "The RNZAF is replacing its five C-130Hs with C-130J-30s."],
+    P8: ["2009", "P-3 Orion", "None", "A Boeing 737-800 airframe modified for sub-hunting and maritime patrol."],
+    T6: ["2003", "Pilatus PC-9", "None", "The RNZAF trainers fly out of Ohakea."]
+  };
+  // "Owned by" under "Mainly used for": who the register says owns it and roughly what they use it for
+  var OWNER_ORG = /\b(ltd|limited|trust|council|inc|corp|corporation|company|co\b|services|aviation|airways|air\b|aero|flying|club|school|academy|holdings|partnership|nz\b|new zealand|university|college|department|ministry|group|leasing|finance|capital|investments?|farm|station)\b/i;
+  function ownedHtml(f, owner) {
+    var o = (owner || "").replace(/\s+/g, " ").trim(), i, use = "", kind;
+    if (!o) return "";
+    kind = OWNER_ORG.test(o) ? "company or organisation" : "likely a private owner";
+    for (i = 0; i < USE_OWNER.length; i++) if (USE_OWNER[i][0].test(o)) { use = USE_OWNER[i][1]; break; }
+    if (!use) use = /leasing|finance|capital|holdings|investments?/i.test(o) ? "Held by a leasing or holding company and leased to whoever flies it"
+      : /farm|station|pastoral|agri|orchard|dairy|sheep/i.test(o) ? "Farm work and getting around the property"
+      : kind === "company or organisation" ? "Business use or charter flights" : "Private and recreational flying";
+    return '<div class="use"><b>Owned by: </b>' + esc(titleCase(o)) + " (" + kind + ")<b> · </b>" + esc(use) +
+      "<small>From the aircraft register; what they use it for is a guess from the owner's name</small></div>";
+  }
+  // Extra lines for "About the …": this aircraft's age and serial, and the type's history
+  function aboutLines(f, a, x) {
+    var out = [], t = f.type || "", th = TYPE_HISTORY[t], yr = parseInt(a.year || x.year, 10), now = new Date().getFullYear();
+    if (yr) out.push("Built: this aircraft was built in " + yr + ", so it is about " + (now - yr) + " years old.");
+    var sn = a.serial || a.msn || x.sn;
+    if (sn) out.push("Serial no: " + sn + ".");
+    if (x.since) out.push("Registered: here since " + x.since + ".");
+    if (th) {
+      out.push("First flight: the type first flew in " + th[0] + ".");
+      if (th[1]) out.push("Came from: " + th[1] + ".");
+      if (th[2]) out.push("Replaced by: " + th[2] + ".");
+      if (th[3]) out.push("Interesting: " + th[3]);
+    }
+    return out;
+  }
   function fleetHtml(f, owner) {
     var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg], rg;
     if (!fi && f.cat === "pol" && /^ZK/.test(reg)) fi = ["eagle", ""];
@@ -3113,16 +3200,18 @@ body.infoup main{visibility:hidden}
     if (!fi && (rg = rnzafGroup(f, reg))) fi = [rg, RNZAF_SQN[rg] + (reg ? " · " + reg : "")];
     var g = fi && FLEET_GROUP[fi[0]], gen = !g;
     if (!g) { g = genericGroup(f); fi = ["", ""]; }
+    var more = aboutLines(f, f.raw || {}, extraInfo[f.hex] || {});
+    if (more.length) g = [g ? g[0] : "About the " + typeName(f), (g ? g[1] : []).concat(more)];
     if (!g) return "";
     return '<div class="fleet"><b>' + esc(g[0]) + "</b>" + (fi[1] ? "<i>This one: " + esc(fi[1]) + "</i>" : "") +
-      "<ul>" + g[1].map(function (s) { var i = s.indexOf(": "); return i > 0 && i < 12 ? "<li><b>" + esc(s.slice(0, i)) + ":</b> " + esc(s.slice(i + 2)) + "</li>" : "<li>" + esc(s) + "</li>"; }).join("") +
+      "<ul>" + g[1].map(function (s) { var i = s.indexOf(": "); return i > 0 && i < 14 ? "<li><b>" + esc(s.slice(0, i)) + ":</b> " + esc(s.slice(i + 2)) + "</li>" : "<li>" + esc(s) + "</li>"; }).join("") +
       "</ul><small>" + (gen ? "Rounded maker figures and typical hours for this kind of aircraft, not this one" : RNZAF_SQN[fi[0]] ? "From NZDF, Wikipedia and news reports" : "From NZ Police, the operators and trusts, news reports and 111emergency.co.nz") + "</small></div>";
   }
   function useHtml(f, owner, co) {
     var u = usedFor(f, owner, co);
     if (!u) return "";
     return '<div class="use"><b>' + (u.mine ? "Used for: " : "Mainly used for: ") + "</b>" + esc(u.text) +
-      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>" + fleetHtml(f, owner);
+      "<small>" + (u.mine ? "What this aircraft does, from its callsign or owner" : "What this type of aircraft is usually used for · couldn't find what this one does") + "</small></div>" + ownedHtml(f, owner) + fleetHtml(f, owner);
   }
   function drawInfoPage(f) {
     var a = f.raw || {}, x = extraInfo[f.hex] || {}, rows = [];

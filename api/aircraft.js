@@ -31,12 +31,12 @@ module.exports = async (req, res) => {
   }
   if (!ac && /^[A-Z0-9]{1,3}-?[A-Z0-9]{2,6}$/.test(reg)) ac = fromAdsbdb(await get("https://api.adsbdb.com/v0/aircraft/" + reg));
   let caaDown = false;
-  if ((!ac || !ac.t) && (/^ZK-?[A-Z0-9]{2,4}$/.test(reg) || /^c8/.test(hex))) {
+  if (/^ZK-?[A-Z0-9]{2,4}$/.test(reg) || /^c8/.test(hex)) {
     const zk = await caaRegister();
     if (!zk) caaDown = true;
     else {
       const row = zk.byReg.get(reg.replace("-", "")) || zk.byHex.get(hex);
-      if (row) ac = ac ? Object.assign({ t: row.t }, ac, { t: ac.t || row.t }) : row;
+      if (row) ac = ac ? Object.assign({}, row, ac, { t: ac.t || row.t, year: row.year, sn: row.sn, since: row.since }) : row;
       if (ac && !ac.t) delete ac.t;
     }
   }
@@ -69,6 +69,8 @@ async function caaRegister() {
     const head = rows.shift().map((h) => h.trim().toLowerCase());
     const col = (re) => head.findIndex((h) => re.test(h));
     const cReg = col(/^registration/), cMan = col(/^manufacturer/), cMod = col(/^model$/), cOwn = col(/^owner name/), cHex = col(/hex/);
+    // year built, serial number and registration date: column names vary a little between CAA releases
+    const cYear = col(/year.*manuf|manuf.*year|year of|year built/), cSn = col(/serial|c\/n|msn/), cSince = col(/registration date|date registered|registered date/);
     if (cReg < 0 || cMod < 0) return caa;
     const byReg = new Map(), byHex = new Map();
     for (const r of rows) {
@@ -77,6 +79,10 @@ async function caaRegister() {
       const man = maker(r[cMan] || ""), model = (r[cMod] || "").trim();
       const ac = clean({ t: icaoType(man, model), desc: [man, model].filter(Boolean).join(" "), r: reg, owner: r[cOwn] });
       if (!ac) continue;
+      const yr = cYear >= 0 ? (r[cYear] || "").match(/\b(19|20)\d\d\b/) : null;
+      if (yr) ac.year = yr[0];
+      if (cSn >= 0 && (r[cSn] || "").trim()) ac.sn = r[cSn].trim();
+      if (cSince >= 0 && (r[cSince] || "").trim()) ac.since = r[cSince].trim();
       byReg.set(reg.replace("-", ""), ac);
       const hex = (r[cHex] || "").trim().toLowerCase();
       if (/^[0-9a-f]{6}$/.test(hex)) byHex.set(hex, ac);
