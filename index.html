@@ -2477,7 +2477,7 @@ body.infoup main{visibility:hidden}
   function drawContinents() {
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
-      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that isn't a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters).</div>' +
+      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters).</div>' +
         CONTINENTS.map(function (c) {
           var n = scanAll ? scanAll.filter(function (a) { return inContinent(c, a); }).length : null;
           return '<button type="button" class="rr" data-cont="' + esc(c[0]) + '"><span class="rm"><span class="rc">' + esc(c[0]) + '</span></span><span class="rw">' + (n == null ? "" : n + " found") + "</span></button>";
