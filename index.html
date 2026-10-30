@@ -2532,6 +2532,7 @@ body.infoup main{visibility:hidden}
       r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
       r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
       r.cont = contOf(a); r.last = now;
+      noteRare(a, why);   // the rare list gets the world's finds too, not only planes near the map
     });
     contList = contList.filter(function (r) { return now - r.last < CONT_DAYS_MS; }).sort(function (x, y) { return y.t - x.t; });
     store.set("cont", contList);
