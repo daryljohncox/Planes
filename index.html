@@ -530,7 +530,7 @@ body.infoup main{visibility:hidden}
   var TZ = P.get("tz") || "Pacific/Auckland";
   var MAP_STYLE = (P.get("map") || "natgeo").toLowerCase();
   if (MAP_STYLE !== "dark") document.body.classList.add("lightmap");
-  var FOLLOW_MS = 3000;    // poll interval while following a plane
+  var FOLLOW_MS = 2000;    // poll interval while following a plane
   var REFRESH_MS = 6000;   // adsb.lol poll interval (be kind to the free API)
   var PREFETCH_N = 8;      // pre-load photos for this many nearest planes so taps feel instant
   // Data comes via the relay in api/feed.js (adsb.lol / adsb.fi don't allow direct browser access)
@@ -4580,6 +4580,11 @@ body.infoup main{visibility:hidden}
         p = { lat: la2 * 180 / Math.PI, lon: lo2 * 180 / Math.PI };
     if (markers[a.hex]) markers[a.hex].setLatLng([p.lat, p.lon]);
     if (mapFollow) mapFollow({ lat: p.lat, lon: p.lon }, true);
+    // numbers keep ticking too: altitude climbs or sinks at the reported rate, distance follows the new position
+    var live = Object.assign({}, a, { lat: p.lat, lon: p.lon, homeDist: distKm(LAT, LON, p.lat, p.lon), homeBrg: bearing(LAT, LON, p.lat, p.lon) });
+    if (typeof a.alt === "number" && a.vr) live.alt = Math.max(0, Math.round(a.alt + a.vr * dt / 60));
+    $("sAlt").innerHTML = altHtml(live);
+    $("sDist").innerHTML = live.homeDist.toFixed(1) + "<small>km " + compass(live.homeBrg) + "</small>";
   }, 500);
   tick();
   setInterval(tick, 1000);
