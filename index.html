@@ -543,7 +543,7 @@ body.infoup main{visibility:hidden}
   // Plane feeds often refuse Cloudflare's addresses, so when /api/feed fails try the Deno relay (if set)
   var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "https://planes.daryljohncox.deno.net/api/feed");
   var relayIdx = 0, cfRetryAt = 0;   // relay that last worked; Cloudflare is retried once a minute after it fails
-  function feedFetch(qs, opts) {
+  function feedFetch(qs, opts, ms) {
     var urls = (RELAY2 ? [FEED, RELAY2] : [FEED]);
     var order = urls.map(function (u, k) { return k; });
     if (relayIdx && Date.now() < cfRetryAt) order.reverse();   // Cloudflare is blocked right now: go straight to Deno
@@ -551,7 +551,7 @@ body.infoup main{visibility:hidden}
     function next() {
       var k = order[n++], last = n >= order.length;
       var ctl = window.AbortController ? new AbortController() : null;
-      var tm = ctl ? setTimeout(function () { ctl.abort(); }, 4000) : 0;   // a hung relay shouldn't stall the poll
+      var tm = ctl ? setTimeout(function () { ctl.abort(); }, ms || 4000) : 0;   // a hung relay shouldn't stall the poll
       var o = Object.assign({}, opts, ctl ? { signal: ctl.signal } : {});
       return fetch(urls[k] + qs, o).then(function (r) {
         clearTimeout(tm);
@@ -2615,7 +2615,7 @@ body.infoup main{visibility:hidden}
       if (next >= batches.length) return Promise.resolve();
       var b = batches[next++];
       var mil = b[0] === "mil";
-      return feedFetch(mil ? "?mil=1&all=1" : "?types=" + b.join(","), { cache: "no-store" })
+      return feedFetch(mil ? "?mil=1&all=1" : "?types=" + b.join(","), { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
           (j.ac || []).forEach(function (x) {
