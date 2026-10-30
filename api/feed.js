@@ -75,7 +75,8 @@ module.exports = async (req, res) => {
         if (!up.ok) return;
         const data = await up.json();
         (data[s.list] || []).forEach((x) => {
-          if (typeof x.lat !== "number" || x.lat > -30 || (x.lon < 140 && x.lon > -150) || !x.hex) return;
+          if (typeof x.lat !== "number" || !x.hex) return;
+          if (!req.query.all && (x.lat > -30 || (x.lon < 140 && x.lon > -150))) return;   // ?mil=1&all=1: the whole world (Continents scan)
           const old = seen[x.hex];
           if (old && (old.seen_pos == null || (x.seen_pos != null && x.seen_pos >= old.seen_pos))) return;   // keep the freshest
           if (old) ac.splice(ac.indexOf(old), 1);

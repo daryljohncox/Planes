@@ -2456,6 +2456,18 @@ body.infoup main{visibility:hidden}
     SPIT: "Spitfire", HURI: "Hurricane", P38: "P-38 Lightning", B25: "B-25 Mitchell", F4U: "Corsair", JU52: "Junkers Ju 52", PBY5: "Catalina", P3: "P-3 Orion",
     ZEPP: "Zeppelin airship", SHIP: "Airship", CL2T: "CL-415 water bomber", S64: "Air-Crane helicopter"
   };
+  // Military aircraft that aren't for carrying people or cargo count as rare too (spy planes, fighters, bombers, radar planes,
+  // tankers, attack helicopters). These transport / utility / trainer types are left out.
+  var MIL_PLAIN = {
+    C130: 1, C30J: 1, C17: 1, C5M: 1, C5: 1, A400: 1, C160: 1, C27J: 1, C295: 1, CN35: 1, C2: 1, Y20: 1, IL76: 1, AN12: 1, AN26: 1, AN24: 1, AN30: 1, AN32: 1, AN72: 1, A124: 1, AN22: 1,
+    BE20: 1, B350: 1, BE9L: 1, BE99: 1, C12: 1, C21: 1, GLF4: 1, GLF5: 1, GLF6: 1, CL60: 1, C560: 1, C750: 1, E145: 1, DH8D: 1, DH8C: 1, DHC6: 1, DHC5: 1, C172: 1, C182: 1, PC12: 1, PC6: 1,
+    A332: 1, A339: 1, B752: 1, B762: 1, B763: 1, B772: 1, B77W: 1, B744: 1, B737: 1, B738: 1, A319: 1, A320: 1, A321: 1, F900: 1, F2TH: 1, FA7X: 1, FA50: 1, LJ35: 1, LJ45: 1, LJ60: 1, C25A: 1, C25B: 1, C25C: 1, C510: 1, C525: 1, C550: 1, C650: 1, C680: 1, GALX: 1, G280: 1, H25B: 1, E55P: 1, PC24: 1, SF34: 1, SW4: 1, JS31: 1, JS32: 1, B462: 1, RJ85: 1, CRJ2: 1, E190: 1, E170: 1, SB20: 1, AT76: 1, AT75: 1, AT45: 1, AT72: 1, DH8A: 1, DH8B: 1, D328: 1, F27: 1, F50: 1, F100: 1,
+    TEX2: 1, T6: 1, T38: 1, PC21: 1, PC9: 1, PC7: 1, HAWK: 1, M346: 1, L39: 1, L159: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, SR22: 1, S22T: 1, P28A: 1, PA28: 1, C152: 1, C150: 1, DA40: 1, DA42: 1, EC35: 1, EC45: 1, EC30: 1, A109: 1, A139: 1, NH90: 1, H60: 1, S70: 1, UH1: 1, H1: 1, B412: 1, B06: 1, B407: 1, EC20: 1, AS50: 1, AS55: 1, AS32: 1, S76: 1, H47: 1, H53: 1, H53S: 1, MI8: 1, MI17: 1, S61: 1, S92: 1, R44: 1, R22: 1, R66: 1, BK17: 1, MD52: 1, MD60: 1, MI26: 1, H500: 1, AS65: 1, EC55: 1, EC75: 1, A119: 1, A169: 1
+  };
+  function milRare(x) {
+    if (!x.t || !(x.dbFlags & 1) || x.alt_baro === "ground" || MIL_PLAIN[x.t]) return false;
+    return true;
+  }
   var CONTINENTS = [   // [name, south, west, north, east]
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
@@ -2465,7 +2477,7 @@ body.infoup main{visibility:hidden}
   function drawContinents() {
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
-      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, stealth bombers, spy planes, WWII bombers and other one-of-a-kind aircraft.</div>' +
+      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that isn't a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters).</div>' +
         CONTINENTS.map(function (c) {
           var n = scanAll ? scanAll.filter(function (a) { return inContinent(c, a); }).length : null;
           return '<button type="button" class="rr" data-cont="' + esc(c[0]) + '"><span class="rm"><span class="rc">' + esc(c[0]) + '</span></span><span class="rw">' + (n == null ? "" : n + " found") + "</span></button>";
@@ -2483,7 +2495,7 @@ body.infoup main{visibility:hidden}
     $("controws").innerHTML = head + (scanBusy ? '<div class="note">Still scanning… ' + scanDone + " of " + scanTotal + "</div>" : "") +
       (!list.length ? '<div class="note">' + (scanBusy ? "" : "No very rare aircraft are flying over " + esc(contSel) + " right now. Tap the continent again later.") + "</div>" : list.map(function (a) {
         return '<button type="button" class="rr" data-hex="' + esc(a.hex) + '" data-lat="' + a.lat + '" data-lon="' + a.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(a.callsign) +
-          '</span><span class="rt">' + esc(WORLD_RARE[a.type] || "Rare") + " · " + esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : "")) + '</span></span><span class="rw">' +
+          '</span><span class="rt">' + esc(WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare")) + " · " + esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : "")) + '</span></span><span class="rw">' +
           esc(a.country || "") + "<br>" + (a.alt === "ground" ? "On the ground" : typeof a.alt === "number" ? plainNum(metres(a.alt)) + " m" : "") + "</span></button>";
       }).join(""));
   }
@@ -2491,16 +2503,19 @@ body.infoup main{visibility:hidden}
     if (scanBusy || (!force && scanAll && Date.now() - scanAt < 180000)) return;
     var codes = Object.keys(WORLD_RARE), batches = [], i, found = [], seen = {};
     for (i = 0; i < codes.length; i += 6) batches.push(codes.slice(i, i + 6));
+    batches.push(["mil"]);
     scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0; scanAll = force ? scanAll : null;
     var next = 0;
     function worker() {
       if (next >= batches.length) return Promise.resolve();
       var b = batches[next++];
-      return feedFetch("?types=" + b.join(","), { cache: "no-store" })
+      var mil = b[0] === "mil";
+      return feedFetch(mil ? "?mil=1&all=1" : "?types=" + b.join(","), { cache: "no-store" })
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
           (j.ac || []).forEach(function (x) {
             if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300)) return;
+            if (mil && !milRare(x)) return;
             seen[x.hex] = 1; found.push(bgPlane(x, { lat: LAT, lon: LON }));
           });
         })
