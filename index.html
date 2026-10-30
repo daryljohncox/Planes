@@ -331,6 +331,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .lastseen span{position:absolute;left:18px;top:-12px;white-space:nowrap;background:#ff6a00;color:#fff;font:700 13px system-ui,sans-serif;padding:2px 6px;border-radius:4px}
 .rr .star{color:#ffd400;font-size:3vh}
 .rr .hsir{height:3.4vh;width:auto;border-radius:.6vh;flex:0 0 auto}
+.pop .kh .khb{display:flex;gap:1vh}
+.pop .kh .trash.on{background:#c62828}
+.rr.sel{background:#2a1a1a}
+.rr.sel .rc:before{content:"✕";display:inline-block;margin-right:1vh;width:3.2vh;height:3.2vh;line-height:3.2vh;text-align:center;border-radius:50%;background:#e53935;color:#fff;font-size:2.2vh}
 .pop .kh .ktabs{display:flex;gap:.8vh}
 .pop .kh .ktabs button{width:auto;height:auto;padding:.8vh 1.6vh;font:700 2.2vh system-ui,sans-serif;background:#1c2633;color:var(--dim)}
 .pop .kh .ktabs button.on{background:#ffd400;color:#000}
@@ -460,11 +464,11 @@ body.infoup main{visibility:hidden}
       <div class="pb" id="emgrows"></div>
     </div>
     <div id="rarepanel" class="pop" hidden>
-      <div class="kh"><span class="ktabs"><button type="button" data-tab="rare">Rare planes</button><button type="button" data-tab="emg">Emergencies<b id="emgcount"></b></button></span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="kh"><span class="ktabs"><button type="button" data-tab="rare">Rare planes</button><button type="button" data-tab="emg">Emergencies<b id="emgcount"></b></button></span><span class="khb"><button class="trash" type="button" aria-label="Delete selected planes">🗑</button><button class="popclose" type="button" aria-label="Close">✕</button></span></div>
       <div class="pb" id="rarerows"></div>
     </div>
     <div id="contpanel" class="pop" hidden>
-      <div class="kh"><span id="conttitle">Rare plane scan</span><button class="popclose" type="button" aria-label="Close">✕</button></div>
+      <div class="kh"><span id="conttitle">Rare plane scan</span><span class="khb"><button class="trash" type="button" aria-label="Delete selected planes">🗑</button><button class="popclose" type="button" aria-label="Close">✕</button></span></div>
       <div class="pb" id="controws"></div>
     </div>
     <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
@@ -2454,6 +2458,7 @@ body.infoup main{visibility:hidden}
   // Panels on the right (voice settings, rare list): only one open at a time
   function showPop(id) {
     ["voicepanel", "rarepanel", "huntpanel", "emgpanel", "contpanel"].forEach(function (p) { $(p).hidden = p !== id || !$(p).hidden; });
+    delSel = {}; drawTrash();
     if (id === "rarepanel" && !$(id).hidden) drawRareList();
     if (id === "huntpanel" && !$(id).hidden) drawHuntList();
     if (id === "contpanel" && !$(id).hidden) drawContinents();
@@ -2500,39 +2505,73 @@ body.infoup main{visibility:hidden}
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
   ];
-  var scanAll = null, scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "";
+  var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "";
+  // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
+  var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
+  var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS; });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
+  function contOf(a) {
+    for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
+    return "Elsewhere";
+  }
   function inContinent(c, a) { return a.lat >= c[1] && a.lat <= c[3] && a.lon >= c[2] && a.lon <= c[4]; }
+  // Planes deleted from a list stay away for 6 hours, so one that is still flying doesn't pop straight back
+  var bans = store.get("bans", {});
+  function ban(hex) { bans[hex] = Date.now(); store.set("bans", bans); }
+  function banned(hex) { return bans[hex] && Date.now() - bans[hex] < 6 * 3600000; }
+  Object.keys(bans).forEach(function (h) { if (Date.now() - bans[h] >= 6 * 3600000) delete bans[h]; });
+  function mergeScan(found) {
+    var now = Date.now(), at = {};
+    contList.forEach(function (r) { at[r.hex] = r; });
+    found.forEach(function (a) {
+      if (banned(a.hex)) return;
+      var r = at[a.hex], why = WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare");
+      if (!r || now - r.last > 6 * 3600000) {
+        if (r) contList.splice(contList.indexOf(r), 1);
+        r = at[a.hex] = { hex: a.hex, t: now }; contList.push(r);
+      }
+      r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
+      r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
+      r.cont = contOf(a); r.last = now;
+    });
+    contList = contList.filter(function (r) { return now - r.last < CONT_DAYS_MS; }).sort(function (x, y) { return y.t - x.t; });
+    store.set("cont", contList);
+  }
+  function contRow(r) {
+    var live = Date.now() - r.last < SCAN_EVERY_MS * 1.6;
+    return '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      esc(r.country || "") + "<br>" + (live ? '<span class="now">Flying now</span>' : "seen " + esc(when(r.last))) +
+      (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
+  }
   function drawContinents() {
+    var busy = scanBusy ? '<div class="note">Scanning the world… ' + scanDone + " of " + scanTotal + "</div>" : "";
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
-      $("controws").innerHTML = '<div class="note">Pick a continent. Looks for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters).</div>' +
-        CONTINENTS.map(function (c) {
-          var n = scanAll ? scanAll.filter(function (a) { return inContinent(c, a); }).length : null;
-          return '<button type="button" class="rr" data-cont="' + esc(c[0]) + '"><span class="rm"><span class="rc">' + esc(c[0]) + '</span></span><span class="rw">' + (n == null ? "" : n + " found") + "</span></button>";
+      var names = CONTINENTS.map(function (c) { return c[0]; }).concat(["Elsewhere"]);
+      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every military plane that is not a transport (spy planes, radar planes, fighters, bombers, tankers, attack helicopters). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
+        names.map(function (n) {
+          var cnt = contList.filter(function (r) { return r.cont === n; }).length;
+          if (n === "Elsewhere" && !cnt) return "";
+          return '<button type="button" class="rr" data-cont="' + esc(n) + '"><span class="rm"><span class="rc">' + esc(n) + '</span></span><span class="rw">' + (scanAt || cnt ? cnt + " found" : "") + "</span></button>";
         }).join("");
       return;
     }
-    var c = CONTINENTS.filter(function (x) { return x[0] === contSel; })[0];
     $("conttitle").textContent = contSel;
     var head = '<button type="button" class="act" data-cont="">← Continents</button>';
-    if (!scanAll) {
-      $("controws").innerHTML = head + '<div class="note">' + (scanBusy ? "Scanning the world… " + scanDone + " of " + scanTotal : "The scan didn't work – check the connection and try again.") + "</div>";
-      return;
-    }
-    var list = scanAll.filter(function (a) { return inContinent(c, a); }).sort(function (a, b) { return (a.alt === "ground") - (b.alt === "ground"); });
-    $("controws").innerHTML = head + (scanBusy ? '<div class="note">Still scanning… ' + scanDone + " of " + scanTotal + "</div>" : "") +
-      (!list.length ? '<div class="note">' + (scanBusy ? "" : "No very rare aircraft are flying over " + esc(contSel) + " right now. Tap the continent again later.") + "</div>" : list.map(function (a) {
-        return '<button type="button" class="rr" data-hex="' + esc(a.hex) + '" data-lat="' + a.lat + '" data-lon="' + a.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(a.callsign) +
-          '</span><span class="rt">' + esc(WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare")) + " · " + esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : "")) + '</span></span><span class="rw">' +
-          esc(a.country || "") + "<br>" + (a.alt === "ground" ? "On the ground" : typeof a.alt === "number" ? plainNum(metres(a.alt)) + " m" : "") + "</span></button>";
+    var list = contList.filter(function (r) { return r.cont === contSel; }), day = null;
+    $("controws").innerHTML = head + busy +
+      (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : list.map(function (r) {
+        var d = dayLabel(r.t), h = "";
+        if (d !== day) { day = d; h = '<div class="rday">' + esc(d) + "</div>"; }
+        return h + contRow(r);
       }).join(""));
   }
   function worldScan(force) {
-    if (scanBusy || (!force && scanAll && Date.now() - scanAt < 180000)) return;
+    if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
     var codes = Object.keys(WORLD_RARE), batches = [], i, found = [], seen = {};
     for (i = 0; i < codes.length; i += 6) batches.push(codes.slice(i, i + 6));
     batches.push(["mil"]);
-    scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0; scanAll = force ? scanAll : null;
+    scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0;
     var next = 0;
     function worker() {
       if (next >= batches.length) return Promise.resolve();
@@ -2548,15 +2587,75 @@ body.infoup main{visibility:hidden}
           });
         })
         .catch(function () { scanErr++; })
-        .then(function () { scanDone++; if (!$("contpanel").hidden && contSel) { scanAll = found.slice(); drawContinents(); } return worker(); });
+        .then(function () { scanDone++; if (!$("contpanel").hidden) drawContinents(); return worker(); });
     }
     Promise.all([worker(), worker(), worker()]).then(function () {
       scanBusy = false;
-      if (found.length || scanErr < scanTotal) { scanAll = found; scanAt = Date.now(); }
+      if (found.length || scanErr < scanTotal) { scanAt = Date.now(); mergeScan(found); }
       if (!$("contpanel").hidden) drawContinents();
     });
   }
+  setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 20000);
+
+  // Hold a plane in the rare / continent list for 3 seconds to mark it with an x (hold more to mark more),
+  // then the bin at the top of the panel deletes the marked ones
+  var delSel = {}, holdFired = 0;
+  function delCount() { return Object.keys(delSel).length; }
+  function drawTrash() {
+    Array.prototype.forEach.call(document.querySelectorAll(".pop .trash"), function (b) {
+      var n = delCount();
+      b.classList.toggle("on", n > 0);
+      b.textContent = n ? "🗑 " + n : "🗑";
+      b.style.width = n ? "auto" : "";
+      b.style.padding = n ? "0 1.4vh" : "";
+    });
+  }
+  function toggleSel(row) {
+    var hex = row.getAttribute("data-hex");
+    if (delSel[hex]) delete delSel[hex]; else delSel[hex] = 1;
+    row.classList.toggle("sel", !!delSel[hex]);
+    drawTrash();
+  }
+  // true when the click was the end of a hold, or a tap on a row while some are marked (so it marks / unmarks instead of opening)
+  function rowSelect(e) {
+    var row = e.target.closest ? e.target.closest(".rr[data-hex]") : null;
+    if (!row) return false;
+    if (Date.now() - holdFired < 600) return true;
+    if (delCount()) { toggleSel(row); return true; }
+    return false;
+  }
+  function holdToSelect(box) {
+    var timer = 0, x0 = 0, y0 = 0;
+    function stop() { clearTimeout(timer); timer = 0; }
+    function start(e) {
+      var row = e.target.closest ? e.target.closest(".rr[data-hex]") : null;
+      if (!row) return;
+      var pt = e.touches ? e.touches[0] : e;
+      x0 = pt.clientX; y0 = pt.clientY; stop();
+      timer = setTimeout(function () { timer = 0; holdFired = Date.now(); toggleSel(row); }, 3000);
+    }
+    function move(e) {
+      var pt = e.touches ? e.touches[0] : e;
+      if (timer && (Math.abs(pt.clientX - x0) > 12 || Math.abs(pt.clientY - y0) > 12)) stop();
+    }
+    box.addEventListener("touchstart", start, { passive: true });
+    box.addEventListener("touchmove", move, { passive: true });
+    box.addEventListener("touchend", stop); box.addEventListener("touchcancel", stop);
+    box.addEventListener("mousedown", start); box.addEventListener("mousemove", move);
+    box.addEventListener("mouseup", stop); box.addEventListener("mouseleave", stop);
+    box.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
+  holdToSelect($("controws"));
+  $("contpanel").querySelector(".trash").addEventListener("click", function () {
+    if (!delCount()) return;
+    var gone = Object.keys(delSel);
+    contList = contList.filter(function (r) { return !delSel[r.hex]; });
+    store.set("cont", contList);
+    gone.forEach(ban);
+    delSel = {}; drawContinents(); drawTrash();
+  });
   $("controws").addEventListener("click", function (e) {
+    if (rowSelect(e)) return;
     var t = e.target.closest ? e.target.closest("[data-cont],[data-hex]") : null;
     if (!t) return;
     if (t.hasAttribute("data-hex")) { trackPlane(t.getAttribute("data-hex"), +t.getAttribute("data-lat"), +t.getAttribute("data-lon")); return; }
@@ -3608,6 +3707,7 @@ body.infoup main{visibility:hidden}
   }
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
+    if (banned(a.hex)) return false;   // deleted from the list a short while ago
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
@@ -3669,7 +3769,7 @@ body.infoup main{visibility:hidden}
     }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : shown.map(function (r) {
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
-      return head + '<button type="button" class="rr" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      return head + '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
         (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
         esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
@@ -3795,7 +3895,17 @@ body.infoup main{visibility:hidden}
     try { localStorage.setItem("planes.raretab", rareTab); } catch (e2) { /* not saved */ }
     drawRareList();
   });
+  holdToSelect($("rarerows"));
+  $("rarepanel").querySelector(".trash").addEventListener("click", function () {
+    if (!delCount()) return;
+    var gone = Object.keys(delSel);
+    rareList = rareList.filter(function (r) { return !delSel[r.hex]; });
+    store.set("rare", rareList);
+    gone.forEach(ban);
+    delSel = {}; rareCount(); drawRareList(); drawTrash();
+  });
   $("rarerows").addEventListener("click", function (e) {
+    if (rowSelect(e)) return;
     var en = e.target.closest ? e.target.closest(".en") : null;
     if (en) { if (!e.target.closest("a")) en.classList.toggle("open"); return; }
     var rg = e.target.closest ? e.target.closest("[data-range]") : null;
