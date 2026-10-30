@@ -137,6 +137,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .pl.ant:not(.on) span{background:#39ff14;color:#000;box-shadow:0 0 6px #39ff14}
 .pl.gld:not(.on) svg{color:#14c2b0;--ol:#000;filter:none}
 .pl.gld:not(.on) span{background:#0f9488;color:#fff}
+.pl.bal:not(.on) svg{color:#6c7bff;--ol:#fff;filter:drop-shadow(0 0 5px #6c7bff)}
+.pl.bal:not(.on) span{background:#4455e0;color:#fff}
 .pl.cgo:not(.on) svg{color:#c4c9cf;--ol:#000;filter:none}
 .pl.cgo:not(.on) span{background:#c4c9cf;color:#13284a}
 /* vintage / warbird = purple, business jet = bright yellow, drone = black */
@@ -236,6 +238,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .row .ri.ag{color:#0b5d1e;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)}
 .row .ri.ant{color:#39ff14;filter:drop-shadow(0 0 3px #39ff14)}
 .row .ri.gld{color:#2fd8c5}
+.row .ri.bal{color:#8c98ff}
 .row .ri.cgo{color:#c4c9cf}
 .row .ri.vin{color:#b385ff}
 .row .ri.biz{color:#ffff00}
@@ -250,6 +253,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .tag.ag{background:#0b5d1e;color:#fff}
 .tag.ant{background:#39ff14;color:#000;box-shadow:0 0 6px #39ff14}
 .tag.gld{background:#0f9488;color:#fff}
+.tag.bal{background:#4455e0;color:#fff}
 .tag.cgo{background:#c4c9cf;color:#13284a}
 .tag.vin{background:#7a3fe0;color:#fff}
 .tag.biz{background:#ffff00;color:#000}
@@ -732,7 +736,7 @@ body.infoup main{visibility:hidden}
     if (a.type) return a.type;
     // No database knows it (e.g. CFL06 Care Flight): say what we can from the feed
     if (a.heli) return a.cat === "res" ? "Rescue helicopter" : a.cat === "pol" ? "Police helicopter" : "Helicopter";
-    return a.cat === "res" ? "Air ambulance" : "Unknown type";
+    return a.cat === "res" ? "Air ambulance" : a.cat === "bal" ? "High-altitude balloon" : "Unknown type";
   }
   // Feed altitudes are in feet; everything shown or spoken is metres (nearest 10 m)
   function metres(ft) { return Math.max(0, Math.round(ft * 0.3048 / 10) * 10); }
@@ -1058,6 +1062,7 @@ body.infoup main{visibility:hidden}
     if (RESCUE_CS.test(cs) || raw.emergency === "lifeguard") return "res";
     if (POLICE_CS.test(cs)) return "pol";
     if (RESEARCH_CS.test(cs) || (raw.t && RESEARCH_TYPES[raw.t]) || antarcticFlight(raw)) return "ant";
+    if (/^HBAL\d/.test(cs) || raw.t === "BALL" || raw.category === "B2") return "bal";   // stratospheric balloons (Loon-style HBAL callsigns)
     if (raw.category === "B6" || (raw.t && DRONE_TYPES[raw.t])) return "drn";
     if (raw.t && VINTAGE_TYPES[raw.t]) return "vin";
     if (RESCUE_REGO[(raw.r || "").replace(/-/g, "").toUpperCase()]) return "res";
@@ -1075,7 +1080,7 @@ body.infoup main{visibility:hidden}
     return "pvt";
   }
   var CAT_NAME = { mil: "Military", trn: "Trainer", mtr: "Mil trainer", emg: "Emergency", res: "Rescue", pol: "Police",
-    ag: "Topdressing", ant: "Antarctic / research", gld: "Glider", cgo: "Cargo", vin: "Vintage", biz: "Business jet", drn: "Drone" };   // only these get a tag; colour shows the rest
+    ag: "Topdressing", ant: "Antarctic / research", gld: "Glider", bal: "Balloon", cgo: "Cargo", vin: "Vintage", biz: "Business jet", drn: "Drone" };   // only these get a tag; colour shows the rest
   // Colour key (opened by the button next to "Return to …")
   var KEY = [
     ["emg", "#ff0000", 0, "Emergency", "Squawking 7500 / 7600 / 7700 – flashes"],
@@ -1086,7 +1091,8 @@ body.infoup main{visibility:hidden}
     ["", "#13284a", 1, "Helicopter", "Navy, or brown if military"],
     ["biz", "#ffff00", 0, "Business jet / charter", "King Air, PC-12, Citation, Learjet, Gulfstream …"],
     ["drn", "#111111", 0, "Drone", ""],
-    ["gld", "#14c2b0", 0, "Glider / balloon / microlight", ""],
+    ["gld", "#14c2b0", 0, "Glider / microlight", ""],
+    ["bal", "#6c7bff", 0, "High-altitude balloon", "HBAL callsigns: stratospheric balloons drifting at about 19,000 m"],
     ["pvt", "#ffffff", 0, "Private", "Everything else"],
     ["ant", "#39ff14", 0, "Antarctic / research", "Flights to Antarctica, Deep Freeze C-17s, NASA, NOAA, LC-130s …"],
     ["ag", "#0b5d1e", 0, "Topdressing / ag", "Fletcher, Cresco, PAC 750XL, Air Tractor …"],
@@ -2174,7 +2180,7 @@ body.infoup main{visibility:hidden}
   }
   // "All planes" list: grouped in this order, closest first within each. Headings with counts only on the NZ view.
   var LIST_GROUPS = [["emg", "Emergency"], ["pol", "Police"], ["vin", "Vintage"], ["res", "Rescue"], ["ant", "Antarctic / research"], ["mil", "Military"],
-    ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["gld", "Glider / balloon"], ["pvt", "Private"], ["ag", "Topdressing"], ["mtr", "Military trainer"],
+    ["heli", "Helicopter"], ["biz", "Business jet"], ["drn", "Drone"], ["bal", "Balloon"], ["gld", "Glider"], ["pvt", "Private"], ["ag", "Topdressing"], ["mtr", "Military trainer"],
     ["trn", "Trainer"], ["com", "Airline"], ["cgo", "Cargo"]];
   function listGroup(a) { return a.heli && !a.cat ? "heli" : a.cat || "pvt"; }
   // Rebuilding the rows mid-scroll stops the fling and makes the list jump, so while a finger is on the list
@@ -2575,6 +2581,7 @@ body.infoup main{visibility:hidden}
     else if (a.cat === "ag") lead = "Topdressing";
     else if (a.cat === "ant") lead = a.ice ? "Antarctic flight" : "Research";
     else if (a.cat === "gld") lead = "";
+    else if (a.cat === "bal") lead = "High-altitude balloon";
     else if (a.cat === "vin") lead = "Vintage";
     else if (a.cat === "drn") lead = "Drone";
     else if (a.cat === "cgo") lead = "Cargo";
@@ -2670,6 +2677,7 @@ body.infoup main{visibility:hidden}
     if (c === "res" || (co && RESCUE_CS.test(cs))) return { mine: 1, text: "Rescue, air ambulance or firefighting flights" + (co && co.op ? " for " + co.op : "") };
     if (c === "pol") return { mine: 1, text: "Police work: patrols, searches and pursuits" };
     if (c === "ant") return { mine: 1, text: "Antarctic or scientific research flights" };
+    if (c === "bal") return { mine: 1, text: "Floating in the stratosphere as a flying phone tower or weather and research platform, drifting with the wind instead of flying a route" };
     if (TRAINER_CS.test(cs)) return { mine: 1, text: "Pilot training" };
     if (c === "cgo") return { mine: 1, text: "Carrying freight and mail" };
     if (c === "com" && AIRLINE_CS.test(cs)) return { mine: 1, text: "Airline passenger flights" };
@@ -2729,6 +2737,16 @@ body.infoup main{visibility:hidden}
     ZKIWL: ["otago", "MBB BK117 B1 · Air 2 Queenstown"], ZKIME: ["otago", "Kawasaki BK117 B2 · Air 3 Queenstown"],
     ZKHEV: ["teanau", "MBB BK117 B2 · Air 1 Te Anau · Te Anau"]
   };
+  var BALLOON_GROUP = ["High-altitude balloon (HBAL)", [
+    "What it is: not an aeroplane. A large solar-powered balloon that floats in the stratosphere, well above airliners (about 19,000 m, or 62,000 ft) and the weather.",
+    "Callsign: HBAL is the prefix Google's Loon project used for its balloons. The feed doesn't say who flies this one, so treat the operator as unconfirmed.",
+    "How it moves: it can't steer. It rises or sinks to find a wind going the way it wants and drifts with it, so speeds of 4 to 12 km/h and slow wandering loops are normal.",
+    "Job: carry a phone-tower payload (LTE) to give internet to remote or disaster areas, or carry weather and research gear.",
+    "Size: a typical Loon envelope was about 15 m wide and 12 m tall, made of thin polyethylene, with solar panels and batteries hanging underneath.",
+    "Staying up: Loon balloons flew for months, and one stayed up 312 days. When one is retired it is brought down on purpose.",
+    "NZ link: Loon's first public trial launched from Tekapo in Canterbury in June 2013, with 30 balloons and 50 testers.",
+    "Hours: they fly non-stop, day and night, for as long as the batteries and gas last."
+  ]];
   var RESCUE_HOURS = "Hours: the trusts don't publish hours for each helicopter. All NZ air ambulances together flew 13,026 hours in the year to October 2023, and demand rose 21% in three years.";
   var FLEET_GROUP = {
     eagle: ["NZ Police Air Support Unit \"Eagle\"", [
@@ -3194,6 +3212,7 @@ body.infoup main{visibility:hidden}
   function fleetHtml(f, owner) {
     var reg = (f.reg || "").replace(/-/g, "").toUpperCase(), fi = FLEET_INFO[reg], rg;
     if (!fi && f.cat === "pol" && /^ZK/.test(reg)) fi = ["eagle", ""];
+    if (f.cat === "bal") { var bg = BALLOON_GROUP, bm = aboutLines(f, f.raw || {}, extraInfo[f.hex] || {}); if (bm.length) bg = [bg[0], bg[1].concat(bm)]; return '<div class="fleet"><b>' + esc(bg[0]) + "</b><ul>" + bg[1].map(function (l) { var i = l.indexOf(": "); return i > 0 && i < 14 ? "<li><b>" + esc(l.slice(0, i)) + ":</b> " + esc(l.slice(i + 2)) + "</li>" : "<li>" + esc(l) + "</li>"; }).join("") + "</ul><small>From Loon's published history and news reports; the operator of this balloon is not confirmed</small></div>"; }
     var cs = (f.flight || "").trim().toUpperCase(), own = owner || f.owner || "";
     if (!fi && (/^FDC\d/.test(cs) || /flying doctor/i.test(own))) fi = ["flydoc", ""];
     if (!fi && !f.heli && (/^LFT\d/.test(cs) || /life ?flight/i.test(own))) fi = ["lifeplane", ""];
