@@ -524,12 +524,23 @@ body.infoup main{visibility:hidden}
   var FEED = P.get("feed") || "/api/feed";
   // Plane feeds often refuse Cloudflare's addresses, so when /api/feed fails try the Deno relay (if set)
   var RELAY2 = P.get("feed") ? "" : (P.get("relay") || "https://planes.daryljohncox.deno.net/api/feed");
+  var relayIdx = 0, cfRetryAt = 0;   // relay that last worked; Cloudflare is retried once a minute after it fails
   function feedFetch(qs, opts) {
-    var urls = (RELAY2 ? [FEED, RELAY2] : [FEED]);   // Deno only when Cloudflare fails, to stay inside its free allowance
-    var i = 0;
+    var urls = (RELAY2 ? [FEED, RELAY2] : [FEED]);
+    var order = urls.map(function (u, k) { return k; });
+    if (relayIdx && Date.now() < cfRetryAt) order.reverse();   // Cloudflare is blocked right now: go straight to Deno
+    var n = 0;
     function next() {
-      var u = urls[i++] + qs;
-      return fetch(u, opts).then(function (r) { if (!r.ok && i < urls.length) return next(); return r; }, function (e) { if (i < urls.length) return next(); throw e; });
+      var k = order[n++], last = n >= order.length;
+      var ctl = window.AbortController ? new AbortController() : null;
+      var tm = ctl ? setTimeout(function () { ctl.abort(); }, 4000) : 0;   // a hung relay shouldn't stall the poll
+      var o = Object.assign({}, opts, ctl ? { signal: ctl.signal } : {});
+      return fetch(urls[k] + qs, o).then(function (r) {
+        clearTimeout(tm);
+        if (!r.ok && !last) return next();
+        if (r.ok) { if (k && Date.now() >= cfRetryAt) cfRetryAt = Date.now() + 60000; relayIdx = k; }
+        return r;
+      }, function (e) { clearTimeout(tm); if (!last) return next(); throw e; });
     }
     return next();
   }
@@ -2056,7 +2067,7 @@ body.infoup main{visibility:hidden}
         render();
         voiceCheck(aircraft);
       })
-      .catch(function () { setStatus("Plane feed busy – retrying"); });
+      .catch(function () { setStatus("Plane feed busy – retrying"); setTimeout(poll, 1500); });   // retry quickly, not after the full interval
   }
 
   // ---------- render ----------
