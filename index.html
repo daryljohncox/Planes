@@ -2515,8 +2515,10 @@ body.infoup main{visibility:hidden}
   };
   function milRare(x) {
     if (!x.t || !(x.dbFlags & 1) || x.alt_baro === "ground") return false;
-    return !!MIL_SPECIAL[x.t] || isAntonov(x.t, x.desc);
+    return milKeep(x.t) || isAntonov(x.t, x.desc);
   }
+  // Military types that count: the special / combat list, or anything that isn't a plain transport / trainer / utility type
+  function milKeep(t) { return !!t && (!!MIL_SPECIAL[t] || !MIL_PLAIN[t]); }
   var CONTINENTS = [   // [name, south, west, north, east]
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
@@ -2526,7 +2528,8 @@ body.infoup main{visibility:hidden}
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS; });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
-  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && lat > -58 && lat < -8 && (lon > 155 || lon < -150); }
+  // (within 3000 km of home)
+  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && distKm(LAT, LON, lat, lon) <= 3000; }
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
     return "Elsewhere";
@@ -3694,7 +3697,7 @@ body.infoup main{visibility:hidden}
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
     if (a.cat === "ant") return a.ice ? "Antarctic flight" : "Research";
     if (southOfNZ(a)) return "South of NZ";
-    if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type])) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
+    if ((a.cat === "mil" || a.cat === "mtr") && !(a.type && COMMON_MIL[a.type]) && (a.country === "New Zealand" || milKeep(a.type))) return a.country && a.country !== "New Zealand" ? a.country + " military" : "Military";
     return "";
   }
   // Anything in the air south of Stewart Island counts as rare, except airliners (Sydney-Santiago flies past there daily)
@@ -3767,6 +3770,7 @@ body.infoup main{visibility:hidden}
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
+    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) return false;   // the Rare list is only for planes within 3000 km
     for (var i = 0; i < rareList.length; i++) {
       var r = rareList[i];
       if (r.hex !== a.hex || now - r.t >= RARE_SAME_MS) continue;
