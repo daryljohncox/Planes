@@ -314,7 +314,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .pop .note{padding:1.2vh 1.8vh;font-size:1.9vh;color:var(--dim)}
 .pop .act{margin:1.2vh 1.8vh;padding:1.2vh 2vh;border:0;border-radius:1vh;background:var(--acc);color:#000;font:700 2.4vh system-ui,sans-serif;cursor:pointer}
 .rr{display:flex;align-items:center;gap:1.4vh;width:100%;padding:1vh 1.8vh;border:0;border-bottom:1px solid #1d2632;background:none;
-  color:var(--txt);font:inherit;text-align:left;cursor:pointer}
+  color:var(--txt);font:inherit;text-align:left;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .rr .rm{flex:1;min-width:0}
 .rr .rc{display:block;font-size:2.6vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rr .pal{margin-left:1vh;font-size:1.8vh;font-weight:600;color:#7fd4ff}
@@ -2650,7 +2650,7 @@ body.infoup main{visibility:hidden}
   }
   ["rarerows", "emgrows", "huntrows", "controws"].forEach(function (id) { smoothPane($(id)); });
 
-  // Hold a plane in the rare / continent list for 3 seconds to mark it with an x (hold more to mark more),
+  // Hold a plane in the rare / continent list for a moment to mark it with an x (hold more to mark more),
   // then the bin at the top of the panel deletes the marked ones
   var delSel = {}, holdFired = 0;
   function delCount() { return Object.keys(delSel).length; }
@@ -2685,7 +2685,7 @@ body.infoup main{visibility:hidden}
       if (!row) return;
       var pt = e.touches ? e.touches[0] : e;
       x0 = pt.clientX; y0 = pt.clientY; stop();
-      timer = setTimeout(function () { timer = 0; holdFired = Date.now(); toggleSel(row); }, 3000);
+      timer = setTimeout(function () { timer = 0; holdFired = Date.now(); toggleSel(row); }, 700);
     }
     function move(e) {
       var pt = e.touches ? e.touches[0] : e;
@@ -2693,7 +2693,8 @@ body.infoup main{visibility:hidden}
     }
     box.addEventListener("touchstart", start, { passive: true });
     box.addEventListener("touchmove", move, { passive: true });
-    box.addEventListener("touchend", stop); box.addEventListener("touchcancel", stop);
+    // touchcancel is not a stop: Android fires it when its own long-press menu starts, which killed the hold
+    box.addEventListener("touchend", stop);
     box.addEventListener("mousedown", start); box.addEventListener("mousemove", move);
     box.addEventListener("mouseup", stop); box.addEventListener("mouseleave", stop);
     box.addEventListener("contextmenu", function (e) { e.preventDefault(); });
