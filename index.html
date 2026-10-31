@@ -2552,10 +2552,13 @@ body.infoup main{visibility:hidden}
     r.cs = a.callsign; r.why = why; r.ty = typeName(a); r.reg = a.reg || ""; r.country = a.country || "";
     r.lat = a.lat; r.lon = a.lon; r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null;
     r.cont = contOf(a); r.last = now;
+    rareInfo(r, a);   // details and the track it flew, so a tap still shows the photo, info and route after it has gone
+    r.ty = typeName(a) + (a.type ? " (" + a.type + ")" : "");
   }
   function contSave() {
     var now = Date.now();
     contList = contList.filter(function (r) { return now - r.last < CONT_DAYS_MS; }).sort(function (x, y) { return y.t - x.t; });
+    contList.forEach(function (r, i) { if (i >= RARE_PATHS && r.path) delete r.path; });   // keeps the saved list small
     store.set("cont", contList);
     contCount();
   }
@@ -2729,7 +2732,7 @@ body.infoup main{visibility:hidden}
     if (rowSelect(e)) return;
     var t = e.target.closest ? e.target.closest("[data-cont],[data-hex]") : null;
     if (!t) return;
-    if (t.hasAttribute("data-hex")) { trackPlane(t.getAttribute("data-hex"), +t.getAttribute("data-lat"), +t.getAttribute("data-lon")); return; }
+    if (t.hasAttribute("data-hex")) { openGoneRow(t, contList); return; }
     contSel = t.getAttribute("data-cont") || "";
     if (contSel) worldScan(false);
     drawContinents();
@@ -3773,7 +3776,7 @@ body.infoup main{visibility:hidden}
   function rareInfo(r, a) {
     r.fl = a.flight || ""; r.type = a.type || ""; r.desc = a.desc || ""; r.owner = a.owner || "";
     r.cat = a.cat || ""; r.heli = !!a.heli; r.alt = a.alt; r.track = a.track; r.gs = a.gs;
-    if (a.cat === "emg") noteEmg(r, a);
+    if (a.cat === "emg" && !r.cont) noteEmg(r, a);
     if (a.lat == null || a.lon == null) return r;
     var path = r.path || (r.path = []), p = path[path.length - 1];
     if (!p || distKm(p[0], p[1], a.lat, a.lon) >= 1) path.push([+a.lat.toFixed(4), +a.lon.toFixed(4)]);
@@ -3996,6 +3999,10 @@ body.infoup main{visibility:hidden}
     }
     var r = e.target.closest ? e.target.closest(".rr") : null;
     if (!r) return;
+    openGoneRow(r, rareList);
+  });
+  // Tap a row of the Rare or Continents list: select the plane if the map has it, else find it anywhere, else show where it was last seen
+  function openGoneRow(r, list) {
     var hex = r.getAttribute("data-hex"), rw = r.querySelector(".rw");
     if (latest(hex, null)) { showPop(null); select(hex, true); return; }
     function note(cls, txt) {
@@ -4004,7 +4011,7 @@ body.infoup main{visibility:hidden}
       rw.insertAdjacentHTML("beforeend", '<span class="' + cls + '"><br>' + txt + "</span>");
     }
     note("now", "Finding…");
-    var rec = rareList.filter(function (x) { return x.hex === hex; })[0];
+    var rec = list.filter(function (x) { return x.hex === hex; })[0];
     // Show where it was last seen (and say why, if the feed let us down)
     function lastSeen(why) {
       if (!rec) { note("gone", why || "Not flying now"); return; }
@@ -4027,7 +4034,7 @@ body.infoup main{visibility:hidden}
         setTimeout(function () { pendingHex = null; }, 30000);   // give up if the area feed never shows it
       })
       .catch(function () { lastSeen("Plane feed unreachable"); });
-  });
+  }
 
   // ---------- deciding what to announce (runs after every feed update) ----------
   var flashUntil = {};
