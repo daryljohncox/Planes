@@ -3022,6 +3022,10 @@ body.infoup main{visibility:hidden}
     if (c === "cgo") return { mine: 1, text: "Carrying freight and mail" };
     if (c === "com" && AIRLINE_CS.test(cs)) return { mine: 1, text: "Airline passenger flights" };
     if (owner) for (i = 0; i < USE_OWNER.length; i++) if (USE_OWNER[i][0].test(owner)) return { mine: 1, text: USE_OWNER[i][1] };
+    if (cs === "AF1") return { mine: 1, text: "Flying the US President (Air Force One)" };
+    if (cs === "AF2") return { mine: 1, text: "Flying the US Vice President (Air Force Two)" };
+    if (/^SAM\d/.test(cs)) return { mine: 1, text: "Flying US government VIPs and senior officials (Special Air Mission)" };
+    if (/^(RCH|REACH)\d/.test(cs)) return { mine: 1, text: "US military transport: moving troops and cargo worldwide" };
     if (c === "mil" || c === "mtr") return { mine: 1, text: c === "mtr" ? "Training military pilots" : MIL_TRANSPORT[t] ? "Military transport, patrol and disaster relief" : "Military flying" };
     // Otherwise: what this kind of aircraft is mainly used for
     var u = "";
@@ -3258,6 +3262,22 @@ body.infoup main{visibility:hidden}
   // Everything else: NZ airline facts by callsign, plus specs for the type and typical yearly hours for its kind.
   // Specs are rounded maker figures; hours are typical industry figures for that kind of aircraft, not this one.
   var AIRLINE_INFO = [
+    [/^AF1$/, ["Air Force One", [
+      "Callsign: 'Air Force One' is the radio callsign of any US Air Force plane with the US President on board. It is not one fixed aircraft.",
+      "Usual aircraft: the two VC-25s (modified Boeing 747-200Bs, in service since 1990), with 747-8 VC-25Bs being brought in to replace them.",
+      "Crew: flown by the 89th Airlift Wing from Joint Base Andrews, Maryland, and usually shadowed by other Air Force jets carrying staff and cars.",
+      "Seen here? It is rare: the callsign only goes on while the President is aboard."]]],
+    [/^AF2$/, ["Air Force Two", [
+      "Callsign: 'Air Force Two' is the radio callsign of any US Air Force plane with the US Vice President on board.",
+      "Usual aircraft: a Boeing C-32 (a 757-200) of the 89th Airlift Wing, Joint Base Andrews, Maryland."]]],
+    [/^SAM\d/, ["Special Air Mission", [
+      "Job: 'SAM' flights are the US Air Force 89th Airlift Wing flying the President's cabinet, senior officials and other VIPs.",
+      "Aircraft: Boeing C-32s (757-200), C-40s (737) and VC-25s, based at Joint Base Andrews, Maryland."]]],
+    [/^(RCH|REACH)\d/, ["Reach (US Air Mobility Command)", [
+      "Job: 'Reach' is the callsign of US Air Force Air Mobility Command transports, which move troops and cargo around the world.",
+      "Aircraft: mostly C-17 Globemasters, C-5 Galaxies and KC-135 / KC-46 tankers."]]],
+    [/^RRR\d/, ["Royal Air Force", [
+      "Job: 'RRR' is the callsign of Royal Air Force flights, often Voyager tanker-transports (an Airbus A330) flying troops, VIPs and refuelling jets."]]],
     [/^(ANZ|NZM|RLK)\d/, ["Air New Zealand", [
       "Job: NZ's national airline. Flies about 20 NZ towns and cities and around 30 overseas destinations across the Tasman, Pacific Islands, Asia and North America.",
       "Fleet: about 110 aircraft. Boeing 787-9 Dreamliners and 777-300ERs long-haul, Airbus A320/A321neos on domestic, Tasman and Pacific routes, ATR 72-600s and Dash 8 Q300s on regional routes.",
@@ -3465,6 +3485,11 @@ body.infoup main{visibility:hidden}
   // Type history for the "About the …" box: ICAO type -> [first flight, came from, replaced by, did you know].
   // Maker and Wikipedia figures, rounded; add types here as they turn up.
   var TYPE_HISTORY = {
+    B742: ["1970", "747-100: the 200 added stronger engines, more weight and more range", "747-300 and the 747-400, then the 747-8", "The two VC-25s that have flown as Air Force One since 1990 are modified 747-200Bs."],
+    B744: ["1988", "747-300: a glass cockpit that cut the crew from three to two, plus winglets", "747-8, 777 and A350 (the passenger 747-8 was the last built)", "Boeing built 694 of the 747-400 family, and many airlines flew them for 30 years."],
+    C17: ["1991", "C-141 Starlifter and C-5 Galaxy: a big transport that can use short, rough airstrips", "Nothing yet", "Carries about 77 tonnes, which is an M1 tank, and flies to Christchurch each summer for the US Antarctic programme (Operation Deep Freeze)."],
+    B52: ["1952", "B-36 and B-47: eight-engined jet bomber", "Nothing yet: the B-21 will join it, and the US plans to keep flying B-52s into the 2050s", "Over 70 years in service, so some crews now fly the same airframes their grandparents' generation did."],
+    B2: ["1989", "B-1 and B-52: a stealth flying wing", "B-21 Raider", "Only 21 were built, each costing about US$2 billion, which makes it the most expensive aircraft ever made."],
     BE20: ["1972", "King Air 100: the 200 added a T-tail, a pressurised bigger cabin and more powerful engines", "King Air 250 (2011): winglets, more power and a shorter takeoff; the 350 is stretched", "Over 7,000 King Airs of all models have been built since 1964; the 200 series is the best-selling twin turboprop of its size and flies air ambulance, survey and charter jobs worldwide."],
     B350: ["1988", "King Air 200: stretched about 0.9 m, with winglets and more powerful engines", "None yet", "A stretched King Air 200 with a longer cabin and winglets; the RNZAF uses them to train aircrew."],
     BE9L: ["1964", "Queen Air piston twin: swapped piston engines for turboprops and added a pressurised cabin", "King Air 100 and 200: more power, then a T-tail and a bigger cabin", "The first King Air: a Queen Air with turboprop engines and a pressurised cabin."],
