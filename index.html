@@ -2550,7 +2550,7 @@ body.infoup main{visibility:hidden}
   // Worldwide emergency squawks (7700 / 7600 / 7500), kept 30 days; radio / transponder emergencies only, no news
   var wemg = store.get("wemg", []).filter(function (r) { return Date.now() - r.last < 30 * 86400000; });
   // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
-  var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
+  var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 15 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300") && !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
   // (within 3000 km of home)
@@ -2589,7 +2589,7 @@ body.infoup main{visibility:hidden}
     var at = contIndex();
     found.forEach(function (a) {
       if (banned(a.hex)) return;
-      var why = WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare");
+      var why = a.why || WORLD_RARE[a.type] || (a.cat === "mil" || a.cat === "mtr" ? "Military" : "Rare");
       contNote(a, why, at);
       if (nearNZ(a.lat, a.lon)) noteRare(a, why);   // only finds near NZ go on the Rare list
     });
@@ -2653,11 +2653,11 @@ body.infoup main{visibility:hidden}
       }).join("");
       return;
     }
-    var busy = scanBusy ? '<div class="note">Scanning the world… ' + scanDone + " of " + scanTotal + "</div>" : "";
+    var busy = scanBusy ? '<div class="note">Scanning the world… ' + scanDone + " of " + scanTotal + "</div>" : scanMsg ? '<div class="note">' + esc(scanMsg) + "</div>" : "";
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
       var names = CONTINENTS.map(function (c) { return c[0]; }).concat(["Elsewhere"]);
-      $("controws").innerHTML = '<div class="note">Pick a continent. The world is scanned in the background every 2 minutes for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every Antonov and the special and combat military ones (spy planes, radar planes, bombers, fighters, attack jets, drones). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
+      $("controws").innerHTML = '<div class="note">Pick a continent. The world is swept in the background every 15 minutes (or press Scan to sweep it now) for very rare aircraft: giants like the Beluga and An-124, Concorde, WWII bombers and one-of-a-kind aircraft, plus every Antonov and the special and combat military ones (spy planes, radar planes, bombers, fighters, attack jets, drones). Finds stay for 30 days. Hold a plane for 3 seconds to mark it, then tap the bin to delete.</div>' + busy +
         names.map(function (n) {
           var all = contList.filter(function (r) { return r.cont === n; }), cnt = all.length;
           var d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -2677,24 +2677,40 @@ body.infoup main{visibility:hidden}
         return h + contRow(r);
       }).join(""));
   }
+  // The background sweep asks the feed for planes around a grid of points, just like the map does when you pan it there,
+  // but without moving the view. 250 nm (the relay's maximum) around each point; about 85 points cover the busy parts of the world.
+  var SWEEP_PTS = [
+    [47,-122],[49,-106],[46,-90],[44,-74],[37,-120],[37,-105],[34,-90],[36,-78],[30,-96],[27,-81],[20,-100],[61,-150],[64,-100],[53,-113],
+    [9,-79],[4,-74],[-3,-60],[-12,-77],[-15,-47],[-23,-46],[-34,-58],[-33,-70],[-45,-70],
+    [51,0],[48,10],[52,18],[41,-4],[42,13],[60,10],[64,26],[38,24],[56,38],[46,30],[39,33],
+    [31,31],[25,45],[25,55],[33,44],[9,38],[-1,37],[6,3],[14,-14],[-26,28],[-33,19],[-9,13],[35,3],
+    [28,77],[19,73],[13,80],[24,90],[13,100],[3,102],[-6,107],[14,121],[23,114],[31,121],[37,127],[36,139],[45,126],[40,116],[55,83],[43,75],[30,104],[62,130],
+    [-34,151],[-37,145],[-27,153],[-32,116],[-12,131],[-41,174],[-45,170],[-37,175],[-18,178],[-17,-149],[21,-157],[14,145],[-9,147],
+    [-78,167],[-75,0],[-70,80],[-90,0]
+  ];
+  var scanMsg = "";
+  function sweepWanted(x) {   // cheap pre-check, so thousands of ordinary planes don't each get the full treatment
+    return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x);
+  }
   function worldScan(force) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
-    var codes = Object.keys(WORLD_RARE), batches = [], i, found = [], seen = {};
-    for (i = 0; i < codes.length; i += 6) batches.push(codes.slice(i, i + 6));
-    batches.push(["mil"]);
+    var batches = SWEEP_PTS.slice(), found = [], seen = {}, okN = 0;
+    batches.push("mil");
     scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0;
     var next = 0;
     function worker() {
       if (next >= batches.length) return Promise.resolve();
       var b = batches[next++];
-      var mil = b[0] === "mil";
-      return feedFetch(mil ? "?mil=1&all=1" : "?types=" + b.join(","), { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
+      var mil = b === "mil";
+      return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
+          okN++;
           (j.ac || []).forEach(function (x) {
-            if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300)) return;
-            if (mil && !milRare(x)) return;
-            seen[x.hex] = 1; found.push(bgPlane(x, { lat: LAT, lon: LON }));
+            if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) return;
+            var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
+            if (w && w !== "South of NZ" && w !== "Emergency") a.why = w;
+            seen[x.hex] = 1; found.push(a);
           });
         })
         .catch(function () { scanErr++; })
@@ -2702,7 +2718,10 @@ body.infoup main{visibility:hidden}
     }
     Promise.all([worker(), worker(), worker()]).then(function () {
       scanBusy = false;
-      if (found.length || scanErr < scanTotal) { scanAt = Date.now(); mergeScan(found); }
+      var tm = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      scanMsg = okN ? "Last sweep " + tm + ": " + okN + " of " + scanTotal + " areas answered, " + found.length + " rare plane" + (found.length === 1 ? "" : "s") + " in the air."
+        : "Last sweep " + tm + " failed: the plane feed didn't answer. Try Scan again in a minute.";
+      if (okN) { scanAt = Date.now(); mergeScan(found); }
       if (!$("contpanel").hidden) drawContinents();
     });
   }
@@ -2714,7 +2733,7 @@ body.infoup main{visibility:hidden}
   // Smooth scrolling for the side panels (rare, emergencies, hunt, continents): a redraw is skipped when nothing changed,
   // and while a finger is on the panel or it is still gliding the new rows wait until 0.7 s after it stops
   function smoothPane(el) {
-    var desc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), last = null, pend = null, touch = false, scrolled = false, t = null, appliedAt = 0;
+    var desc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), last = null, pend = null, touch = false, scrolled = false, t = null, appliedAt = 0, safe = null;
     function apply(h) {
       var top = el.scrollTop;
       desc.set.call(el, h); last = h; appliedAt = Date.now();
@@ -2727,7 +2746,7 @@ body.infoup main{visibility:hidden}
       get: function () { return desc.get.call(el); },
       set: function (h) {
         if (h === last) { pend = null; return; }
-        if ((touch && scrolled) || t) { pend = h; return; }
+        if ((touch && scrolled) || t) { pend = h; clearTimeout(safe); safe = setTimeout(function () { touch = false; scrolled = false; flush(); }, 2500); return; }
         apply(h);
       }
     });

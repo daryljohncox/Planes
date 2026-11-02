@@ -13,15 +13,18 @@ module.exports = async (req, res) => {
   const sources = reg ? [
     { url: `https://api.adsb.lol/v2/registration/${reg}`, list: "ac" },
     { url: `https://opendata.adsb.fi/api/v2/registration/${reg}`, list: "aircraft" },
-    { url: `https://api.airplanes.live/v2/reg/${reg}`, list: "ac" }
+    { url: `https://api.airplanes.live/v2/reg/${reg}`, list: "ac" },
+    { url: `https://api.adsb.one/v2/reg/${reg}`, list: "ac" }
   ] : hex ? [
     { url: `https://api.adsb.lol/v2/hex/${hex}`, list: "ac" },
     { url: `https://opendata.adsb.fi/api/v2/hex/${hex}`, list: "aircraft" },
-    { url: `https://api.airplanes.live/v2/hex/${hex}`, list: "ac" }
+    { url: `https://api.airplanes.live/v2/hex/${hex}`, list: "ac" },
+    { url: `https://api.adsb.one/v2/hex/${hex}`, list: "ac" }
   ] : [
     { url: `https://api.adsb.lol/v2/point/${lat}/${lon}/${r}`, list: "ac" },
     { url: `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`, list: "aircraft" },
-    { url: `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`, list: "ac" }
+    { url: `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`, list: "ac" },
+    { url: `https://api.adsb.one/v2/point/${lat}/${lon}/${r}`, list: "ac" }
   ];
   const tried = [];
   // A plane sending a blank callsign comes through as "@@@@@@@@" (character 0 in ADS-B): treat it as none
@@ -64,7 +67,8 @@ module.exports = async (req, res) => {
     const lists = [
       { url: "https://api.adsb.lol/v2/mil", list: "ac" },
       { url: "https://opendata.adsb.fi/api/v2/mil", list: "aircraft" },
-      { url: "https://api.airplanes.live/v2/mil", list: "ac" }
+      { url: "https://api.airplanes.live/v2/mil", list: "ac" },
+      { url: "https://api.adsb.one/v2/mil", list: "ac" }
     ];
     const seen = {}, ac = [];
     await Promise.all(lists.map(async (s) => {
@@ -126,19 +130,29 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ac: clean(ac), tried });
   }
 
-  for (const s of sources) {
-    try {
-      const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(5000) });
-      tried.push(new URL(s.url).host + " " + up.status);
-      if (!up.ok) continue;
-      const data = await up.json();
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Cache-Control", "s-maxage=2, stale-while-revalidate=2");
-      return res.status(200).json({ ac: clean(data[s.list] || []), src: new URL(s.url).host });
-    } catch (e) {
-      tried.push(new URL(s.url).host + " error");
-    }
-  }
+  // Sources are tried together, each one starting 1.2 s after the last (or at once when the one before it fails), and the first
+  // good answer wins, so one slow or refused feed no longer holds up the poll for 5 s
+  const attempt = (s, i) => new Promise((resolve, reject) => {
+    setTimeout(async () => {
+      const host = new URL(s.url).host;
+      try {
+        const up = await fetch(s.url, { headers: { "User-Agent": "nest-hub-planes" }, signal: AbortSignal.timeout(5000) });
+        tried.push(host + " " + up.status);
+        if (!up.ok) return reject(new Error("status"));
+        const data = await up.json();
+        resolve({ ac: clean(data[s.list] || []), src: host });
+      } catch (e) {
+        tried.push(host + " error");
+        reject(e);
+      }
+    }, i * 1200);
+  });
+  try {
+    const win = await Promise.any(sources.map(attempt));
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "s-maxage=2, stale-while-revalidate=2");
+    return res.status(200).json(win);
+  } catch (e) { /* every source failed */ }
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   return res.status(503).json({ ac: [], error: "all feeds busy", tried });
