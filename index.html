@@ -270,6 +270,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .csn{font-size:2.2vh;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .csn:empty{display:none}
 .aps{font-size:2.4vh;color:#9fd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3vh}
+.rt.role{color:#9fd8ff}
 .rt .apsl{color:#9fd8ff}
 .rt .lap{color:#ffd27a;font-weight:700}
 .row .ri svg{width:100%;height:100%}
@@ -2359,7 +2360,7 @@ body.infoup main{visibility:hidden}
   $("rows").addEventListener("touchcancel", function () { listTouch = false; listSettled(); }, { passive: true });
   $("rows").addEventListener("scroll", listSettled, { passive: true });
   function rowHtml(a) {
-      var rl = roleOf(a), ty = esc(typeName(a) + (rl && rl.toLowerCase() !== typeName(a).toLowerCase() ? " · " + rl : "") + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
+      var rl = roleOf(a), ty = esc(typeName(a) + (a.reg && a.reg !== a.callsign ? " · " + a.reg : ""));
       var st = airportStatus(a), oh = overheadIn(a);
       if (st) ty = '<span class="apsl">' + st.icon + " " + esc(st.text + " " + (st.ap.code || st.ap.name)) + "</span> · " + ty;
       var lp = lapsOf(a);
@@ -2367,7 +2368,7 @@ body.infoup main{visibility:hidden}
       if (oh) ty = '<span class="ovh">Overhead ' + (oh < 1 ? "now" : "in " + Math.round(oh) + " min") + "</span> · " + ty;
       return '<button type="button" class="row" data-hex="' + esc(a.hex) + '">' +
         '<span class="ri ' + a.cat + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' + Math.round(a.track || 0) + 'deg)">' + shapeOf(a) + '</svg></span>' +
-        '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span></span>' +
+        '<span class="rm"><span class="rc">' + esc(a.callsign) + tagHtml(a) + '</span><span class="rt">' + ty + '</span>' + (rl && rl.toLowerCase() !== typeName(a).toLowerCase() ? '<span class="rt role">' + esc(rl) + '</span>' : "") + '</span>' +
         '<span class="rs"><b>' + esc(altText(a)) + '</b><br>' + a.dist.toFixed(1) + ' km · ' +
         (a.gs == null ? "—" : Math.round(a.gs * 1.852) + " km/h") + '</span></button>';
   }
@@ -2678,21 +2679,21 @@ body.infoup main{visibility:hidden}
     var n = contList.filter(function (r) { return r.t >= d0.getTime(); }).length;
     $("contcount").textContent = n ? n : "";
   }
-  function tyRole(r) {   // "T-38 Talon (T38)" -> "T-38 Talon (T38) · supersonic jet trainer"
+  function roleLine(r) {   // second line under the type: "supersonic jet trainer"
     var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || ""), rl = ROLES[r.type || (m ? m[1] : "")] || "";
-    return r.ty + (rl && (r.ty || "").toLowerCase().indexOf(rl.toLowerCase()) < 0 ? " · " + rl : "");
+    return rl && (r.ty || "").toLowerCase().indexOf(rl.toLowerCase()) < 0 ? '<span class="rt role">' + esc(rl) + "</span>" : "";
   }
   function contRow(r) {
     var live = Date.now() - r.last < SCAN_EVERY_MS * 1.6;
     return '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-      '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Flying now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
   function wemgRow(r) {
     var live = Date.now() - r.last < 4 * 60000;
     return '<button type="button" class="rr" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="warn">⚠</span><span class="rm"><span class="rc">' + esc(r.cs) +
-      '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Squawking now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
@@ -4255,7 +4256,7 @@ body.infoup main{visibility:hidden}
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       return head + '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
         esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
