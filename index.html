@@ -112,7 +112,6 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl svg g.sh{display:none}
 .dense .pl svg{transition:none}
 .dense .pl:not(.on):not(.emg) svg{filter:none!important}
-.row{content-visibility:auto;contain-intrinsic-size:auto 9vh}
 .rr{content-visibility:auto;contain-intrinsic-size:auto 8vh}
 .more{padding:1.2vh 1.8vh;color:var(--dim);font-size:1.9vh;text-align:center}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
@@ -207,7 +206,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 /* plane list (default panel) */
 #list{flex:1;display:flex;flex-direction:column;min-height:0}
 .lh{flex:0 0 auto;padding:1.2vh 1.8vh;font-size:2vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #222d3a}
-#rows{flex:1;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#rows{flex:1;overflow-y:auto;overflow-anchor:none;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 .row{display:flex;align-items:center;gap:1.4vh;width:100%;padding:1.2vh 1.8vh;border:0;border-bottom:1px solid #1d2632;
   background:none;color:var(--txt);text-align:left;font:inherit;cursor:pointer}
 .row:active{background:#1c2633}
