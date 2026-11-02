@@ -2564,11 +2564,13 @@ body.infoup main{visibility:hidden}
     var u = document.createElement("button"); u.type = "button"; u.className = "uptop"; u.textContent = "▲"; u.setAttribute("aria-label", "Back to the top of the list");
     c.parentNode.insertBefore(u, c);
   });
-  document.addEventListener("click", function (e) {
-    var b = e.target.closest ? e.target.closest("button.uptop") : null;
-    if (!b) return;
-    var box = b.closest(".pop") ? b.closest(".pop").querySelector(".pb") : $("rows");
-    if (box) box.scrollTop = 0;
+  // (bound on each button: the panels stop clicks bubbling to the document, so a document-level handler never fired)
+  Array.prototype.forEach.call(document.querySelectorAll("button.uptop"), function (b) {
+    b.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var pop = b.closest(".pop"), box = pop ? pop.querySelector(".pb") : $("rows");
+      if (box) { box.scrollTop = 0; try { box.scrollTo({ top: 0 }); } catch (x) {} }
+    });
   });
   Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
     b.addEventListener("click", function (e) { e.stopPropagation(); showPop(null); });
@@ -4137,6 +4139,13 @@ body.infoup main{visibility:hidden}
   var RARE_STOP_MS = 15 * 60000;   // a landing only ends the flight if it stays down this long (circuits / touch-and-goes don't)
   // Tidy the saved list: drop types no longer counted as rare (e.g. the A380) and merge the repeats left by
   // planes whose callsign flipped back and forth (YAK83 / ANZ648M) or that were doing circuits (one entry per touch-and-go)
+  function staleVip(w) {
+    w = String(w || "");
+    if (!/^VIP: /.test(w)) return false;
+    for (var i = 0; i < VIP_PLANES.length; i++) if (w.indexOf("VIP: " + VIP_PLANES[i][2]) === 0) return false;
+    return !VIP_OWNER_RE.test(w.replace(/^VIP: [^(]*\(/, ""));
+  }
+  contList = contList.filter(function (r) { return !staleVip(r.why); });
   (function () {
     var NOT_TYPE = /^(Emergency|Antarctic flight|Research|South of NZ|.*Military)$/i, kept = [];
     rareList.slice().reverse().forEach(function (r) {
@@ -4146,6 +4155,7 @@ body.infoup main{visibility:hidden}
       if (m && /military$/i.test(r.why || "") && !RARE_TYPES[m[1]] && !milKeep(m[1]) && !isAntonov(m[1], r.desc)) return;   // military transports etc. from before only combat / special types counted
       if (!nearNZ(r.lat, r.lon) && !/^(Emergency|Antarctic flight|Research|South of NZ)$/.test(r.why || "") && typeof r.lat === "number" && r.lat > -60) return;   // world finds from before the Rare list went NZ-only
       if (r.why === "South of NZ" && isAirliner({ cat: r.cat, type: m ? m[1] : r.type })) return;
+      if (staleVip(r.why)) return;   // owner-based VIP tags saved before the owner match was tightened (e.g. "Consultants" read as "Sultan")
       for (var i = kept.length - 1; i >= 0; i--) {
         var k = kept[i];
         if (k.hex !== r.hex) continue;
