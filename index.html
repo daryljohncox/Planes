@@ -2200,6 +2200,8 @@ body.infoup main{visibility:hidden}
   function render() {
     // new data arriving mid pan / pinch waits until the map stops, so the Hub isn't redrawing under your finger
     if (moving && !autoPan) { renderLater = true; return; }
+    // same while a list is being scrolled: wait until it settles (then redraw once)
+    if (uiBusy()) { renderLater = true; clearTimeout(renderLaterT); renderLaterT = setTimeout(function () { if (renderLater) render(); }, 900); return; }
     renderLater = false;
     $("place").textContent = selHex && selLast ? selLast.callsign : away ? "map centre" : PLACE;
     $("count").textContent = aircraft.length + " aircraft within " + Math.round(cR * 1.852) + " km";
@@ -2297,6 +2299,10 @@ body.infoup main{visibility:hidden}
   // Rebuilding the rows mid-scroll stops the fling and makes the list jump, so while a finger is on the list
   // (or it is still gliding) new data waits until it settles; unchanged rows aren't rebuilt at all
   var listHtml = "", listTouch = false, listScrollT = null, listPending = false;
+  // Any list being used (finger down, still gliding) or any list panel open: background work (world scan, map redraws) stays out of the way
+  var paneTouching = false, paneActive = 0, renderLaterT = null;
+  function uiBusy() { return listTouch || !!listScrollT || paneTouching || Date.now() - paneActive < 800; }
+  function popOpen() { return ["voicepanel", "rarepanel", "huntpanel", "emgpanel", "contpanel"].some(function (p) { return !$(p).hidden; }); }
   // Groups tapped shut (their header stays, with the count); kept through the hourly reload
   // Order within each group: tap the list title to go round nearest -> lowest -> fastest (remembered on this Hub)
   var SORTS = {
@@ -2783,7 +2789,7 @@ body.infoup main{visibility:hidden}
   function sweepWanted(x) {   // cheap pre-check, so thousands of ordinary planes don't each get the full treatment
     return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x) || !!vipOf(x.flight, x.r, x.ownOp || x.owner, "");
   }
-  function worldScan(force) {
+  function worldScan(force, manual) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
     var batches = SWEEP_PTS.slice(), found = [], seen = {}, okN = 0, failRun = 0;
     batches.push("mil");
@@ -2792,7 +2798,8 @@ body.infoup main{visibility:hidden}
     function worker() {
       if (next >= batches.length || failRun >= 8) return Promise.resolve();   // the feed is refusing: stop instead of hammering it
       // the Hub is busy with a finger on the map or a list: the sweep waits instead of making it lag
-      if (moving || listTouch) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
+      // (the automatic sweeps also wait for as long as any list panel is open; the Scan button still runs, but not under a finger)
+      if (moving || uiBusy() || (!manual && popOpen())) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
       var b = batches[next++];
       var mil = b === "mil";
       return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
@@ -2803,6 +2810,7 @@ body.infoup main{visibility:hidden}
           var acs = j.ac || [], i = 0;
           return new Promise(function (done) {
             (function chunk() {
+              if (uiBusy()) { setTimeout(chunk, 300); return; }
               for (var n = 0; i < acs.length && n < 60; i++, n++) {
                 var x = acs[i];
                 if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) continue;
@@ -2826,7 +2834,7 @@ body.infoup main{visibility:hidden}
       if (!$("contpanel").hidden) drawContinents();
     });
   }
-  $("scannow").addEventListener("click", function () { contTab = "scan"; worldScan(true); drawContinents(); });
+  $("scannow").addEventListener("click", function () { contTab = "scan"; worldScan(true, true); drawContinents(); });
   $("contemg").addEventListener("click", function () { contTab = "emg"; wemgScan(); drawContinents(); });
   setTimeout(function () { wemgScan(); setInterval(wemgScan, 60000); }, 25000);
   setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 60000);
@@ -2851,10 +2859,10 @@ body.infoup main{visibility:hidden}
         apply(h);
       }
     });
-    el.addEventListener("touchstart", function () { touch = true; scrolled = false; }, { passive: true });
-    el.addEventListener("touchend", function () { touch = false; if (scrolled) settle(); else flush(); }, { passive: true });
-    el.addEventListener("touchcancel", function () { touch = false; if (scrolled) settle(); else flush(); }, { passive: true });
-    el.addEventListener("scroll", function () { if (Date.now() - appliedAt < 100) return; scrolled = true; settle(); }, { passive: true });
+    el.addEventListener("touchstart", function () { touch = true; scrolled = false; paneTouching = true; paneActive = Date.now(); }, { passive: true });
+    el.addEventListener("touchend", function () { touch = false; paneTouching = false; paneActive = Date.now(); if (scrolled) settle(); else flush(); }, { passive: true });
+    el.addEventListener("touchcancel", function () { touch = false; paneTouching = false; paneActive = Date.now(); if (scrolled) settle(); else flush(); }, { passive: true });
+    el.addEventListener("scroll", function () { if (Date.now() - appliedAt < 100) return; paneActive = Date.now(); scrolled = true; settle(); }, { passive: true });
   }
   ["rarerows", "emgrows", "huntrows", "controws"].forEach(function (id) { smoothPane($(id)); });
 
