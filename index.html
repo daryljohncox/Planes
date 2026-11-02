@@ -111,6 +111,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl:not(.on):not(.emg) span{display:none}
 .dense .pl svg g.sh{display:none}
 .dense .pl svg{transition:none}
+.dense .pl:not(.on):not(.emg) svg{filter:none!important}
+.row{content-visibility:auto;contain-intrinsic-size:auto 9vh}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
@@ -586,6 +588,7 @@ body.infoup main{visibility:hidden}
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
   var TYPES = {
+    G12T:["Grob G 120TP","Grob G 120TP"], G120:["Grob G 120TP","Grob G 120TP"],
     A319:["Airbus A319","Airbus A319"], A320:["Airbus A320","Airbus A320 family"],
     A321:["Airbus A321","Airbus A321"], A20N:["Airbus A320neo","Airbus A320neo family"],
     A21N:["Airbus A321neo","Airbus A321neo"], A332:["Airbus A330-200","Airbus A330"],
@@ -1158,16 +1161,15 @@ body.infoup main{visibility:hidden}
   function iconFor(a, on) {
     var size = on ? 36 : 28;
     var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + (flashUntil[a.hex] > Date.now() ? " flash" : "") +
-      (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
-      Math.round(a.track || 0) + 'deg)"><g class="sh">' + shapeOf(a) + '</g><g>' + shapeOf(a) + '</g></svg><span>' + esc(a.callsign) + "</span></div>";
-    return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
+      (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor"><g class="sh">' + shapeOf(a) + '</g><g>' + shapeOf(a) + '</g></svg><span>' + esc(a.callsign) + "</span></div>";
+    return { key: html, rot: Math.round(a.track || 0), icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
   function drawMap(featured) {
     if (!map) return;
     var seen = {};
     // lots of planes: drop the callsign labels and soft edges (the selected plane keeps its label) so panning stays smooth
-    document.body.classList.toggle("dense", aircraft.length > 40);
+    document.body.classList.toggle("dense", aircraft.length > 25);
     aircraft.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
@@ -1177,14 +1179,19 @@ body.infoup main{visibility:hidden}
       var m = markers[a.hex];
       if (!m) {
         m = L.marker([a.lat, a.lon], { icon: ic.icon, interactive: true, keyboard: false, bubblingMouseEvents: false }).addTo(map);
-        m._key = ic.key;
+        m._key = ic.key; m._rot = null;
         m.on("click", (function (hex) { return function () { select(hex); }; })(a.hex));
         markers[a.hex] = m;
       } else {
         m.setLatLng([a.lat, a.lon]);
-        if (m._key !== ic.key) { m.setIcon(ic.icon); m._key = ic.key; }
+        if (m._key !== ic.key) { m.setIcon(ic.icon); m._key = ic.key; m._rot = null; }
       }
       m.setZIndexOffset(on ? 1000 : 0);
+      // heading changes turn the existing icon instead of rebuilding it (rebuilding every plane each poll made big views lag)
+      if (m._rot !== ic.rot) {
+        var el = m.getElement(), sv = el && el.querySelector("svg");
+        if (sv) { sv.style.transform = "rotate(" + ic.rot + "deg)"; m._rot = ic.rot; }
+      }
     });
     Object.keys(markers).forEach(function (hex) {
       if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
@@ -3892,7 +3899,7 @@ body.infoup main{visibility:hidden}
   ];
   // Any country: the aircraft database names the owner, so a plane registered to a presidential, royal, amiri or state flight counts
   // even when it isn't in the table above. Airlines with "Royal" or "Sultan" in their name don't.
-  var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|amiri|emiri|sultan|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
+  var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
   function vipEntry(cs, reg) {
     cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase();
     for (var i = 0; i < VIP_PLANES.length; i++) {
@@ -3908,7 +3915,7 @@ body.infoup main{visibility:hidden}
       if ((v[0] && (v[0].test(cs) || v[0].test(reg))) || (reg && v[1].indexOf(reg) >= 0) || (cs && v[1].indexOf(cs) >= 0)) return "VIP: " + v[2] + " · " + v[3];
     }
     if (owner && VIP_OWNER_RE.test(owner) && !/airlines?|airways|\bair\b.*\b(ltd|plc|inc)\b|charter|leasing/i.test(owner)) {
-      var who = /prime minister/i.test(owner) ? "the Prime Minister and government" : /presiden/i.test(owner) ? "the President and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(owner) ? "the royal family or ruler" : "government leaders and VIPs";
+      var who = /prime minister/i.test(owner) ? "the Prime Minister and government" : /presiden/i.test(owner) ? "the President and government" : /\broyal\b|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|\bking\b|\bqueen\b/i.test(owner) ? "the royal family or ruler" : "government leaders and VIPs";
       return "VIP: " + who + " (" + owner.slice(0, 40) + ")" + (country ? " · " + country : "");
     }
     return "";
@@ -4015,7 +4022,7 @@ body.infoup main{visibility:hidden}
     var own = String(f.owner || (f.raw && f.raw.ownOp) || "");
     if (!e && own && vipOf("", "", own, f.country)) {
       return ["VIP flight", [
-        "Carries: " + (/prime minister/i.test(own) ? "a prime minister and government" : /presiden/i.test(own) ? "a president and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(own) ? "a royal family or ruler" : "government leaders and VIPs") + ".",
+        "Carries: " + (/prime minister/i.test(own) ? "a prime minister and government" : /presiden/i.test(own) ? "a president and government" : /\broyal\b|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|\bking\b|\bqueen\b/i.test(own) ? "a royal family or ruler" : "government leaders and VIPs") + ".",
         "Owner: " + own + (f.country ? " (" + f.country + ")" : "") + ", as listed in the aircraft database.",
         "Who: the passengers aren't made public; flights like this are usually only announced after they land."]];
     }
