@@ -2699,7 +2699,7 @@ body.infoup main{visibility:hidden}
   ];
   var scanMsg = "";
   function sweepWanted(x) {   // cheap pre-check, so thousands of ordinary planes don't each get the full treatment
-    return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x) || !!vipOf(x.flight, x.r);
+    return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x) || !!vipOf(x.flight, x.r, x.ownOp || x.owner, "");
   }
   function worldScan(force) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
@@ -3885,17 +3885,24 @@ body.infoup main{visibility:hidden}
     [null, ["FAB2101"], "the Brazilian President (Airbus A319 'Santos Dumont')", "Brazil"],
     [null, ["A-001"], "the Indonesian President ('Indonesia One')", "Indonesia"]
   ];
-  function vipOf(cs, reg) {   // -> "the US President (Air Force One) · United States" style text, or ""
-    cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase();
+  // Any country: the aircraft database names the owner, so a plane registered to a presidential, royal, amiri or state flight counts
+  // even when it isn't in the table above. Airlines with "Royal" or "Sultan" in their name don't.
+  var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|amiri|emiri|sultan|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
+  function vipOf(cs, reg, owner, country) {   // -> "VIP: who they carry · country" text, or ""
+    cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase(); owner = String(owner || "");
     for (var i = 0; i < VIP_PLANES.length; i++) {
       var v = VIP_PLANES[i];
       if ((v[0] && (v[0].test(cs) || v[0].test(reg))) || (reg && v[1].indexOf(reg) >= 0) || (cs && v[1].indexOf(cs) >= 0)) return "VIP: " + v[2] + " · " + v[3];
+    }
+    if (owner && VIP_OWNER_RE.test(owner) && !/airlines?|airways|\bair\b.*\b(ltd|plc|inc)\b|charter|leasing/i.test(owner)) {
+      var who = /prime minister/i.test(owner) ? "the Prime Minister and government" : /presiden/i.test(owner) ? "the President and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(owner) ? "the royal family or ruler" : "government leaders and VIPs";
+      return "VIP: " + who + " (" + owner.slice(0, 40) + ")" + (country ? " · " + country : "");
     }
     return "";
   }
   function rareWhy(a) {
     if (a.cat === "emg") return "Emergency";
-    var vip = vipOf(a.flight || a.callsign, a.reg); if (vip) return vip;
+    var vip = vipOf(a.flight || a.callsign, a.reg, a.owner || (a.raw && a.raw.ownOp), a.country); if (vip) return vip;
     if (isAntonov(a.type, a.desc)) return "Antonov";
     if (a.type === "P8" && !/^NZ/i.test(a.reg || "")) return "";   // only the RNZAF Poseidons
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
@@ -4427,7 +4434,7 @@ body.infoup main{visibility:hidden}
   function bgPlane(x, ref) {
     var alt = x.alt_baro === "ground" ? "ground" : first(x.alt_baro, x.alt_geom);
     return { hex: x.hex, flight: (x.flight || "").trim(), callsign: ((x.flight || "").trim()) || x.r || (x.hex || "").toUpperCase(),
-      reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || "", country: countryOf(x.hex),
+      reg: x.r || "", type: x.t || "", desc: x.desc || "", owner: x.owner || x.ownOp || "", country: countryOf(x.hex),
       lat: x.lat, lon: x.lon, alt: typeof alt === "number" || alt === "ground" ? alt : null,
       vr: first(x.baro_rate, x.geom_rate, 0), track: first(x.track, x.true_heading, x.mag_heading), gs: x.gs,
       sq: x.squawk || "", emg: x.emergency && x.emergency !== "none" ? x.emergency : "",
