@@ -3885,7 +3885,7 @@ body.infoup main{visibility:hidden}
     B1: "Bomber", B2: "Bomber", F35: "Fighter", F18: "Fighter", F18S: "Fighter", E18G: "Fighter", F16: "Fighter", F15: "Fighter",
     F22: "Fighter", EUFI: "Fighter", RFAL: "Fighter", MIR2: "Fighter", HAWK: "Jet trainer", PC21: "Jet trainer", M339: "Vintage jet",
     V22: "Osprey", H47: "Chinook", H53: "Big helicopter", H53S: "Big helicopter", S61: "Big helicopter", MI8: "Big helicopter",
-    IL18: "Unusual", IL62: "Unusual", IL96: "Unusual", T154: "Unusual", T204: "Unusual", SGUP: "Super Guppy",
+    IL18: "Unusual", IL62: "Unusual", SGUP: "Super Guppy",
     H6: "Chinese bomber", KJ20: "Radar plane",
     AN22: "Antonov", A124: "Antonov", A225: "Antonov",
     L101: "Classic", B741: "Classic 747", B742: "Classic 747", B743: "Classic 747", B703: "Classic", B722: "Classic",
@@ -3894,6 +3894,8 @@ body.infoup main{visibility:hidden}
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
   };
   // Drop old military entries that no longer count (done here because it needs RARE_TYPES, which is defined just above)
+  // Russian passenger airliners (Il-96, Tu-154, Tu-204) flying for airlines are everyday there, not rare: drop saved ones that aren't military
+  contList = contList.filter(function (r) { return !(/^(IL96|T154|T204)$/.test(r.type || "") && !/military$/i.test(r.why || "")); });
   contList = contList.filter(function (r) { return !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });
   // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country, key into VIP_BIO (info page)].
   // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
