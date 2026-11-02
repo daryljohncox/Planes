@@ -704,6 +704,9 @@ body.infoup main{visibility:hidden}
     A320:"narrowbody airliner", A20N:"narrowbody airliner", A319:"narrowbody airliner", A321:"narrowbody airliner", B738:"narrowbody airliner", B737:"narrowbody airliner",
     B77W:"long-haul widebody airliner", B788:"long-haul widebody airliner", B789:"long-haul widebody airliner", A359:"long-haul widebody airliner", A388:"double-deck superjumbo",
     AT72:"regional turboprop airliner", DH8C:"regional turboprop airliner", DH8D:"regional turboprop airliner", SF34:"regional turboprop airliner", JS32:"commuter turboprop",
+    M346:"advanced jet trainer / light attack", H64:"attack helicopter", AH64:"attack helicopter", MI24:"attack helicopter", MI28:"attack helicopter", KA52:"attack helicopter", TIGR:"attack helicopter", MI8:"heavy transport helicopter", MI17:"heavy transport helicopter", M171:"heavy transport helicopter", MI26:"giant heavy-lift helicopter",
+    PC6:"STOL utility turboprop", PC6T:"STOL utility turboprop", P180:"fast twin-turboprop, executive / transport", C27J:"military transport", C295:"military transport", A400:"heavy military transport", C160:"military transport", CN35:"military transport", IL76:"heavy military transport",
+    F14:"fighter jet", F4:"fighter jet", F5:"light fighter jet", F104:"supersonic fighter", EUFI:"fighter jet", TOR:"strike fighter", RFAL:"fighter jet", MIR2:"fighter jet", JAS3:"fighter jet", GRIP:"fighter jet", SU27:"fighter jet", SU30:"fighter jet", SU34:"strike fighter", SU35:"fighter jet", MG29:"fighter jet", MG31:"interceptor jet", J10:"fighter jet", J11:"fighter jet", JF17:"fighter jet", AV8:"jump-jet attack plane", HAR:"jump-jet attack plane", SU25:"attack jet", AC13:"gunship", E2:"carrier radar plane", E8:"battlefield radar plane", R135:"signals-intelligence spy plane", RC13:"signals-intelligence spy plane", E6:"nuclear command relay plane", TU95:"turboprop bomber", H6:"bomber", TU22:"supersonic bomber", T160:"supersonic bomber", KJ20:"radar early-warning", KJ50:"radar early-warning", A50:"radar early-warning", MQ9:"armed drone", F117:"stealth attack jet", SU57:"stealth fighter", J20:"stealth fighter",
     SPIT:"WWII fighter", P51:"WWII fighter", B17:"WWII bomber", CAT:"flying boat", DH82:"vintage biplane trainer", AN2:"giant biplane", BALL:"weather balloon"
   };
   function roleOf(a) {
@@ -2682,6 +2685,10 @@ body.infoup main{visibility:hidden}
   }
   function roleLine(r) {   // second line under the type: "supersonic jet trainer"
     var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || ""), rl = ROLES[r.type || (m ? m[1] : "")] || "";
+    if (!rl) {   // type not in the table: say something from the name / reason so no row is bare
+      var tx = ((r.ty || "") + " " + (r.why || "")).toLowerCase();
+      rl = /helicopter|apache|chinook|black hawk|mil mi|\bmi-\d|\bka-\d/.test(tx) ? "helicopter" : /drone|uav/.test(tx) ? "drone" : /military/.test(tx) ? "military aircraft" : /airliner|boeing|airbus/.test(tx) ? "airliner" : /antonov/.test(tx) ? "giant freighter" : /vip|royal|presiden|prime minister|state/.test(tx) ? "VIP / state flight" : "";
+    }
     return rl && (r.ty || "").toLowerCase().indexOf(rl.toLowerCase()) < 0 ? '<span class="rt role">' + esc(rl) + "</span>" : "";
   }
   function contRow(r) {
