@@ -2560,7 +2560,7 @@ body.infoup main{visibility:hidden}
   var wemg = store.get("wemg", []).filter(function (r) { return Date.now() - r.last < 30 * 86400000; });
   // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 15 * 60000;
-  var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300") && !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
+  var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300"); });   // (the military clean-up runs later, once RARE_TYPES exists)   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
   // (within 3000 km of home)
   function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && distKm(LAT, LON, lat, lon) <= 3000; }
@@ -3864,6 +3864,8 @@ body.infoup main{visibility:hidden}
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica",
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
   };
+  // Drop old military entries that no longer count (done here because it needs RARE_TYPES, which is defined just above)
+  contList = contList.filter(function (r) { return !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });
   // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country, key into VIP_BIO (info page)].
   // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
   var VIP_PLANES = [
