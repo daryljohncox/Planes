@@ -333,6 +333,10 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .rr .star{color:#ffd400;font-size:3vh}
 .rr .hsir{height:3.4vh;width:auto;border-radius:.6vh;flex:0 0 auto}
 .pop .kh .khb{display:flex;gap:1vh}
+.pop .kh button.uptop{margin-right:1vh;font-size:2.4vh}
+#lhrow{display:flex;flex:0 0 auto;align-items:stretch;border-bottom:1px solid #222d3a}
+#lhrow button.lh{flex:1;border-bottom:0;width:auto}
+#lhrow button.uptop{border:0;background:#1d2632;color:#fff;font-size:2.4vh;width:6vh;cursor:pointer}
 .pop .kh .kt{display:flex;align-items:center;gap:1.6vh}
 .pop .kh button.scanbtn{width:auto;height:auto;padding:.8vh 2vh;font:700 2.2vh system-ui,sans-serif;background:#ffd400;color:#000}
 .pop .kh button.scanbtn:disabled{background:#1c2633;color:var(--dim)}
@@ -489,7 +493,7 @@ body.infoup main{visibility:hidden}
   </div>
   <section id="side">
     <div id="list">
-      <button class="lh" id="sortbtn" type="button">Nearest first · tap to sort</button>
+      <div id="lhrow"><button class="lh" id="sortbtn" type="button">Nearest first · tap to sort</button><button class="uptop" type="button" aria-label="Back to the top of the list">▲</button></div>
       <div id="rows"></div>
     </div>
     <div id="detail" style="display:none">
@@ -2473,6 +2477,17 @@ body.infoup main{visibility:hidden}
   }
   [["voicebtn", "voicepanel"], ["rarebtn", "rarepanel"], ["zoomcont", "contpanel"]].forEach(function (b) {
     $(b[0]).addEventListener("click", function (e) { e.stopPropagation(); showPop(b[1]); });
+  });
+  // Up-arrow at the top of every list: jumps back to the very top
+  Array.prototype.forEach.call(document.querySelectorAll(".pop .kh .popclose"), function (c) {
+    var u = document.createElement("button"); u.type = "button"; u.className = "uptop"; u.textContent = "▲"; u.setAttribute("aria-label", "Back to the top of the list");
+    c.parentNode.insertBefore(u, c);
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button.uptop") : null;
+    if (!b) return;
+    var box = b.closest(".pop") ? b.closest(".pop").querySelector(".pb") : $("rows");
+    if (box) box.scrollTop = 0;
   });
   Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
     b.addEventListener("click", function (e) { e.stopPropagation(); showPop(null); });
