@@ -2122,7 +2122,7 @@ body.infoup main{visibility:hidden}
         render();
         voiceCheck(aircraft);
       })
-      .catch(function (e) { if (window.console) console.error("poll", e); setStatus("Plane feed busy – retrying" + (e && e.message ? " (" + String(e.message).slice(0, 60) + ")" : "")); setTimeout(poll, 1500); });   // retry quickly, not after the full interval
+      .catch(function (e) { if (window.console) console.error("poll", e); setStatus("Plane feed busy – retrying" + (e && e.message ? " (" + String(e.message).slice(0, 60) + ")" : "") + (firstErr ? " [" + firstErr + "]" : "")); setTimeout(poll, 1500); });   // retry quickly, not after the full interval
   }
 
   // ---------- render ----------
@@ -2365,8 +2365,17 @@ body.infoup main{visibility:hidden}
   }
 
   // ---------- saved settings (per device; the page still works if storage is blocked) ----------
+  var firstErr = "";   // the first script error on the page, shown beside the feed message so a start-up failure can be read off the screen
+  window.addEventListener("error", function (ev) { if (!firstErr) firstErr = String(ev.message).replace(/^Uncaught /, "").slice(0, 60) + " @" + ev.lineno; });
   var store = {
-    get: function (k, d) { try { var v = localStorage.getItem("planes." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    get: function (k, d) {   // a saved value of the wrong kind (null, a string where a list is expected...) counts as nothing saved, so it can't stop the page starting
+      try {
+        var v = localStorage.getItem("planes." + k); if (v == null) return d;
+        v = JSON.parse(v);
+        if (d !== null && d !== undefined && (v === null || Array.isArray(d) !== Array.isArray(v) || typeof v !== typeof d)) return d;
+        return v;
+      } catch (e) { return d; }
+    },
     set: function (k, v) { try { localStorage.setItem("planes." + k, JSON.stringify(v)); } catch (e) { /* not saved */ } }
   };
 
