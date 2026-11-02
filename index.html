@@ -2524,8 +2524,8 @@ body.infoup main{visibility:hidden}
     return milKeep(x.t) || isAntonov(x.t, x.desc);
   }
   // Military types that count: the special / combat list, or anything that isn't a plain transport / trainer / utility type
-  // Only combat and special types (MIL_SPECIAL) count: no transports, tankers, trainers or unknown military types
-  function milKeep(t) { return !!t && !!MIL_SPECIAL[t]; }
+  // Combat / special types (MIL_SPECIAL) and military types we don't recognise count; known transports, trainers and utility types (MIL_PLAIN) don't
+  function milKeep(t) { return !!t && (!!MIL_SPECIAL[t] || !MIL_PLAIN[t]); }
   var CONTINENTS = [   // [name, south, west, north, east]
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
