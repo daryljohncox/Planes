@@ -2678,17 +2678,21 @@ body.infoup main{visibility:hidden}
     var n = contList.filter(function (r) { return r.t >= d0.getTime(); }).length;
     $("contcount").textContent = n ? n : "";
   }
+  function tyRole(r) {   // "T-38 Talon (T38)" -> "T-38 Talon (T38) · supersonic jet trainer"
+    var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || ""), rl = ROLES[r.type || (m ? m[1] : "")] || "";
+    return r.ty + (rl && (r.ty || "").toLowerCase().indexOf(rl.toLowerCase()) < 0 ? " · " + rl : "");
+  }
   function contRow(r) {
     var live = Date.now() - r.last < SCAN_EVERY_MS * 1.6;
     return '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Flying now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
   function wemgRow(r) {
     var live = Date.now() - r.last < 4 * 60000;
     return '<button type="button" class="rr" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="warn">⚠</span><span class="rm"><span class="rc">' + esc(r.cs) +
-      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Squawking now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
@@ -4251,7 +4255,7 @@ body.infoup main{visibility:hidden}
       var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       return head + '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + tyRole(r) + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
         esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
