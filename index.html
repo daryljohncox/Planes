@@ -339,6 +339,9 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 #lhrow button.uptop{border:0;background:#1d2632;color:#fff;font-size:2.4vh;width:6vh;cursor:pointer}
 .pop .kh .kt{display:flex;align-items:center;gap:1.6vh}
 .pop .kh button.scanbtn{width:auto;height:auto;padding:.8vh 2vh;font:700 2.2vh system-ui,sans-serif;background:#ffd400;color:#000}
+.pop .kh button.emgtab{background:#1c2633;color:var(--dim)}
+.pop .kh button.scanbtn.on{background:#ffd400;color:#000}
+.pop .kh button.emgtab.on{background:#ff3b30;color:#fff}
 .pop .kh button.scanbtn:disabled{background:#1c2633;color:var(--dim)}
 .pop .kh .trash.on{background:#c62828}
 .pop .kh .trashall{position:relative;margin-right:10mm}
@@ -479,7 +482,7 @@ body.infoup main{visibility:hidden}
       <div class="pb" id="rarerows"></div>
     </div>
     <div id="contpanel" class="pop" hidden>
-      <div class="kh"><span class="kt"><span id="conttitle">Rare plane scan</span><button id="scannow" class="scanbtn" type="button">Scan</button></span><span class="khb"><button class="trashall" type="button" aria-label="Clear this whole list">🗑<i>ALL</i></button><button class="trash" type="button" aria-label="Delete selected planes">🗑</button><button class="popclose" type="button" aria-label="Close">✕</button></span></div>
+      <div class="kh"><span class="kt"><span id="conttitle">Rare plane scan</span><button id="scannow" class="scanbtn" type="button">Scan</button><button id="contemg" class="scanbtn emgtab" type="button">Emergency</button></span><span class="khb"><button class="trashall" type="button" aria-label="Clear this whole list">🗑<i>ALL</i></button><button class="trash" type="button" aria-label="Delete selected planes">🗑</button><button class="popclose" type="button" aria-label="Close">✕</button></span></div>
       <div class="pb" id="controws"></div>
     </div>
     <div id="card" hidden><div class="cph" id="cardph"></div><div class="ctx"><div class="ccs" id="cardcs"></div><div class="csay" id="cardsay"></div></div></div>
@@ -2543,7 +2546,9 @@ body.infoup main{visibility:hidden}
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
   ];
-  var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "";
+  var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "", contTab = "scan";
+  // Worldwide emergency squawks (7700 / 7600 / 7500), kept 30 days; radio / transponder emergencies only, no news
+  var wemg = store.get("wemg", []).filter(function (r) { return Date.now() - r.last < 30 * 86400000; });
   // Everything the scan finds is kept for 30 days (like the rare list), whatever part of the world the map is showing
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 2 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300") && !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
@@ -2602,8 +2607,52 @@ body.infoup main{visibility:hidden}
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Flying now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
+  function wemgRow(r) {
+    var live = Date.now() - r.last < 4 * 60000;
+    return '<button type="button" class="rr" data-hex="' + esc(r.hex) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '"><span class="warn">⚠</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
+      esc(r.country || "") + "<br>" + (live ? '<span class="now">Squawking now</span>' : "seen " + esc(when(r.last))) +
+      (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
+  }
+  function wemgScan() {
+    feedFetch("?sqk=1&all=1", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var now = Date.now(), at = {}, changed = false;
+        wemg.forEach(function (r) { at[r.hex] = r; });
+        (j.ac || []).filter(function (x) {
+          return x.lat != null && x.lon != null && (x.seen_pos == null || x.seen_pos < 120) && EMERG_SQUAWK[x.squawk];
+        }).map(withInfo).forEach(function (x) {
+          var a = bgPlane(x, { lat: LAT, lon: LON }), r = at[a.hex];
+          if (!r || now - r.last > 2 * 3600000) {
+            if (r) wemg.splice(wemg.indexOf(r), 1);
+            r = at[a.hex] = { hex: a.hex, t: now }; wemg.push(r);
+          }
+          r.cs = a.callsign; r.why = emgMeaning(a.sq, a.emg).replace(/ \(.*\)/, ""); r.ty = typeName(a) + (a.type ? " (" + a.type + ")" : "");
+          r.reg = a.reg || ""; r.type = a.type || ""; r.country = a.country || ""; r.lat = a.lat; r.lon = a.lon;
+          r.alt = typeof a.alt === "number" ? a.alt : a.alt === "ground" ? "ground" : null; r.last = now; changed = true;
+        });
+        if (changed) {
+          wemg.sort(function (p, q) { return q.t - p.t; });
+          store.set("wemg", wemg);
+          if (!$("contpanel").hidden && contTab === "emg") drawContinents();
+        }
+      })
+      .catch(function () { /* try again next time */ });
+  }
   function drawContinents() {
     $("scannow").disabled = scanBusy; $("scannow").textContent = scanBusy ? "Scanning…" : "Scan";
+    $("scannow").classList.toggle("on", contTab === "scan"); $("contemg").classList.toggle("on", contTab === "emg");
+    if (contTab === "emg") {
+      $("conttitle").textContent = "";
+      var day = null;
+      $("controws").innerHTML = !wemg.length ? '<div class="note">No emergencies in the last 30 days. Planes squawking 7700 (emergency), 7600 (radio failure) or 7500 (hijack) anywhere in the world show up here, checked every minute. No news stories.</div>' : wemg.map(function (r) {
+        var d = dayLabel(r.t), h = "";
+        if (d !== day) { day = d; h = '<div class="rday">' + esc(d) + "</div>"; }
+        return h + wemgRow(r);
+      }).join("");
+      return;
+    }
     var busy = scanBusy ? '<div class="note">Scanning the world… ' + scanDone + " of " + scanTotal + "</div>" : "";
     if (!contSel) {
       $("conttitle").textContent = "Scan for rare planes";
@@ -2657,7 +2706,9 @@ body.infoup main{visibility:hidden}
       if (!$("contpanel").hidden) drawContinents();
     });
   }
-  $("scannow").addEventListener("click", function () { worldScan(true); drawContinents(); });
+  $("scannow").addEventListener("click", function () { contTab = "scan"; worldScan(true); drawContinents(); });
+  $("contemg").addEventListener("click", function () { contTab = "emg"; wemgScan(); drawContinents(); });
+  setTimeout(function () { wemgScan(); setInterval(wemgScan, 60000); }, 25000);
   setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 20000);
 
   // Smooth scrolling for the side panels (rare, emergencies, hunt, continents): a redraw is skipped when nothing changed,
@@ -2749,7 +2800,7 @@ body.infoup main{visibility:hidden}
     if (rowSelect(e)) return;
     var t = e.target.closest ? e.target.closest("[data-cont],[data-hex]") : null;
     if (!t) return;
-    if (t.hasAttribute("data-hex")) { openGoneRow(t, contList); return; }
+    if (t.hasAttribute("data-hex")) { openGoneRow(t, contTab === "emg" ? wemg : contList); return; }
     contSel = t.getAttribute("data-cont") || "";
     if (contSel) worldScan(false);
     drawContinents();
@@ -3946,35 +3997,17 @@ body.infoup main{visibility:hidden}
   // here for 30 days (like the rare list), so they stay even after they drop off the news feeds.
   var rareTab = "rare";
   try { rareTab = localStorage.getItem("planes.raretab") || "rare"; } catch (e) { /* none */ }
-  var emgNews = store.get("emgnews", []).filter(function (x) { return Date.now() - x.t < RARE_DAYS_MS; });   // [{id, t, title, src, text, url, day}]
-  var INCIDENTS_MS = 15 * 60000;
-  function incidentCheck() {
-    getJSON((P.get("feed") || "/api/feed").replace(/feed$/, "incidents")).then(function (j) {
-      var have = {}, added = 0, now = Date.now();
-      emgNews.forEach(function (x) { have[x.id] = 1; });
-      (j.items || []).forEach(function (x) {
-        if (have[x.id] || !x.title || now - x.t >= RARE_DAYS_MS) return;
-        have[x.id] = 1; added++;
-        emgNews.push({ id: x.id, t: x.t, title: x.title, src: x.src || "", text: x.text || "", url: x.url || "", day: !!x.day });
-      });
-      emgNews = emgNews.filter(function (x) { return now - x.t < RARE_DAYS_MS; }).sort(function (a, b) { return b.t - a.t; }).slice(0, 300);
-      if (added) {
-        store.set("emgnews", emgNews);
-        rareCount();
-        if (!$("rarepanel").hidden && rareTab === "emg") drawEmgList();
-      }
-    }).catch(function () { /* try again next time */ });
-  }
+  var emgNews = [];   // news stories were taken off the Emergencies tab
+  store.set("emgnews", []);
   function emgItems() {
-    return rareList.filter(function (r) { return r.why === "Emergency"; }).map(function (r) { return { t: r.t, sq: r }; })
-      .concat(emgNews.map(function (x) { return { t: x.t, news: x }; })).sort(function (a, b) { return b.t - a.t; });
+    return rareList.filter(function (r) { return r.why === "Emergency"; }).map(function (r) { return { t: r.t, sq: r }; }).sort(function (a, b) { return b.t - a.t; });
   }
   function emgDay(t) {   // a news date with no time (Aviation Safety Network): its day, not a made-up time
     try { return new Date(t).toLocaleDateString("en-NZ", { timeZone: "UTC", day: "numeric", month: "short" }); } catch (e) { return ""; }
   }
   function drawEmgList() {
     var day = null, list = emgItems();
-    $("rarerows").innerHTML = !list.length ? '<div class="note">No emergencies in the last 30 days. Planes squawking 7700 / 7600 / 7500 anywhere around NZ, and NZ aircraft emergencies in the news (1News, RNZ, NZ Herald, Stuff and others) and on the Aviation Safety Network, show up here.</div>' : list.map(function (x) {
+    $("rarerows").innerHTML = !list.length ? '<div class="note">No emergencies in the last 30 days. Planes squawking 7700 / 7600 / 7500 anywhere around NZ show up here. Emergencies from the rest of the world are under Continents.</div>' : list.map(function (x) {
       var d = x.news && x.news.day ? (function () { try { return new Date(x.t).toLocaleDateString("en-NZ", { timeZone: "UTC" }) === new Date().toLocaleDateString("en-NZ", { timeZone: TZ }) ? "Today" : dayLabel(x.t + 12 * 3600000); } catch (e) { return dayLabel(x.t); } })() : dayLabel(x.t), head = "";
       if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
       if (x.sq) {
@@ -3983,9 +4016,7 @@ body.infoup main{visibility:hidden}
           '</span><span class="rt">' + esc(mean.replace(/ \(.*\)/, "") + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span></span><span class="rw">' +
           esc(when(r.t)) + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
       }
-      var n = x.news;
-      return head + '<div class="en"><span class="rc">' + esc(n.title) + '</span><span class="rt">' + esc(n.src + " · " + (n.day ? emgDay(n.t) : when(n.t))) + " · tap for more</span>" +
-        '<div class="ex">' + (n.text ? esc(n.text) + "<br>" : "") + (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">Open the story</a>' : "") + "</div></div>";
+      return "";
     }).join("");
   }
   // Tap a rare plane: select it if it's on the map; otherwise look it up anywhere, move the map there and
@@ -4876,8 +4907,6 @@ body.infoup main{visibility:hidden}
   setTimeout(resumeIce, 2000);
   setTimeout(milCheck, 9000);
   setTimeout(emgWatch, 5000);
-  setTimeout(incidentCheck, 12000);
-  setInterval(incidentCheck, INCIDENTS_MS);
   setInterval(emgWatch, EMG_WATCH_MS);
   setInterval(milCheck, MIL_MS);
   setTimeout(iceWatch, 15000);

@@ -110,7 +110,8 @@ module.exports = async (req, res) => {
         const data = await up.json();
         (data[s.list] || []).forEach((x) => {
           // NZ and the sea around it (Kermadecs down to the Auckland Islands, Tasman to the Chathams)
-          if (typeof x.lat !== "number" || x.lat > -28 || x.lat < -53 || (x.lon < 160 && x.lon > -174) || !x.hex) return;
+          if (typeof x.lat !== "number" || !x.hex) return;
+          if (!req.query.all && (x.lat > -28 || x.lat < -53 || (x.lon < 160 && x.lon > -174))) return;   // ?sqk=1&all=1: the whole world (Continents Emergency tab)
           const old = seen[x.hex];
           if (old && (old.seen_pos == null || (x.seen_pos != null && x.seen_pos >= old.seen_pos))) return;   // keep the freshest
           if (old) ac.splice(ac.indexOf(old), 1);
