@@ -112,7 +112,7 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl svg g.sh{display:none}
 .dense .pl svg{transition:none}
 .dense .pl:not(.on):not(.emg) svg{filter:none!important}
-.rr{content-visibility:auto;contain-intrinsic-size:auto 8vh}
+.rr{}
 .more{padding:1.2vh 1.8vh;color:var(--dim);font-size:1.9vh;text-align:center}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
@@ -2568,7 +2568,7 @@ body.infoup main{visibility:hidden}
     b.addEventListener("click", function (e) {
       e.stopPropagation();
       var pop = b.closest(".pop"), box = pop ? pop.querySelector(".pb") : $("rows");
-      if (box) { box.scrollTop = 0; try { box.scrollTo({ top: 0 }); } catch (x) {} }
+      if (box) { var up = function () { box.scrollTop = 0; try { box.scrollTo({ top: 0, behavior: "instant" }); } catch (x) {} }; up(); requestAnimationFrame(up); setTimeout(up, 120); setTimeout(up, 400); }   // repeated: a row-height correction after the first jump used to pull it back down
     });
   });
   Array.prototype.forEach.call(document.querySelectorAll(".popclose"), function (b) {
