@@ -2122,7 +2122,7 @@ body.infoup main{visibility:hidden}
         render();
         voiceCheck(aircraft);
       })
-      .catch(function () { setStatus("Plane feed busy – retrying"); setTimeout(poll, 1500); });   // retry quickly, not after the full interval
+      .catch(function (e) { if (window.console) console.error("poll", e); setStatus("Plane feed busy – retrying" + (e && e.message ? " (" + String(e.message).slice(0, 60) + ")" : "")); setTimeout(poll, 1500); });   // retry quickly, not after the full interval
   }
 
   // ---------- render ----------
@@ -2694,18 +2694,18 @@ body.infoup main{visibility:hidden}
   }
   function worldScan(force) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
-    var batches = SWEEP_PTS.slice(), found = [], seen = {}, okN = 0;
+    var batches = SWEEP_PTS.slice(), found = [], seen = {}, okN = 0, failRun = 0;
     batches.push("mil");
     scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0;
     var next = 0;
     function worker() {
-      if (next >= batches.length) return Promise.resolve();
+      if (next >= batches.length || failRun >= 8) return Promise.resolve();   // the feed is refusing: stop instead of hammering it
       var b = batches[next++];
       var mil = b === "mil";
       return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
-          okN++;
+          okN++; failRun = 0;
           (j.ac || []).forEach(function (x) {
             if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) return;
             var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
@@ -2713,10 +2713,10 @@ body.infoup main{visibility:hidden}
             seen[x.hex] = 1; found.push(a);
           });
         })
-        .catch(function () { scanErr++; })
-        .then(function () { scanDone++; if (!$("contpanel").hidden) drawContinents(); return worker(); });
+        .catch(function () { scanErr++; failRun++; })
+        .then(function () { scanDone++; if (!$("contpanel").hidden) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 350); }).then(worker); });
     }
-    Promise.all([worker(), worker(), worker()]).then(function () {
+    Promise.all([worker(), worker()]).then(function () {
       scanBusy = false;
       var tm = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       scanMsg = okN ? "Last sweep " + tm + ": " + okN + " of " + scanTotal + " areas answered, " + found.length + " rare plane" + (found.length === 1 ? "" : "s") + " in the air."
@@ -2728,7 +2728,7 @@ body.infoup main{visibility:hidden}
   $("scannow").addEventListener("click", function () { contTab = "scan"; worldScan(true); drawContinents(); });
   $("contemg").addEventListener("click", function () { contTab = "emg"; wemgScan(); drawContinents(); });
   setTimeout(function () { wemgScan(); setInterval(wemgScan, 60000); }, 25000);
-  setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 20000);
+  setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 60000);
 
   // Smooth scrolling for the side panels (rare, emergencies, hunt, continents): a redraw is skipped when nothing changed,
   // and while a finger is on the panel or it is still gliding the new rows wait until 0.7 s after it stops
