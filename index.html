@@ -2697,7 +2697,16 @@ body.infoup main{visibility:hidden}
       esc(r.country || "") + "<br>" + (live ? '<span class="now">Squawking now</span>' : "seen " + esc(when(r.last))) +
       (r.alt === "ground" ? "<br>On the ground" : typeof r.alt === "number" ? "<br>" + plainNum(metres(r.alt)) + " m" : "") + "</span></button>";
   }
+  // The background scans wait while you're looking at a list or following a plane, and carry on once you're back on the Marton map
+  var scanManual = false;
+  function scanPaused() {
+    if (scanManual) return false;   // you pressed Scan yourself
+    if (selHex) return true;
+    if (["voicepanel", "rarepanel", "huntpanel", "emgpanel", "contpanel"].some(function (p) { return !$(p).hidden; })) return true;
+    return !atHome();
+  }
   function wemgScan() {
+    if (scanPaused()) return;
     feedFetch("?sqk=1&all=1", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
@@ -2775,8 +2784,11 @@ body.infoup main{visibility:hidden}
   function sweepWanted(x) {   // cheap pre-check, so thousands of ordinary planes don't each get the full treatment
     return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x) || !!vipOf(x.flight, x.r, x.ownOp || x.owner, "");
   }
+  var scanDue = false;
   function worldScan(force) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
+    if (scanPaused()) { scanDue = true; return; }
+    scanDue = false;
     var batches = SWEEP_PTS.slice(), found = [], seen = {}, okN = 0, failRun = 0;
     batches.push("mil");
     scanBusy = true; scanDone = 0; scanTotal = batches.length; scanErr = 0;
@@ -2784,7 +2796,7 @@ body.infoup main{visibility:hidden}
     function worker() {
       if (next >= batches.length || failRun >= 8) return Promise.resolve();   // the feed is refusing: stop instead of hammering it
       // the Hub is busy with a finger on the map or a list: the sweep waits instead of making it lag
-      if (moving || listTouch) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
+      if (moving || listTouch || scanPaused()) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
       var b = batches[next++];
       var mil = b === "mil";
       return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
@@ -2810,7 +2822,7 @@ body.infoup main{visibility:hidden}
         .then(function () { scanDone++; if (!$("contpanel").hidden && (scanDone % 4 === 0 || scanDone >= scanTotal)) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 900); }).then(worker); });
     }
     worker().then(function () {
-      scanBusy = false;
+      scanBusy = false; scanManual = false;
       var tm = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       scanMsg = okN ? "Last sweep " + tm + ": " + okN + " of " + scanTotal + " areas answered, " + found.length + " rare plane" + (found.length === 1 ? "" : "s") + " in the air."
         : "Last sweep " + tm + " failed: the plane feed didn't answer. Try Scan again in a minute.";
@@ -2818,10 +2830,11 @@ body.infoup main{visibility:hidden}
       if (!$("contpanel").hidden) drawContinents();
     });
   }
-  $("scannow").addEventListener("click", function () { contTab = "scan"; worldScan(true); drawContinents(); });
+  $("scannow").addEventListener("click", function () { contTab = "scan"; scanManual = true; worldScan(true); if (!scanBusy) scanManual = false; drawContinents(); });
   $("contemg").addEventListener("click", function () { contTab = "emg"; wemgScan(); drawContinents(); });
   setTimeout(function () { wemgScan(); setInterval(wemgScan, 60000); }, 25000);
   setTimeout(function () { worldScan(true); setInterval(function () { worldScan(true); }, SCAN_EVERY_MS); }, 60000);
+  setInterval(function () { if (scanDue && !scanPaused()) worldScan(true); }, 5000);   // a sweep that was held back starts once you're home again
 
   // Smooth scrolling for the side panels (rare, emergencies, hunt, continents): a redraw is skipped when nothing changed,
   // and while a finger is on the panel or it is still gliding the new rows wait until 0.7 s after it stops
