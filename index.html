@@ -113,6 +113,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl svg{transition:none}
 .dense .pl:not(.on):not(.emg) svg{filter:none!important}
 .row{content-visibility:auto;contain-intrinsic-size:auto 9vh}
+.rr{content-visibility:auto;contain-intrinsic-size:auto 8vh}
+.more{padding:1.2vh 1.8vh;color:var(--dim);font-size:1.9vh;text-align:center}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
@@ -588,7 +590,9 @@ body.infoup main{visibility:hidden}
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
   var TYPES = {
-    G12T:["Grob G 120TP","Grob G 120TP"], G120:["Grob G 120TP","Grob G 120TP"],
+    Q9:["MQ-9 Reaper","General Atomics MQ-9 Reaper"], Q4:["RQ-4 Global Hawk","Northrop Grumman RQ-4 Global Hawk"], RQ4:["RQ-4 Global Hawk","Northrop Grumman RQ-4 Global Hawk"], Q1:["MQ-1 Predator","General Atomics MQ-1 Predator"],
+    HRON:["IAI Heron","IAI Heron"], MQ9:["MQ-9 Reaper","General Atomics MQ-9 Reaper"], G12T:["Grob G 120TP","Grob G 120TP"],
+    G120:["Grob G 120TP","Grob G 120TP"],
     A319:["Airbus A319","Airbus A319"], A320:["Airbus A320","Airbus A320 family"],
     A321:["Airbus A321","Airbus A321"], A20N:["Airbus A320neo","Airbus A320neo family"],
     A21N:["Airbus A321neo","Airbus A321neo"], A332:["Airbus A330-200","Airbus A330"],
@@ -1165,12 +1169,22 @@ body.infoup main{visibility:hidden}
     return { key: html, rot: Math.round(a.track || 0), icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
+  var MAP_MAX = 150, LIST_MAX = 120;
   function drawMap(featured) {
     if (!map) return;
     var seen = {};
     // lots of planes: drop the callsign labels and soft edges (the selected plane keeps its label) so panning stays smooth
     document.body.classList.toggle("dense", aircraft.length > 25);
-    aircraft.forEach(function (a) {
+    // a screen full of planes (a whole continent is 500+) is more than the Hub can move: draw the selected plane, the
+    // special ones and the nearest to the map centre, up to MAP_MAX; the list still has everything
+    var drawList = aircraft;
+    if (aircraft.length > MAP_MAX) {
+      drawList = aircraft.slice().sort(function (x, y) {
+        return (x.cat && x.cat !== "com" && x.cat !== "pvt" ? 0 : 1) - (y.cat && y.cat !== "com" && y.cat !== "pvt" ? 0 : 1) || x.dist - y.dist;
+      }).slice(0, MAP_MAX);
+    }
+    if (featured && drawList !== aircraft && drawList.indexOf(featured) < 0) drawList.push(featured);
+    drawList.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
       if (mapOff[listGroup(a)] && !on) return;                 // eyes crossed out: those groups are hidden
@@ -2274,6 +2288,7 @@ body.infoup main{visibility:hidden}
     listPending = false;
     var by = SORTS[listSort] || SORTS.near;
     $("sortbtn").textContent = by[0] + " first · tap to sort";
+    listBudget = LIST_MAX;
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
       if (!inGroup.length && !mapOnly[g[0]] && !mapOff[g[0]]) return "";   // a group with its eye lit or crossed keeps its header (to switch it back)
@@ -2281,13 +2296,20 @@ body.infoup main{visibility:hidden}
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + g[1] + '</b><button type="button" class="fold" aria-label="' + (shut ? "Show" : "Hide") +
         ' these in the list">' + FOLD_SVG + "</button><span>" +
         (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly[g[0]] ? " on" : mapOff[g[0]] ? " off" : "") +
-        '" aria-label="Hide these, show only these, or show all on the map">' + (mapOff[g[0]] ? EYE_OFF_SVG : EYE_SVG) + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
+        '" aria-label="Hide these, show only these, or show all on the map">' + (mapOff[g[0]] ? EYE_OFF_SVG : EYE_SVG) + "</button></span></div>" + (shut ? "" : shownRows(inGroup));
     }).join("");
     if (html === listHtml) return;
     listHtml = html;
     var top = $("rows").scrollTop;
     $("rows").innerHTML = html;
     $("rows").scrollTop = top;
+  }
+  // a continent's worth of planes: only the first LIST_MAX rows (in list order) are built, the rest are counted
+  var listBudget = 0;
+  function shownRows(arr) {
+    var n = Math.max(0, Math.min(arr.length, listBudget));
+    listBudget -= n;
+    return arr.slice(0, n).map(rowHtml).join("") + (n < arr.length ? '<div class="more">+ ' + (arr.length - n) + " more not listed · zoom in to see them</div>" : "");
   }
   function listSettled() {
     clearTimeout(listScrollT);
@@ -2539,6 +2561,7 @@ body.infoup main{visibility:hidden}
   // tankers, attack helicopters). These transport / utility / trainer types are left out.
   var MIL_PLAIN = {
     C130: 1, C30J: 1, C17: 1, C5M: 1, C5: 1, A400: 1, C160: 1, C27J: 1, C295: 1, CN35: 1, C2: 1, Y20: 1, IL76: 1, AN2: 1, AN28: 1, AN38: 1, AN70: 1, AN74: 1, A140: 1, A148: 1, A158: 1, P3: 1, P1: 1, P8: 1, AN12: 1, AN26: 1, AN24: 1, AN30: 1, AN32: 1, AN72: 1, A124: 1, AN22: 1,
+    GLEX: 1, GL5T: 1, GL6T: 1, GL7T: 1, GL8T: 1, GLF2: 1, GLF3: 1, CL30: 1, CL35: 1, CL64: 1, E35L: 1, E50P: 1, E545: 1, E550: 1, FA6X: 1, FA8X: 1, FA20: 1, F2EX: 1, LJ31: 1, LJ40: 1, LJ55: 1, LJ75: 1, H25A: 1, H25C: 1, C56X: 1, C700: 1, C68A: 1, C25M: 1, E120: 1, B190: 1, B190: 1, DC9: 1, B732: 1, B733: 1, B734: 1, B735: 1, B736: 1, B739: 1, B753: 1, B764: 1, B788: 1, B789: 1, A310: 1, A306: 1, A330: 1, A343: 1, A346: 1, A388: 1, BCS1: 1, BCS3: 1, CRJ7: 1, CRJ9: 1, CRJX: 1, AT42: 1, AT43: 1, SB20: 1, DH8A: 1,
     BE20: 1, B350: 1, BE9L: 1, BE99: 1, C12: 1, C21: 1, GLF4: 1, GLF5: 1, GLF6: 1, CL60: 1, C560: 1, C750: 1, E145: 1, DH8D: 1, DH8C: 1, DHC6: 1, DHC5: 1, C172: 1, C182: 1, PC12: 1, PC6: 1,
     A332: 1, A339: 1, B752: 1, B762: 1, B763: 1, B772: 1, B77W: 1, B744: 1, B737: 1, B738: 1, A319: 1, A320: 1, A321: 1, F900: 1, F2TH: 1, FA7X: 1, FA50: 1, LJ35: 1, LJ45: 1, LJ60: 1, C25A: 1, C25B: 1, C25C: 1, C510: 1, C525: 1, C550: 1, C650: 1, C680: 1, GALX: 1, G280: 1, H25B: 1, E55P: 1, PC24: 1, SF34: 1, SW4: 1, JS31: 1, JS32: 1, B462: 1, RJ85: 1, CRJ2: 1, E190: 1, E170: 1, SB20: 1, AT76: 1, AT75: 1, AT45: 1, AT72: 1, DH8A: 1, DH8B: 1, D328: 1, F27: 1, F50: 1, F100: 1,
     TEX2: 1, T6: 1, T38: 1, PC21: 1, PC9: 1, PC7: 1, HAWK: 1, M346: 1, L39: 1, L159: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, SR22: 1, S22T: 1, P28A: 1, PA28: 1, C152: 1, C150: 1, DA40: 1, DA42: 1, EC35: 1, EC45: 1, EC30: 1, A109: 1, A139: 1, NH90: 1, H60: 1, S70: 1, UH1: 1, H1: 1, B412: 1, B06: 1, B407: 1, EC20: 1, AS50: 1, AS55: 1, AS32: 1, S76: 1, H47: 1, H53: 1, H53S: 1, MI8: 1, MI17: 1, S61: 1, S92: 1, R44: 1, R22: 1, R66: 1, BK17: 1, MD52: 1, MD60: 1, MI26: 1, H500: 1, AS65: 1, EC55: 1, EC75: 1, A119: 1, A169: 1
@@ -2716,23 +2739,33 @@ body.infoup main{visibility:hidden}
     var next = 0;
     function worker() {
       if (next >= batches.length || failRun >= 8) return Promise.resolve();   // the feed is refusing: stop instead of hammering it
+      // the Hub is busy with a finger on the map or a list: the sweep waits instead of making it lag
+      if (moving || listTouch) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
       var b = batches[next++];
       var mil = b === "mil";
       return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
           okN++; failRun = 0;
-          (j.ac || []).forEach(function (x) {
-            if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) return;
-            var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
-            if (w && w !== "South of NZ" && w !== "Emergency") a.why = w;
-            seen[x.hex] = 1; found.push(a);
+          // a few dozen planes at a time with a breather between, so a big answer doesn't freeze the Hub
+          var acs = j.ac || [], i = 0;
+          return new Promise(function (done) {
+            (function chunk() {
+              for (var n = 0; i < acs.length && n < 60; i++, n++) {
+                var x = acs[i];
+                if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) continue;
+                var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
+                if (w && w !== "South of NZ" && w !== "Emergency") a.why = w;
+                seen[x.hex] = 1; found.push(a);
+              }
+              if (i < acs.length) setTimeout(chunk, 30); else done();
+            })();
           });
         })
         .catch(function () { scanErr++; failRun++; })
-        .then(function () { scanDone++; if (!$("contpanel").hidden) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 350); }).then(worker); });
+        .then(function () { scanDone++; if (!$("contpanel").hidden && (scanDone % 4 === 0 || scanDone >= scanTotal)) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 900); }).then(worker); });
     }
-    Promise.all([worker(), worker()]).then(function () {
+    worker().then(function () {
       scanBusy = false;
       var tm = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       scanMsg = okN ? "Last sweep " + tm + ": " + okN + " of " + scanTotal + " areas answered, " + found.length + " rare plane" + (found.length === 1 ? "" : "s") + " in the air."
@@ -3863,7 +3896,7 @@ body.infoup main{visibility:hidden}
     B1: "Bomber", B2: "Bomber", F35: "Fighter", F18: "Fighter", F18S: "Fighter", E18G: "Fighter", F16: "Fighter", F15: "Fighter",
     F22: "Fighter", EUFI: "Fighter", RFAL: "Fighter", MIR2: "Fighter", HAWK: "Jet trainer", PC21: "Jet trainer", M339: "Vintage jet",
     V22: "Osprey", H47: "Chinook", H53: "Big helicopter", H53S: "Big helicopter", S61: "Big helicopter", MI8: "Big helicopter",
-    IL18: "Unusual", IL62: "Unusual", IL96: "Unusual", T154: "Unusual", T204: "Unusual", SGUP: "Super Guppy",
+    IL18: "Unusual", IL62: "Unusual", SGUP: "Super Guppy",
     H6: "Chinese bomber", KJ20: "Radar plane",
     AN22: "Antonov", A124: "Antonov", A225: "Antonov",
     L101: "Classic", B741: "Classic 747", B742: "Classic 747", B743: "Classic 747", B703: "Classic", B722: "Classic",
@@ -3872,6 +3905,8 @@ body.infoup main{visibility:hidden}
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
   };
   // Drop old military entries that no longer count (done here because it needs RARE_TYPES, which is defined just above)
+  // Russian passenger airliners (Il-96, Tu-154, Tu-204) flying for airlines are everyday there, not rare: drop saved ones that aren't military
+  contList = contList.filter(function (r) { return !(/^(IL96|T154|T204)$/.test(r.type || "") && !/military$/i.test(r.why || "")); });
   contList = contList.filter(function (r) { return !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });
   // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country, key into VIP_BIO (info page)].
   // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
