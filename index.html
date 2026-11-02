@@ -3115,6 +3115,8 @@ body.infoup main{visibility:hidden}
     if (c === "cgo") return { mine: 1, text: "Carrying freight and mail" };
     if (c === "com" && AIRLINE_CS.test(cs)) return { mine: 1, text: "Airline passenger flights" };
     if (owner) for (i = 0; i < USE_OWNER.length; i++) if (USE_OWNER[i][0].test(owner)) return { mine: 1, text: USE_OWNER[i][1] };
+    var vipTxt = vipOf(cs, f.reg, owner || (f.raw && f.raw.ownOp), "");
+    if (vipTxt && cs !== "AF1" && cs !== "AF2" && !/^SAM\d/.test(cs)) return { mine: 1, text: "Flying " + vipTxt.replace(/^VIP: /, "").replace(/ · .*$/, "") };
     if (cs === "AF1") return { mine: 1, text: "Flying the US President (Air Force One)" };
     if (cs === "AF2") return { mine: 1, text: "Flying the US Vice President (Air Force Two)" };
     if (/^SAM\d/.test(cs)) return { mine: 1, text: "Flying US government VIPs and senior officials (Special Air Mission)" };
@@ -3568,6 +3570,7 @@ body.infoup main{visibility:hidden}
   function genericGroup(f) {
     var cs = (f.flight || "").trim().toUpperCase(), t = f.type || "", c = f.cat, i, out = [];
     for (i = 0; i < AIRLINE_INFO.length; i++) if (AIRLINE_INFO[i][0].test(cs)) { out = AIRLINE_INFO[i][1][1].slice(); var title = AIRLINE_INFO[i][1][0]; break; }
+    var vb = vipBio(f); if (vb) { out = vb[1].slice(); title = vb[0]; }
     var tf = TYPE_FACTS[t], nm = typeName(f);
     if (tf) out.push("Aircraft: the " + nm + " seats " + tf[0] + ", cruises about " + fmtN(tf[1]) + " km/h" + (tf[2] ? " and can fly about " + fmtN(tf[2]) + " km without refuelling." : "."));
     var h = hoursFor(f, c, t);
@@ -3861,33 +3864,41 @@ body.infoup main{visibility:hidden}
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica",
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
   };
-  // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country].
+  // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country, key into VIP_BIO (info page)].
   // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
   var VIP_PLANES = [
-    [/^AF1$/, [], "the US President (Air Force One)", "United States"],
-    [/^AF2$/, [], "the US Vice President (Air Force Two)", "United States"],
-    [/^(MARINE ?ONE|VM1)$/, [], "the US President (Marine One helicopter)", "United States"],
-    [/^SAM\d/, [], "US cabinet members and senior officials (Special Air Mission)", "United States"],
-    [null, ["82-8000", "92-9000"], "the US President (VC-25A Air Force One)", "United States"],
-    [null, ["ZZ336", "ZZ337"], "the UK Prime Minister and royal family (RAF Voyager)", "United Kingdom"],
-    [null, ["ZE700", "ZE701"], "the UK royal family and ministers (No. 32 (The Royal) Squadron)", "United Kingdom"],
-    [/^CFC00[12]$/, [], "the Canadian Prime Minister, Governor General and royal visitors", "Canada"],
-    [/^ASY\d/, ["A36-001", "A37-001", "A37-002"], "the Australian Prime Minister, Governor-General and ministers (RAAF 34 Squadron)", "Australia"],
-    [null, ["NZ7571", "NZ7572"], "the NZ Prime Minister, Governor-General and ministers (RNZAF 757)", "New Zealand"],
-    [null, ["F-RARF"], "the French President (Airbus A330)", "France"],
-    [null, ["10+01", "10+02", "10+03", "16+01", "16+02", "15+01"], "the German Chancellor and President (Flugbereitschaft)", "Germany"],
-    [/^AME0\d\d$/, ["T.22-1", "T.22-2"], "the Spanish Prime Minister and royal family (Ala 45)", "Spain"],
-    [null, ["MM62174", "MM62209"], "the Italian President and Prime Minister", "Italy"],
-    [null, ["VT-ALW", "VT-ALX"], "the Indian Prime Minister and President (Air India One)", "India"],
-    [null, ["B-2472", "B-2447"], "the Chinese President (Air China 747-8)", "China"],
-    [/^RSD\d/, ["RA-96016", "RA-96012", "RA-96021", "RA-96022", "RA-96023", "RA-96024"], "the Russian President and government (Special Flight Detachment)", "Russia"],
-    [null, ["80-1111", "80-1112"], "the Japanese Prime Minister and Imperial Family (JASDF)", "Japan"],
-    [null, ["FAB2101"], "the Brazilian President (Airbus A319 'Santos Dumont')", "Brazil"],
-    [null, ["A-001"], "the Indonesian President ('Indonesia One')", "Indonesia"]
+    [/^AF1$/, [], "the US President (Air Force One)", "United States", "usa_af1"],
+    [/^AF2$/, [], "the US Vice President (Air Force Two)", "United States", "usa_af2"],
+    [/^(MARINE ?ONE|VM1)$/, [], "the US President (Marine One helicopter)", "United States", "usa_m1"],
+    [/^SAM\d/, [], "US cabinet members and senior officials (Special Air Mission)", "United States", "usa_sam"],
+    [null, ["82-8000", "92-9000"], "the US President (VC-25A Air Force One)", "United States", "usa_vc25"],
+    [null, ["ZZ336", "ZZ337"], "the UK Prime Minister and royal family (RAF Voyager)", "United Kingdom", "uk_voy"],
+    [null, ["ZE700", "ZE701"], "the UK royal family and ministers (No. 32 (The Royal) Squadron)", "United Kingdom", "uk_146"],
+    [/^CFC00[12]$/, [], "the Canadian Prime Minister, Governor General and royal visitors", "Canada", "can"],
+    [/^ASY\d/, ["A36-001", "A37-001", "A37-002"], "the Australian Prime Minister, Governor-General and ministers (RAAF 34 Squadron)", "Australia", "aus"],
+    [null, ["NZ7571", "NZ7572"], "the NZ Prime Minister, Governor-General and ministers (RNZAF 757)", "New Zealand", "nz"],
+    [null, ["F-RARF"], "the French President (Airbus A330)", "France", "fra"],
+    [null, ["10+01", "10+02", "10+03", "16+01", "16+02", "15+01"], "the German Chancellor and President (Flugbereitschaft)", "Germany", "ger"],
+    [/^AME0\d\d$/, ["T.22-1", "T.22-2"], "the Spanish Prime Minister and royal family (Ala 45)", "Spain", "esp"],
+    [null, ["MM62174", "MM62209"], "the Italian President and Prime Minister", "Italy", "ita"],
+    [null, ["VT-ALW", "VT-ALX"], "the Indian Prime Minister and President (Air India One)", "India", "ind"],
+    [null, ["B-2472", "B-2447"], "the Chinese President (Air China 747-8)", "China", "chn"],
+    [/^RSD\d/, ["RA-96016", "RA-96012", "RA-96021", "RA-96022", "RA-96023", "RA-96024"], "the Russian President and government (Special Flight Detachment)", "Russia", "rus"],
+    [null, ["80-1111", "80-1112"], "the Japanese Prime Minister and Imperial Family (JASDF)", "Japan", "jpn"],
+    [null, ["FAB2101"], "the Brazilian President (Airbus A319 'Santos Dumont')", "Brazil", "bra"],
+    [null, ["A-001"], "the Indonesian President ('Indonesia One')", "Indonesia", "idn"]
   ];
   // Any country: the aircraft database names the owner, so a plane registered to a presidential, royal, amiri or state flight counts
   // even when it isn't in the table above. Airlines with "Royal" or "Sultan" in their name don't.
   var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|amiri|emiri|sultan|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
+  function vipEntry(cs, reg) {
+    cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase();
+    for (var i = 0; i < VIP_PLANES.length; i++) {
+      var v = VIP_PLANES[i];
+      if ((v[0] && (v[0].test(cs) || v[0].test(reg))) || (reg && v[1].indexOf(reg) >= 0) || (cs && v[1].indexOf(cs) >= 0)) return v;
+    }
+    return null;
+  }
   function vipOf(cs, reg, owner, country) {   // -> "VIP: who they carry · country" text, or ""
     cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase(); owner = String(owner || "");
     for (var i = 0; i < VIP_PLANES.length; i++) {
@@ -3899,6 +3910,114 @@ body.infoup main{visibility:hidden}
       return "VIP: " + who + " (" + owner.slice(0, 40) + ")" + (country ? " · " + country : "");
     }
     return "";
+  }
+  // Info page: who a VIP plane carries and about them. People named are the office holders at the time of writing (November 2026): offices change, planes stay.
+  var VIP_BIO = {
+    usa_af1: ["Air Force One", [
+      "Carries: the President of the United States, with staff, Secret Service agents, press and guests. 'Air Force One' is the radio callsign of any US Air Force plane with the President aboard, so it is not one fixed aircraft.",
+      "The President: Donald Trump, the 47th President, back in office since January 2025. Born in New York City in 1946, a property developer and TV host before politics, and the 45th President from 2017 to 2021.",
+      "The job: the President is both head of state and head of government, and commander-in-chief of the armed forces. Elected every four years, for at most two terms.",
+      "The aircraft: two VC-25As (modified Boeing 747-200Bs, tails 82-8000 and 92-9000) in service since 1990, about 372 square metres of floor space over three levels, a medical suite, and able to refuel in flight. Flown by the 89th Airlift Wing from Joint Base Andrews, Maryland.",
+      "Seen here? Rare: the callsign only goes on while the President is aboard."]],
+    usa_vc25: ["Air Force One (VC-25A)", [
+      "Carries: the President of the United States, when it flies as 'Air Force One'. Without the President aboard it flies as an ordinary Air Force plane under another callsign.",
+      "The President: Donald Trump, the 47th President since January 2025. Born in New York City in 1946, a property developer and TV host before politics; also the 45th President (2017 to 2021).",
+      "The aircraft: two VC-25As (modified Boeing 747-200Bs, tails 82-8000 and 92-9000) in service since 1990, with a medical suite and the ability to refuel in flight. Flown by the 89th Airlift Wing from Joint Base Andrews, Maryland."]],
+    usa_af2: ["Air Force Two", [
+      "Carries: the Vice President of the United States. 'Air Force Two' is the callsign of any Air Force plane with the Vice President aboard.",
+      "The Vice President: JD Vance, since January 2025. Born in 1984 in Ohio, a US Marine who served in Iraq, then a lawyer and the author of the memoir 'Hillbilly Elegy', and a US Senator for Ohio from 2023 to 2025.",
+      "The job: the Vice President takes over if the President cannot serve, and is also President of the Senate (with a vote only to break a tie).",
+      "The aircraft: usually a Boeing C-32 (757-200) of the 89th Airlift Wing at Joint Base Andrews, Maryland."]],
+    usa_m1: ["Marine One", [
+      "Carries: the President of the United States. 'Marine One' is the callsign of any Marine Corps helicopter with the President aboard.",
+      "The President: Donald Trump (47th President, since January 2025), born in New York City in 1946.",
+      "The aircraft: a VH-3D Sea King or the newer VH-92A Patriot, flown by Marine Helicopter Squadron One (HMX-1). It flies the short hops, for example the White House lawn to Joint Base Andrews, where the President boards Air Force One."]],
+    usa_sam: ["Special Air Mission", [
+      "Carries: US cabinet members, senior officials and other VIPs, and sometimes the First Lady or the Vice President when no other plane is free.",
+      "Who: cabinet secretaries such as the Secretaries of State and Defense, flown on official trips by the 89th Airlift Wing.",
+      "The aircraft: Boeing C-32s (757-200), C-40s (737) and VC-25s from Joint Base Andrews, Maryland. 'SAM' plus the tail number is the callsign."]],
+    uk_voy: ["UK Prime Minister and royal flights (RAF Voyager)", [
+      "Carries: the King, members of the royal family and the UK Prime Minister, plus ministers, officials and press, on long overseas trips.",
+      "The King: Charles III, born 1948, King since 8 September 2022 (crowned 6 May 2023), after 70 years as heir. Married to Queen Camilla; the heir is his son William, Prince of Wales. He is head of state of the UK and 14 other realms, including Australia, Canada and New Zealand.",
+      "The Prime Minister: Keir Starmer, Labour leader and Prime Minister since July 2024, a former human rights lawyer and Director of Public Prosecutions.",
+      "The aircraft: an Airbus A330 Voyager (ZZ336 and ZZ337, RAF Brize Norton), a tanker-transport that carries VIPs when needed. Other flights use RAF or charter planes."]],
+    uk_146: ["No. 32 (The Royal) Squadron", [
+      "Carries: the royal family and UK ministers on shorter flights, and visiting dignitaries.",
+      "The King: Charles III, King since 8 September 2022, born 1948; the heir is Prince William, Prince of Wales.",
+      "The aircraft: BAe 146 CC.2s (ZE700, ZE701) of 32 (The Royal) Squadron, RAF Northolt, London. The squadron has flown the royal family since 1936 (as the King's Flight)."]],
+    can: ["Canadian Prime Minister and Governor General", [
+      "Carries: the Prime Minister of Canada, the Governor General and visiting royals.",
+      "The Prime Minister: Mark Carney, since March 2025. Born in 1965 in Fort Smith, Northwest Territories; a former Governor of the Bank of Canada and of the Bank of England, and the first person to run two G7 central banks.",
+      "The Governor General: Mary Simon, since 2021, the first Indigenous person in the role. She represents King Charles III, who is Canada's head of state.",
+      "The aircraft: CC-150 Polaris (an Airbus A310) and CC-144 Challenger jets of the Royal Canadian Air Force, from 437 and 412 Squadrons at Trenton and Ottawa."]],
+    aus: ["Australian Prime Minister and Governor-General", [
+      "Carries: the Prime Minister of Australia, the Governor-General, other ministers and visiting royals.",
+      "The Prime Minister: Anthony Albanese (Labor), since May 2022. Born in 1963 in Sydney, raised by a single mother in public housing, and the member for Grayndler since 1996.",
+      "The Governor-General: Sam Mostyn, since July 2024. She represents King Charles III, who is Australia's head of state.",
+      "The aircraft: Boeing 737 BBJ and Challenger 604 jets of RAAF No. 34 Squadron at Canberra, callsign 'ASY'. Longer trips can use a KC-30A tanker-transport."]],
+    nz: ["NZ Prime Minister and Governor-General", [
+      "Carries: the Prime Minister, the Governor-General and ministers, plus Defence Force and other overseas trips.",
+      "The Prime Minister: Christopher Luxon (National), since November 2023. Born in Christchurch in 1970, he was CEO of Air New Zealand before politics.",
+      "The Governor-General: Dame Cindy Kiro, since October 2021. She represents King Charles III, who is NZ's head of state.",
+      "The aircraft: two RNZAF Boeing 757-200s (NZ7571, NZ7572) of No. 40 Squadron at Auckland (Whenuapai), which also carry troops, freight and other government passengers."]],
+    fra: ["French President", [
+      "Carries: the President of France and his delegation.",
+      "The President: Emmanuel Macron, since May 2017, re-elected 2022. Born in Amiens in 1977, a former investment banker and economy minister; the youngest French president ever elected.",
+      "The job: head of state and commander of the armed forces. Elected every five years, for at most two terms in a row.",
+      "The aircraft: an Airbus A330-200 (F-RARF) of the French Air and Space Force, flown by Escadron de Transport 3/60 'Estérel' from Villacoublay, Paris."]],
+    ger: ["German Chancellor and President (Flugbereitschaft)", [
+      "Carries: the Federal Chancellor, the Federal President, ministers and delegations.",
+      "The Chancellor: Friedrich Merz (CDU), since May 2025. Born in 1955 in Brilon, a lawyer who worked in business before returning to politics.",
+      "The President: Frank-Walter Steinmeier, since 2017, a mostly ceremonial head of state.",
+      "The aircraft: Luftwaffe Flugbereitschaft (Air Transport Wing, Berlin and Cologne-Bonn) Airbus A350-900 jets (10+01 'Konrad Adenauer', 10+02, 10+03) and A340 and A321 jets, named after postwar leaders."]],
+    esp: ["Spanish Prime Minister and royal family (Ala 45)", [
+      "Carries: the King, the Prime Minister and ministers.",
+      "The Prime Minister: Pedro Sánchez (PSOE), since June 2018. Born in Madrid in 1972 and an economist.",
+      "The King: Felipe VI, King since 2014, after his father Juan Carlos abdicated.",
+      "The aircraft: Airbus A310 and Falcon jets of Ala 45 (Air Force 45th Wing) at Torrejón, Madrid, callsign 'AME'."]],
+    ita: ["Italian President and Prime Minister", [
+      "Carries: the President of the Republic, the Prime Minister and ministers.",
+      "The President: Sergio Mattarella, since 2015 and re-elected in 2022. A Sicilian born in 1941, a former judge of the Constitutional Court.",
+      "The Prime Minister: Giorgia Meloni (Brothers of Italy), since October 2022, the first woman to hold the job. Born in Rome in 1977.",
+      "The aircraft: Airbus A340-500 (MM62174) and A319CJ (MM62209) of the Italian Air Force's 31st Wing at Ciampino, Rome."]],
+    ind: ["Air India One", [
+      "Carries: India's Prime Minister, President and Vice President on overseas trips, when flown as 'Air India One'.",
+      "The Prime Minister: Narendra Modi (BJP), since 2014. Born in 1950 in Vadnagar, Gujarat, and Chief Minister of Gujarat from 2001 to 2014.",
+      "The President: Droupadi Murmu, since July 2022, the first tribal woman to be head of state. A mostly ceremonial role.",
+      "The aircraft: two Boeing 777-300ERs (VT-ALW, VT-ALX) with missile-defence and a secure communications fit, flown by Indian Air Force crews and kept by Air India."]],
+    chn: ["Chinese leader's flights", [
+      "Carries: China's President and Communist Party leader and his delegation.",
+      "The leader: Xi Jinping, General Secretary since 2012 and President since 2013. Born in 1953 in Beijing, the son of a revolutionary leader.",
+      "The aircraft: Air China Boeing 747 jets (B-2447 and B-2472) used for state visits. The flight is flown as an Air China flight, so there is no special callsign."]],
+    rus: ["Russian President (Special Flight Detachment)", [
+      "Carries: the President of Russia, ministers and officials, flown by the 'Rossiya' Special Flight Detachment (callsign RSD).",
+      "The President: Vladimir Putin, President since 2012 (and from 2000 to 2008, and Prime Minister in between). Born in Leningrad (St Petersburg) in 1952, a former KGB officer.",
+      "The aircraft: Ilyushin Il-96-300PU airliners (for example RA-96016), fitted as a command post, nicknamed the 'flying Kremlin'. Based at Moscow Vnukovo."]],
+    jpn: ["Japanese Prime Minister and Imperial Family", [
+      "Carries: the Prime Minister, the Emperor and other members of the Imperial Family on overseas trips.",
+      "The Prime Minister: Sanae Takaichi (LDP), since October 2025, the first woman to hold the job. Born in 1961 in Nara.",
+      "The Emperor: Naruhito, since 1 May 2019. A symbolic role: in Japan the Emperor has no political power.",
+      "The aircraft: two Boeing 777-300ERs (80-1111, 80-1112) of the Japan Air Self-Defense Force, based at Chitose, Hokkaido, which replaced 747-400s in 2019."]],
+    bra: ["Brazilian President", [
+      "Carries: the President of Brazil and his delegation.",
+      "The President: Luiz Inácio Lula da Silva ('Lula'), serving his third term since January 2023 (he was also President from 2003 to 2010). Born in 1945, a former metalworker and union leader.",
+      "The aircraft: an Airbus A319CJ (FAB 2101) of the Brazilian Air Force, named 'Santos Dumont' after the aviation pioneer, and nicknamed 'Aerolula'."]],
+    idn: ["Indonesia One", [
+      "Carries: the President of Indonesia and his delegation, flying as 'Indonesia One'.",
+      "The President: Prabowo Subianto, since October 2024. Born in 1951 in Jakarta, a former army general and Defence Minister (2019 to 2024).",
+      "The aircraft: a Boeing 737-800 BBJ2 (A-001) of the Indonesian Air Force, in service since 2014."]]
+  };
+  function vipBio(f) {   // -> [title, bullets] for the info page, or null
+    var e = vipEntry(f.flight, f.reg);
+    if (e && VIP_BIO[e[4]]) return VIP_BIO[e[4]];
+    var own = String(f.owner || (f.raw && f.raw.ownOp) || "");
+    if (!e && own && vipOf("", "", own, f.country)) {
+      return ["VIP flight", [
+        "Carries: " + (/prime minister/i.test(own) ? "a prime minister and government" : /presiden/i.test(own) ? "a president and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(own) ? "a royal family or ruler" : "government leaders and VIPs") + ".",
+        "Owner: " + own + (f.country ? " (" + f.country + ")" : "") + ", as listed in the aircraft database.",
+        "Who: the passengers aren't made public; flights like this are usually only announced after they land."]];
+    }
+    return null;
   }
   function rareWhy(a) {
     if (a.cat === "emg") return "Emergency";
