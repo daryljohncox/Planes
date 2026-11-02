@@ -2699,7 +2699,7 @@ body.infoup main{visibility:hidden}
   ];
   var scanMsg = "";
   function sweepWanted(x) {   // cheap pre-check, so thousands of ordinary planes don't each get the full treatment
-    return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x);
+    return !!x.t && (!!WORLD_RARE[x.t] || !!RARE_TYPES[x.t] || isAntonov(x.t, x.desc)) || milRare(x) || !!vipOf(x.flight, x.r);
   }
   function worldScan(force) {
     if (scanBusy || (!force && scanAt && Date.now() - scanAt < 180000)) return;
@@ -3861,8 +3861,41 @@ body.infoup main{visibility:hidden}
     PBY5: "Vintage flying boat", CAML: "WWI replica", DR1: "WWI replica", SE5: "WWI replica",
     ST75: "Vintage Stearman", DH87: "Vintage", DH94: "Vintage", WACO: "Vintage biplane", P47: "Warbird", FURY: "Warbird"
   };
+  // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country].
+  // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
+  var VIP_PLANES = [
+    [/^AF1$/, [], "the US President (Air Force One)", "United States"],
+    [/^AF2$/, [], "the US Vice President (Air Force Two)", "United States"],
+    [/^(MARINE ?ONE|VM1)$/, [], "the US President (Marine One helicopter)", "United States"],
+    [/^SAM\d/, [], "US cabinet members and senior officials (Special Air Mission)", "United States"],
+    [null, ["82-8000", "92-9000"], "the US President (VC-25A Air Force One)", "United States"],
+    [null, ["ZZ336", "ZZ337"], "the UK Prime Minister and royal family (RAF Voyager)", "United Kingdom"],
+    [null, ["ZE700", "ZE701"], "the UK royal family and ministers (No. 32 (The Royal) Squadron)", "United Kingdom"],
+    [/^CFC00[12]$/, [], "the Canadian Prime Minister, Governor General and royal visitors", "Canada"],
+    [/^ASY\d/, ["A36-001", "A37-001", "A37-002"], "the Australian Prime Minister, Governor-General and ministers (RAAF 34 Squadron)", "Australia"],
+    [null, ["NZ7571", "NZ7572"], "the NZ Prime Minister, Governor-General and ministers (RNZAF 757)", "New Zealand"],
+    [null, ["F-RARF"], "the French President (Airbus A330)", "France"],
+    [null, ["10+01", "10+02", "10+03", "16+01", "16+02", "15+01"], "the German Chancellor and President (Flugbereitschaft)", "Germany"],
+    [/^AME0\d\d$/, ["T.22-1", "T.22-2"], "the Spanish Prime Minister and royal family (Ala 45)", "Spain"],
+    [null, ["MM62174", "MM62209"], "the Italian President and Prime Minister", "Italy"],
+    [null, ["VT-ALW", "VT-ALX"], "the Indian Prime Minister and President (Air India One)", "India"],
+    [null, ["B-2472", "B-2447"], "the Chinese President (Air China 747-8)", "China"],
+    [/^RSD\d/, ["RA-96016", "RA-96012", "RA-96021", "RA-96022", "RA-96023", "RA-96024"], "the Russian President and government (Special Flight Detachment)", "Russia"],
+    [null, ["80-1111", "80-1112"], "the Japanese Prime Minister and Imperial Family (JASDF)", "Japan"],
+    [null, ["FAB2101"], "the Brazilian President (Airbus A319 'Santos Dumont')", "Brazil"],
+    [null, ["A-001"], "the Indonesian President ('Indonesia One')", "Indonesia"]
+  ];
+  function vipOf(cs, reg) {   // -> "the US President (Air Force One) · United States" style text, or ""
+    cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase();
+    for (var i = 0; i < VIP_PLANES.length; i++) {
+      var v = VIP_PLANES[i];
+      if ((v[0] && (v[0].test(cs) || v[0].test(reg))) || (reg && v[1].indexOf(reg) >= 0) || (cs && v[1].indexOf(cs) >= 0)) return "VIP: " + v[2] + " · " + v[3];
+    }
+    return "";
+  }
   function rareWhy(a) {
     if (a.cat === "emg") return "Emergency";
+    var vip = vipOf(a.flight || a.callsign, a.reg); if (vip) return vip;
     if (isAntonov(a.type, a.desc)) return "Antonov";
     if (a.type === "P8" && !/^NZ/i.test(a.reg || "")) return "";   // only the RNZAF Poseidons
     if (a.type && RARE_TYPES[a.type]) return RARE_TYPES[a.type];
