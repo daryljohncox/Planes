@@ -113,6 +113,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl svg{transition:none}
 .dense .pl:not(.on):not(.emg) svg{filter:none!important}
 .row{content-visibility:auto;contain-intrinsic-size:auto 9vh}
+.rr{content-visibility:auto;contain-intrinsic-size:auto 8vh}
+.more{padding:1.2vh 1.8vh;color:var(--dim);font-size:1.9vh;text-align:center}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
@@ -1165,12 +1167,22 @@ body.infoup main{visibility:hidden}
     return { key: html, rot: Math.round(a.track || 0), icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
+  var MAP_MAX = 150, LIST_MAX = 120;
   function drawMap(featured) {
     if (!map) return;
     var seen = {};
     // lots of planes: drop the callsign labels and soft edges (the selected plane keeps its label) so panning stays smooth
     document.body.classList.toggle("dense", aircraft.length > 25);
-    aircraft.forEach(function (a) {
+    // a screen full of planes (a whole continent is 500+) is more than the Hub can move: draw the selected plane, the
+    // special ones and the nearest to the map centre, up to MAP_MAX; the list still has everything
+    var drawList = aircraft;
+    if (aircraft.length > MAP_MAX) {
+      drawList = aircraft.slice().sort(function (x, y) {
+        return (x.cat && x.cat !== "com" && x.cat !== "pvt" ? 0 : 1) - (y.cat && y.cat !== "com" && y.cat !== "pvt" ? 0 : 1) || x.dist - y.dist;
+      }).slice(0, MAP_MAX);
+    }
+    if (featured && drawList !== aircraft && drawList.indexOf(featured) < 0) drawList.push(featured);
+    drawList.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
       if (mapOff[listGroup(a)] && !on) return;                 // eyes crossed out: those groups are hidden
@@ -2274,6 +2286,7 @@ body.infoup main{visibility:hidden}
     listPending = false;
     var by = SORTS[listSort] || SORTS.near;
     $("sortbtn").textContent = by[0] + " first · tap to sort";
+    listBudget = LIST_MAX;
     var html = LIST_GROUPS.map(function (g) {
       var inGroup = aircraft.filter(function (a) { return listGroup(a) === g[0]; }).sort(by[1]);
       if (!inGroup.length && !mapOnly[g[0]] && !mapOff[g[0]]) return "";   // a group with its eye lit or crossed keeps its header (to switch it back)
@@ -2281,13 +2294,20 @@ body.infoup main{visibility:hidden}
       return '<div class="grp' + (shut ? " shut" : "") + '" data-g="' + g[0] + '"><b>' + g[1] + '</b><button type="button" class="fold" aria-label="' + (shut ? "Show" : "Hide") +
         ' these in the list">' + FOLD_SVG + "</button><span>" +
         (shut ? "hidden · " : "") + inGroup.length + '<button type="button" class="eye' + (mapOnly[g[0]] ? " on" : mapOff[g[0]] ? " off" : "") +
-        '" aria-label="Hide these, show only these, or show all on the map">' + (mapOff[g[0]] ? EYE_OFF_SVG : EYE_SVG) + "</button></span></div>" + (shut ? "" : inGroup.map(rowHtml).join(""));
+        '" aria-label="Hide these, show only these, or show all on the map">' + (mapOff[g[0]] ? EYE_OFF_SVG : EYE_SVG) + "</button></span></div>" + (shut ? "" : shownRows(inGroup));
     }).join("");
     if (html === listHtml) return;
     listHtml = html;
     var top = $("rows").scrollTop;
     $("rows").innerHTML = html;
     $("rows").scrollTop = top;
+  }
+  // a continent's worth of planes: only the first LIST_MAX rows (in list order) are built, the rest are counted
+  var listBudget = 0;
+  function shownRows(arr) {
+    var n = Math.max(0, Math.min(arr.length, listBudget));
+    listBudget -= n;
+    return arr.slice(0, n).map(rowHtml).join("") + (n < arr.length ? '<div class="more">+ ' + (arr.length - n) + " more not listed · zoom in to see them</div>" : "");
   }
   function listSettled() {
     clearTimeout(listScrollT);
