@@ -2738,23 +2738,33 @@ body.infoup main{visibility:hidden}
     var next = 0;
     function worker() {
       if (next >= batches.length || failRun >= 8) return Promise.resolve();   // the feed is refusing: stop instead of hammering it
+      // the Hub is busy with a finger on the map or a list: the sweep waits instead of making it lag
+      if (moving || listTouch) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(worker);
       var b = batches[next++];
       var mil = b === "mil";
       return feedFetch(mil ? "?mil=1&all=1" : "?lat=" + b[0] + "&lon=" + b[1] + "&r=250", { cache: "no-store" }, mil ? 15000 : 9000)   // the military list is big and the relay can take 6 s to get it
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
           okN++; failRun = 0;
-          (j.ac || []).forEach(function (x) {
-            if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) return;
-            var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
-            if (w && w !== "South of NZ" && w !== "Emergency") a.why = w;
-            seen[x.hex] = 1; found.push(a);
+          // a few dozen planes at a time with a breather between, so a big answer doesn't freeze the Hub
+          var acs = j.ac || [], i = 0;
+          return new Promise(function (done) {
+            (function chunk() {
+              for (var n = 0; i < acs.length && n < 60; i++, n++) {
+                var x = acs[i];
+                if (seen[x.hex] || x.lat == null || x.lon == null || (x.seen_pos != null && x.seen_pos > 300) || !sweepWanted(x)) continue;
+                var a = bgPlane(x, { lat: LAT, lon: LON }), w = rareWhy(a);
+                if (w && w !== "South of NZ" && w !== "Emergency") a.why = w;
+                seen[x.hex] = 1; found.push(a);
+              }
+              if (i < acs.length) setTimeout(chunk, 30); else done();
+            })();
           });
         })
         .catch(function () { scanErr++; failRun++; })
-        .then(function () { scanDone++; if (!$("contpanel").hidden) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 350); }).then(worker); });
+        .then(function () { scanDone++; if (!$("contpanel").hidden && (scanDone % 4 === 0 || scanDone >= scanTotal)) drawContinents(); return new Promise(function (ok) { setTimeout(ok, 900); }).then(worker); });
     }
-    Promise.all([worker(), worker()]).then(function () {
+    worker().then(function () {
       scanBusy = false;
       var tm = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       scanMsg = okN ? "Last sweep " + tm + ": " + okN + " of " + scanTotal + " areas answered, " + found.length + " rare plane" + (found.length === 1 ? "" : "s") + " in the air."
