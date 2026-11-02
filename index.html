@@ -111,6 +111,8 @@ body:not(.lightmap) .homepin span{color:#fff;text-shadow:0 0 2px #000,0 0 3px #0
 .dense .pl:not(.on):not(.emg) span{display:none}
 .dense .pl svg g.sh{display:none}
 .dense .pl svg{transition:none}
+.dense .pl:not(.on):not(.emg) svg{filter:none!important}
+.row{content-visibility:auto;contain-intrinsic-size:auto 9vh}
 /* light (atlas / topo) maps: dark navy planes with a white outline, selected = orange with a dark outline */
 .lightmap #map,.lightmap .leaflet-container{background:#dfe6ea}
 .lightmap .pl svg{color:#13284a;--ol:#fff;filter:none}
@@ -586,6 +588,7 @@ body.infoup main{visibility:hidden}
 
   // ICAO type code -> [friendly name, Wikipedia article used for the generic photo]
   var TYPES = {
+    G12T:["Grob G 120TP","Grob G 120TP"], G120:["Grob G 120TP","Grob G 120TP"],
     A319:["Airbus A319","Airbus A319"], A320:["Airbus A320","Airbus A320 family"],
     A321:["Airbus A321","Airbus A321"], A20N:["Airbus A320neo","Airbus A320neo family"],
     A21N:["Airbus A321neo","Airbus A321neo"], A332:["Airbus A330-200","Airbus A330"],
@@ -1158,16 +1161,15 @@ body.infoup main{visibility:hidden}
   function iconFor(a, on) {
     var size = on ? 36 : 28;
     var html = '<div class="pl' + (on ? " on" : "") + (a.cat ? " " + a.cat : "") + (flashUntil[a.hex] > Date.now() ? " flash" : "") +
-      (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(' +
-      Math.round(a.track || 0) + 'deg)"><g class="sh">' + shapeOf(a) + '</g><g>' + shapeOf(a) + '</g></svg><span>' + esc(a.callsign) + "</span></div>";
-    return { key: html, icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
+      (isRare(a) ? " rare" : "") + '"><svg viewBox="0 0 24 24" fill="currentColor"><g class="sh">' + shapeOf(a) + '</g><g>' + shapeOf(a) + '</g></svg><span>' + esc(a.callsign) + "</span></div>";
+    return { key: html, rot: Math.round(a.track || 0), icon: L.divIcon({ className: "", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) };
   }
 
   function drawMap(featured) {
     if (!map) return;
     var seen = {};
     // lots of planes: drop the callsign labels and soft edges (the selected plane keeps its label) so panning stays smooth
-    document.body.classList.toggle("dense", aircraft.length > 40);
+    document.body.classList.toggle("dense", aircraft.length > 25);
     aircraft.forEach(function (a) {
       var on = featured && a.hex === featured.hex;
       if (onlyOn() && !on && !mapOnly[listGroup(a)]) return;   // eyes lit on list headers: only those groups show
@@ -1177,14 +1179,19 @@ body.infoup main{visibility:hidden}
       var m = markers[a.hex];
       if (!m) {
         m = L.marker([a.lat, a.lon], { icon: ic.icon, interactive: true, keyboard: false, bubblingMouseEvents: false }).addTo(map);
-        m._key = ic.key;
+        m._key = ic.key; m._rot = null;
         m.on("click", (function (hex) { return function () { select(hex); }; })(a.hex));
         markers[a.hex] = m;
       } else {
         m.setLatLng([a.lat, a.lon]);
-        if (m._key !== ic.key) { m.setIcon(ic.icon); m._key = ic.key; }
+        if (m._key !== ic.key) { m.setIcon(ic.icon); m._key = ic.key; m._rot = null; }
       }
       m.setZIndexOffset(on ? 1000 : 0);
+      // heading changes turn the existing icon instead of rebuilding it (rebuilding every plane each poll made big views lag)
+      if (m._rot !== ic.rot) {
+        var el = m.getElement(), sv = el && el.querySelector("svg");
+        if (sv) { sv.style.transform = "rotate(" + ic.rot + "deg)"; m._rot = ic.rot; }
+      }
     });
     Object.keys(markers).forEach(function (hex) {
       if (!seen[hex]) { map.removeLayer(markers[hex]); delete markers[hex]; }
