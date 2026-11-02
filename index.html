@@ -3892,7 +3892,7 @@ body.infoup main{visibility:hidden}
   ];
   // Any country: the aircraft database names the owner, so a plane registered to a presidential, royal, amiri or state flight counts
   // even when it isn't in the table above. Airlines with "Royal" or "Sultan" in their name don't.
-  var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|amiri|emiri|sultan|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
+  var VIP_OWNER_RE = /presiden|prime minister|royal (flight|family|household|court|squadron)|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|king of|queen of|state flight|head of state|special air mission/i;
   function vipEntry(cs, reg) {
     cs = String(cs || "").trim().toUpperCase(); reg = String(reg || "").trim().toUpperCase();
     for (var i = 0; i < VIP_PLANES.length; i++) {
@@ -3908,7 +3908,7 @@ body.infoup main{visibility:hidden}
       if ((v[0] && (v[0].test(cs) || v[0].test(reg))) || (reg && v[1].indexOf(reg) >= 0) || (cs && v[1].indexOf(cs) >= 0)) return "VIP: " + v[2] + " · " + v[3];
     }
     if (owner && VIP_OWNER_RE.test(owner) && !/airlines?|airways|\bair\b.*\b(ltd|plc|inc)\b|charter|leasing/i.test(owner)) {
-      var who = /prime minister/i.test(owner) ? "the Prime Minister and government" : /presiden/i.test(owner) ? "the President and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(owner) ? "the royal family or ruler" : "government leaders and VIPs";
+      var who = /prime minister/i.test(owner) ? "the Prime Minister and government" : /presiden/i.test(owner) ? "the President and government" : /\broyal\b|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|\bking\b|\bqueen\b/i.test(owner) ? "the royal family or ruler" : "government leaders and VIPs";
       return "VIP: " + who + " (" + owner.slice(0, 40) + ")" + (country ? " · " + country : "");
     }
     return "";
@@ -4015,7 +4015,7 @@ body.infoup main{visibility:hidden}
     var own = String(f.owner || (f.raw && f.raw.ownOp) || "");
     if (!e && own && vipOf("", "", own, f.country)) {
       return ["VIP flight", [
-        "Carries: " + (/prime minister/i.test(own) ? "a prime minister and government" : /presiden/i.test(own) ? "a president and government" : /royal|amiri|emiri|sultan|emir|king|queen/i.test(own) ? "a royal family or ruler" : "government leaders and VIPs") + ".",
+        "Carries: " + (/prime minister/i.test(own) ? "a prime minister and government" : /presiden/i.test(own) ? "a president and government" : /\broyal\b|\bamiri\b|\bemiri\b|\bsultan\b|\bemir\b|\bking\b|\bqueen\b/i.test(own) ? "a royal family or ruler" : "government leaders and VIPs") + ".",
         "Owner: " + own + (f.country ? " (" + f.country + ")" : "") + ", as listed in the aircraft database.",
         "Who: the passengers aren't made public; flights like this are usually only announced after they land."]];
     }
