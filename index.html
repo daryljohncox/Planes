@@ -2659,7 +2659,14 @@ body.infoup main{visibility:hidden}
   function ban(hex) { bans[hex] = Date.now(); store.set("bans", bans); }
   function banned(hex) { return bans[hex] && Date.now() - bans[hex] < 6 * 3600000; }
   Object.keys(bans).forEach(function (h) { if (Date.now() - bans[h] >= 6 * 3600000) delete bans[h]; });
+  // Never on the Continents list: airliners (current and classic) and trainers
+  var NO_CONT = {
+    CONC: 1, L101: 1, DC10: 1, DC85: 1, DC86: 1, DC87: 1, B703: 1, B722: 1, B741: 1, B742: 1, B743: 1, B74S: 1, IL62: 1, IL18: 1, IL96: 1, T154: 1, T204: 1, DC4: 1, DC6: 1,
+    HAWK: 1, PC21: 1, T38: 1, L39: 1, L29: 1, L159: 1, M346: 1, M339: 1, TEX2: 1, T6: 1, PC9: 1, PC7: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, T28: 1, DHC1: 1, DH82: 1
+  };
+  function noCont(t, why) { return !!(t && NO_CONT[t]) || /trainer/i.test(why || ""); }
   function contNote(a, why, at) {   // add or refresh one plane on the Continents list
+    if (noCont(a.type, why)) return;
     var now = Date.now(), r = at[a.hex];
     if (!r || now - r.last > 6 * 3600000) {
       if (r) contList.splice(contList.indexOf(r), 1);
@@ -3990,6 +3997,7 @@ body.infoup main{visibility:hidden}
   // Drop old military entries that no longer count (done here because it needs RARE_TYPES, which is defined just above)
   // Russian passenger airliners (Il-96, Tu-154, Tu-204) flying for airlines are everyday there, not rare: drop saved ones that aren't military
   contList = contList.filter(function (r) { return !(/^(IL96|T154|T204)$/.test(r.type || "") && !/military$/i.test(r.why || "")); });
+  contList = contList.filter(function (r) { return !noCont(r.type || ((/\(([A-Z0-9]+)\)\s*$/.exec(r.ty || "") || [])[1]), r.why); });
   contList = contList.filter(function (r) { return !(/military$/i.test(r.why || "") && r.type && !milKeep(r.type) && !RARE_TYPES[r.type] && !WORLD_RARE[r.type] && !isAntonov(r.type, r.desc)); });
   // Government, presidential and royal aircraft: [callsign pattern or null, registrations, who they normally carry, country, key into VIP_BIO (info page)].
   // Matched by callsign (when the plane flies as e.g. "AF1" or "ASY001") or by tail number; best-effort, add more here as they turn up.
