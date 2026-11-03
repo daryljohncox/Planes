@@ -2659,9 +2659,9 @@ body.infoup main{visibility:hidden}
   function ban(hex) { bans[hex] = Date.now(); store.set("bans", bans); }
   function banned(hex) { return bans[hex] && Date.now() - bans[hex] < 6 * 3600000; }
   Object.keys(bans).forEach(function (h) { if (Date.now() - bans[h] >= 6 * 3600000) delete bans[h]; });
-  // Never on the Continents list: airliners (current and classic) and trainers
+  // Never on the Continents list: ordinary airliners (classic jets like DC-10/707/727; Concorde, 747SP, TriStar, Il-62/18, DC-4/6 stay) and trainers
   var NO_CONT = {
-    CONC: 1, L101: 1, DC10: 1, DC85: 1, DC86: 1, DC87: 1, B703: 1, B722: 1, B741: 1, B742: 1, B743: 1, B74S: 1, IL62: 1, IL18: 1, IL96: 1, T154: 1, T204: 1, DC4: 1, DC6: 1,
+    DC10: 1, DC85: 1, DC86: 1, DC87: 1, B703: 1, B722: 1, B741: 1, B742: 1, B743: 1, IL96: 1, T154: 1, T204: 1,
     HAWK: 1, PC21: 1, T38: 1, L39: 1, L29: 1, L159: 1, M346: 1, M339: 1, TEX2: 1, T6: 1, PC9: 1, PC7: 1, TUCA: 1, T34: 1, T37: 1, G115: 1, G120: 1, T28: 1, DHC1: 1, DH82: 1
   };
   function noCont(t, why) { return !!(t && NO_CONT[t]) || /trainer/i.test(why || ""); }
