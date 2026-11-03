@@ -4192,7 +4192,7 @@ body.infoup main{visibility:hidden}
   }
   contList = contList.filter(function (r) { return !staleVip(r.why); });
   (function () {
-    var NOT_TYPE = /^(Emergency|Antarctic flight|Research|South of NZ|.*Military)$/i, kept = [];
+    var NOT_TYPE = /^(Emergency|Antarctic flight|Research|South of NZ|VIP: .*|.*Military)$/i, kept = [];
     rareList.slice().reverse().forEach(function (r) {
       var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || "");
       if (m && m[1] === "P8" && !/^NZ/i.test(r.reg || "")) return;
@@ -4214,6 +4214,15 @@ body.infoup main{visibility:hidden}
       kept.push(r);
     });
     if (kept.length !== rareList.length) { rareList = kept.reverse(); store.set("rare", rareList); }
+    // Anything on Continents that is within 3000 km of home belongs on the Rare list too
+    var have = {}, added = 0;
+    rareList.forEach(function (r) { have[r.hex] = 1; });
+    contList.forEach(function (r) {
+      if (have[r.hex] || !nearNZ(r.lat, r.lon) || Date.now() - r.t >= RARE_DAYS_MS) return;
+      var o = {}; for (var k in r) if (k !== "cont") o[k] = r[k];
+      o.air = true; have[r.hex] = 1; rareList.push(o); added++;
+    });
+    if (added) { rareList.sort(function (x, y) { return y.t - x.t; }); store.set("rare", rareList); }
   })();
   contCount();
   function rareCount() {   // today's rare planes on the button
