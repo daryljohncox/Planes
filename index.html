@@ -233,6 +233,7 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .fold{flex:0 0 auto;border:0;border-radius:.8vh;background:#1c2633;color:var(--txt);padding:0 1.6vh;margin:-.6vh 1vh;cursor:pointer;line-height:0}
 .fold svg{width:3.2vh;height:3.2vh;transition:transform .2s}
 .grp.shut .fold svg{transform:rotate(-90deg)}
+#controws .grp .fold{margin-left:0}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#d9a300}
@@ -2779,7 +2780,7 @@ body.infoup main{visibility:hidden}
     $("controws").innerHTML = head + busy +
       (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
         var open = !!contOpen[contSel + "|" + k];
-        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
+        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><b>' + esc(k) + "</b><span>" + by[k].length + "</span></div>" +
           (open ? by[k].map(contRow).join("") : "");
       }).join(""));
   }
