@@ -233,7 +233,8 @@ button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;back
 .fold{flex:0 0 auto;border:0;border-radius:.8vh;background:#1c2633;color:var(--txt);padding:0 1.6vh;margin:-.6vh 1vh;cursor:pointer;line-height:0}
 .fold svg{width:3.2vh;height:3.2vh;transition:transform .2s}
 .grp.shut .fold svg{transform:rotate(-90deg)}
-#controws .grp .fold{margin-left:0}
+#controws .grp b{flex:0 1 38%}
+#controws .grp i{flex:1;font-style:normal;font-weight:600;color:var(--dim);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-transform:none}
 .row .ri{color:#7fb2ff;width:4vh;height:4vh;flex:0 0 auto}
 .row .ri.mil{color:#b07a45}
 .row .ri.trn{color:#d9a300}
@@ -2693,12 +2694,16 @@ body.infoup main{visibility:hidden}
     var n = contList.filter(function (r) { return r.t >= d0.getTime(); }).length;
     $("contcount").textContent = n ? n : "";
   }
-  function roleLine(r) {   // second line under the type: "supersonic jet trainer"
+  function roleText(r) {
     var m = /\(([A-Z0-9]+)\)$/.exec(r.ty || ""), rl = ROLES[r.type || (m ? m[1] : "")] || "";
     if (!rl) {   // type not in the table: say something from the name / reason so no row is bare
       var tx = ((r.ty || "") + " " + (r.why || "")).toLowerCase();
       rl = /helicopter|apache|chinook|black hawk|mil mi|\bmi-\d|\bka-\d/.test(tx) ? "helicopter" : /drone|uav/.test(tx) ? "drone" : /military/.test(tx) ? "military aircraft" : /airliner|boeing|airbus/.test(tx) ? "airliner" : /antonov/.test(tx) ? "giant freighter" : /vip|royal|presiden|prime minister|state/.test(tx) ? "VIP / state flight" : "";
     }
+    return rl;
+  }
+  function roleLine(r) {   // second line under the type: "supersonic jet trainer"
+    var rl = roleText(r);
     return rl && (r.ty || "").toLowerCase().indexOf(rl.toLowerCase()) < 0 ? '<span class="rt role">' + esc(rl) + "</span>" : "";
   }
   function contRow(r) {
@@ -2780,7 +2785,7 @@ body.infoup main{visibility:hidden}
     $("controws").innerHTML = head + busy +
       (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
         var open = !!contOpen[contSel + "|" + k];
-        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><b>' + esc(k) + "</b><span>" + by[k].length + "</span></div>" +
+        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><i>' + esc(by[k].map(roleText).filter(Boolean)[0] || by[k][0].why || "") + "</i><span>" + by[k].length + "</span></div>" +
           (open ? by[k].map(contRow).join("") : "");
       }).join(""));
   }
