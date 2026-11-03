@@ -2636,6 +2636,8 @@ body.infoup main{visibility:hidden}
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
   ];
+  var contOpen = {};
+  try { contOpen = JSON.parse(sessionStorage.getItem("planes.contopen") || "{}") || {}; } catch (e) { /* none */ }
   var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "", contTab = "scan";
   // Worldwide emergency squawks (7700 / 7600 / 7500), kept 30 days; radio / transponder emergencies only, no news
   var wemg = store.get("wemg", []).filter(function (r) { return Date.now() - r.last < 30 * 86400000; });
@@ -2769,12 +2771,16 @@ body.infoup main{visibility:hidden}
     }
     $("conttitle").textContent = contSel;
     var head = '<button type="button" class="act" data-cont="">← Continents</button>';
-    var list = contList.filter(function (r) { return r.cont === contSel; }), day = null;
+    var list = contList.filter(function (r) { return r.cont === contSel; });
+    // grouped by aircraft type like the main list: tap a title or its arrow to open or close that type (all closed to start with)
+    var by = {};
+    list.forEach(function (r) { var k = (r.ty || "Other").replace(/\s*\([A-Z0-9]+\)$/, "") || "Other"; (by[k] = by[k] || []).push(r); });
+    var keys = Object.keys(by).sort(function (a, b) { return by[b].length - by[a].length || (a < b ? -1 : 1); });
     $("controws").innerHTML = head + busy +
-      (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : list.map(function (r) {
-        var d = dayLabel(r.t), h = "";
-        if (d !== day) { day = d; h = '<div class="rday">' + esc(d) + "</div>"; }
-        return h + contRow(r);
+      (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
+        var open = !!contOpen[contSel + "|" + k];
+        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
+          (open ? by[k].map(contRow).join("") : "");
       }).join(""));
   }
   // The background sweep asks the feed for planes around a grid of points, just like the map does when you pan it there,
@@ -2929,6 +2935,14 @@ body.infoup main{visibility:hidden}
   });
   $("controws").addEventListener("click", function (e) {
     if (rowSelect(e)) return;
+    var tg = e.target.closest ? e.target.closest("[data-tg]") : null;
+    if (tg) {
+      var tk = contSel + "|" + tg.getAttribute("data-tg");
+      if (contOpen[tk]) delete contOpen[tk]; else contOpen[tk] = 1;
+      try { sessionStorage.setItem("planes.contopen", JSON.stringify(contOpen)); } catch (e3) { /* not saved */ }
+      drawContinents();
+      return;
+    }
     var t = e.target.closest ? e.target.closest("[data-cont],[data-hex]") : null;
     if (!t) return;
     if (t.hasAttribute("data-hex")) { openGoneRow(t, contTab === "emg" ? wemg : contList); return; }
