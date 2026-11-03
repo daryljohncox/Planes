@@ -2772,10 +2772,10 @@ body.infoup main{visibility:hidden}
     $("conttitle").textContent = contSel;
     var head = '<button type="button" class="act" data-cont="">← Continents</button>';
     var list = contList.filter(function (r) { return r.cont === contSel; });
-    // grouped by aircraft type like the main list: tap a title or its arrow to open or close that type (all closed to start with)
+    // grouped by aircraft type like the main list, rarest (fewest planes) first: tap a title or its arrow to open or close that type (all closed to start with)
     var by = {};
     list.forEach(function (r) { var k = (r.ty || "Other").replace(/\s*\([A-Z0-9]+\)$/, "") || "Other"; (by[k] = by[k] || []).push(r); });
-    var keys = Object.keys(by).sort(function (a, b) { return by[b].length - by[a].length || (a < b ? -1 : 1); });
+    var keys = Object.keys(by).sort(function (a, b) { return by[a].length - by[b].length || (a < b ? -1 : 1); });
     $("controws").innerHTML = head + busy +
       (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
         var open = !!contOpen[contSel + "|" + k];
