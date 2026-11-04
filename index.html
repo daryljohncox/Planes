@@ -2648,8 +2648,9 @@ body.infoup main{visibility:hidden}
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 15 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300"); });   // (the military clean-up runs later, once RARE_TYPES exists)   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
-  // (within 3000 km of home)
-  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && distKm(LAT, LON, lat, lon) <= 3000; }
+  // (within 3000 km of home, plus all of Australia)
+  function inAustralia(lat, lon) { return lat >= -44 && lat <= -10.5 && lon >= 112 && lon <= 154.5; }
+  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && (distKm(LAT, LON, lat, lon) <= 3000 || inAustralia(lat, lon)); }
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
     return "Elsewhere";
