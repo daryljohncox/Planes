@@ -2648,9 +2648,9 @@ body.infoup main{visibility:hidden}
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 15 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300"); });   // (the military clean-up runs later, once RARE_TYPES exists)   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
-  // (within 3000 km of home, plus all of Australia)
+  // (within 5500 km of home, plus all of Australia)
   function inAustralia(lat, lon) { return lat >= -44 && lat <= -10.5 && lon >= 112 && lon <= 154.5; }
-  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && (distKm(LAT, LON, lat, lon) <= 3000 || inAustralia(lat, lon)); }
+  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && (distKm(LAT, LON, lat, lon) <= 5500 || inAustralia(lat, lon)); }
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
     return "Elsewhere";
@@ -4216,7 +4216,7 @@ body.infoup main{visibility:hidden}
       kept.push(r);
     });
     if (kept.length !== rareList.length) { rareList = kept.reverse(); store.set("rare", rareList); }
-    // Anything on Continents that is within 3000 km of home belongs on the Rare list too
+    // Anything on Continents that is within 5500 km of home belongs on the Rare list too
     var have = {}, added = 0;
     rareList.forEach(function (r) { have[r.hex] = 1; });
     contList.forEach(function (r) {
@@ -4256,7 +4256,7 @@ body.infoup main{visibility:hidden}
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
-    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 3000 km; rare planes seen further away go on the Continents list
+    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 5500 km; rare planes seen further away go on the Continents list
       contNote(a, why, contIndex()); contSave(); if (!$("contpanel").hidden) drawContinents();
       return false;
     }
@@ -4312,18 +4312,48 @@ body.infoup main{visibility:hidden}
     });
     return out;
   }
+  // The Rare list is split by the country each plane was last over, one fold-able block per country
+  var COUNTRY_BOXES = [   // [name, south, west, north, east], most specific first
+    ["New Zealand", -48.5, 165.5, -33.5, 179.9], ["New Zealand", -45, -177, -43, -175],
+    ["Fiji", -21.5, 176, -12, 180], ["Fiji", -21.5, -180, -12, -177], ["Tonga", -23, -176.5, -15, -173], ["Samoa", -15, -173.5, -13, -171],
+    ["New Caledonia", -23.5, 163, -19, 169], ["Vanuatu", -21, 166, -13, 171.5], ["Solomon Islands", -12.5, 155, -5, 163],
+    ["Papua New Guinea", -10.3, 141, -1, 156], ["Australia", -44, 112, -10.5, 154.5], ["Indonesia", -11, 95, 6, 141]
+  ];
+  function rareCountry(r) {
+    var la = r.lat, lo = r.lon;
+    if (typeof la !== "number" || typeof lo !== "number") return "Other";
+    if (la < -60) return "Antarctica";
+    for (var i = 0; i < COUNTRY_BOXES.length; i++) {
+      var b = COUNTRY_BOXES[i];
+      if (la >= b[1] && la <= b[3] && lo >= b[2] && lo <= b[4]) return b[0];
+    }
+    return "Open ocean";
+  }
+  var rareShut = {};
+  try { rareShut = JSON.parse(sessionStorage.getItem("planes.rareshut") || "{}") || {}; } catch (e) { /* none */ }
+  function rareRow(r) {
+    var here = latest(r.hex, null);
+    return '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
+      esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+  }
   function drawRareList() {
     Array.prototype.forEach.call(document.querySelectorAll("#rarepanel [data-tab]"), function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === rareTab); });
     if (rareTab === "emg") return drawEmgList();
-    var day = null, shown = rareShown(), rareList = rareOnly();
+    var shown = rareShown(), rareList = rareOnly(), by = {};
+    shown.forEach(function (r) { var c = rareCountry(r); (by[c] = by[c] || []).push(r); });
+    // New Zealand first, then the countries with the most planes
+    var keys = Object.keys(by).sort(function (a, b) { return (b === "New Zealand") - (a === "New Zealand") || by[b].length - by[a].length || (a < b ? -1 : 1); });
     $("rarerows").innerHTML = '<div class="rseg">' + RARE_RANGES.map(function (x) {
       return '<button type="button" data-range="' + x[0] + '"' + (rareRange === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>";
-    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : shown.map(function (r) {
-      var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
-      if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
-      return head + '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
-        esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : keys.map(function (k) {
+      var open = !rareShut[k], day = null;
+      return '<div class="grp' + (open ? "" : " shut") + '" data-rg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this country">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
+        (open ? by[k].map(function (r) {
+          var d = dayLabel(r.t), head = "";
+          if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
+          return head + rareRow(r);
+        }).join("") : "");
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
   function dayLabel(t) {
@@ -4440,6 +4470,14 @@ body.infoup main{visibility:hidden}
     if (rowSelect(e)) return;
     var en = e.target.closest ? e.target.closest(".en") : null;
     if (en) { if (!e.target.closest("a")) en.classList.toggle("open"); return; }
+    var cg = e.target.closest ? e.target.closest("[data-rg]") : null;
+    if (cg) {
+      var ck = cg.getAttribute("data-rg");
+      if (rareShut[ck]) delete rareShut[ck]; else rareShut[ck] = 1;
+      try { sessionStorage.setItem("planes.rareshut", JSON.stringify(rareShut)); } catch (e4) { /* not saved */ }
+      drawRareList();
+      return;
+    }
     var rg = e.target.closest ? e.target.closest("[data-range]") : null;
     if (rg) {
       rareRange = rg.getAttribute("data-range");
