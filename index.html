@@ -215,6 +215,7 @@ body:not(.lightmap) .apt b{color:#e5d0ff;text-shadow:0 0 2px #000}
 .grp b{color:var(--txt)}
 .grp{cursor:pointer}
 .grp.shut{opacity:.6}
+.grp.sub{position:static;padding-left:4vh;font-size:1.7vh;background:#0f1721}
 button.lh{display:block;width:100%;border:0;border-bottom:1px solid #222d3a;background:none;text-align:left;font-family:inherit;cursor:pointer}
 .ovh{color:#ffd23f;font-weight:700}
 .kpick{cursor:pointer;border-radius:.8vh}
@@ -2635,12 +2636,50 @@ body.infoup main{visibility:hidden}
   // Military types that count: the special / combat list, or anything that isn't a plain transport / trainer / utility type
   // Combat / special types (MIL_SPECIAL) and military types we don't recognise count; known transports, trainers and utility types (MIL_PLAIN) don't
   function milKeep(t) { return !!t && (!!MIL_SPECIAL[t] || !MIL_PLAIN[t]); }
+  // Which country a plane is over, from rough boxes [name, south, west, north, east]; small / specific countries come first.
+  // The boxes are approximate, so a plane near a border can land in the neighbour.
+  var COUNTRY_BOXES = [
+    ["New Zealand", -48.5, 165.5, -33.5, 179.9], ["New Zealand", -45, -177, -43, -175], ["Fiji", -21.5, 176, -12, 180], ["Fiji", -21.5, -180, -12, -177],
+    ["Tonga", -23, -176.5, -15, -173], ["Samoa", -15, -173.5, -13, -171], ["New Caledonia", -23.5, 163, -19, 169], ["Vanuatu", -21, 166, -13, 171.5],
+    ["Solomon Islands", -12.5, 155, -5, 163], ["Papua New Guinea", -10.3, 141, -1, 156], ["Hawaii (USA)", 18.8, -160.3, 22.3, -154.8],
+    ["Singapore", 1.1, 103.6, 1.5, 104.1], ["Luxembourg", 49.4, 5.7, 50.2, 6.5], ["Belgium", 49.5, 2.5, 51.5, 6.4], ["Netherlands", 50.75, 3.3, 53.6, 7.2],
+    ["Switzerland", 45.8, 5.95, 47.8, 10.5], ["Austria", 46.4, 9.5, 49, 17.2], ["Czechia", 48.5, 12.1, 51.1, 18.9], ["Slovakia", 47.7, 16.8, 49.6, 22.6],
+    ["Hungary", 45.7, 16.1, 48.6, 22.9], ["Slovenia", 45.4, 13.4, 46.9, 16.6], ["Croatia", 42.4, 13.5, 46.6, 19.4], ["Denmark", 54.5, 8, 57.8, 12.7],
+    ["Ireland", 51.4, -10.7, 55.4, -6], ["United Kingdom", 49.9, -8.2, 60.9, 1.8], ["Portugal", 36.9, -9.6, 42.2, -6.2], ["Spain", 36, -9.4, 43.8, 3.4],
+    ["France", 42.3, -4.8, 51.1, 8.2], ["Italy", 36.6, 6.6, 47.1, 18.6], ["Germany", 47.3, 5.9, 55.1, 15.1], ["Poland", 49, 14.1, 54.9, 24.2],
+    ["Norway", 57.9, 4.5, 71.2, 31], ["Sweden", 55.3, 11, 69.1, 24.2], ["Finland", 59.8, 20, 70.1, 31.6], ["Baltic states", 53.9, 21, 59.7, 28.2],
+    ["Belarus", 51.2, 23.2, 56.2, 32.8], ["Ukraine", 44.4, 22.1, 52.4, 40.2], ["Romania", 43.6, 20.3, 48.3, 29.7], ["Bulgaria", 41.2, 22.4, 44.2, 28.6],
+    ["Greece", 34.8, 19.4, 41.8, 28.3], ["Turkey", 36, 26, 42.1, 44.8], ["Iceland", 63.3, -24.6, 66.6, -13.4], ["Greenland", 59.7, -73.1, 83.7, -11.3],
+    ["Taiwan", 21.9, 120, 25.4, 122], ["South Korea", 33, 125.1, 38.6, 129.6], ["North Korea", 38.6, 124.2, 43, 130.7], ["Japan", 30, 129, 45.6, 146],
+    ["Philippines", 4.5, 116.9, 21.2, 126.7], ["Vietnam", 8.4, 102, 23.4, 109.5], ["Thailand", 5.6, 97.3, 20.5, 105.7], ["Malaysia", 0.8, 99.6, 7.4, 119.3],
+    ["Australia", -44, 112, -10.5, 154.5], ["Indonesia", -11, 95, 6, 141], ["Sri Lanka", 5.9, 79.6, 9.9, 81.9], ["Bangladesh", 20.7, 88, 26.6, 92.7],
+    ["India", 6.7, 68.1, 35.5, 97.4], ["Pakistan", 23.6, 60.9, 37.1, 77.8], ["Iran", 25, 44, 39.8, 63.3], ["Iraq", 29, 38.8, 37.4, 48.6],
+    ["United Arab Emirates", 22.6, 51.5, 26.1, 56.4], ["Saudi Arabia", 16.3, 34.5, 32.2, 55.7], ["Egypt", 22, 24.7, 31.7, 36.9], ["Israel / Jordan", 29.4, 34.2, 33.4, 39.3],
+    ["Kazakhstan", 40.5, 46.5, 55.4, 87.3], ["Mongolia", 41.6, 87.7, 52.2, 119.9], ["China", 18.2, 73.5, 53.6, 134.8], ["Russia", 50, 27, 77, 180],
+    ["Morocco", 27.6, -13.2, 36, -1], ["Algeria", 19, -8.7, 37.1, 12], ["Tunisia", 30.2, 7.5, 37.5, 11.6], ["Libya", 19.5, 9.3, 33.2, 25],
+    ["Sudan", 8.7, 21.8, 22.2, 38.6], ["Ethiopia", 3.4, 33, 14.9, 48], ["Kenya", -4.7, 33.9, 5, 41.9], ["Tanzania", -11.7, 29.3, -1, 40.4],
+    ["DR Congo", -13.5, 12.2, 5.4, 31.3], ["Angola", -18, 11.7, -4.4, 24.1], ["Nigeria", 4.3, 2.7, 13.9, 14.7], ["South Africa", -35, 16.4, -22.1, 32.9],
+    ["Alaska (USA)", 51, -170, 71.5, -141], ["United States", 24.5, -125, 49.4, -66.9], ["Canada", 41.7, -141, 83.2, -52.6], ["Mexico", 14.5, -118.5, 32.7, -86.7],
+    ["Cuba", 19.8, -85, 23.3, -74], ["Central America", 7, -92.5, 18.5, -77], ["Colombia", -4.2, -79, 12.5, -66.9], ["Venezuela", 0.6, -73.4, 12.2, -59.8],
+    ["Peru", -18.4, -81.4, 0, -68.7], ["Chile", -56, -75.6, -17.5, -66.4], ["Argentina", -55, -73.6, -21.8, -53.6], ["Brazil", -33.8, -74, 5.3, -34.8]
+  ];
+  function rareCountry(r) {
+    var la = r.lat, lo = r.lon;
+    if (typeof la !== "number" || typeof lo !== "number") return "Other";
+    if (la < -60) return "Antarctica";
+    for (var i = 0; i < COUNTRY_BOXES.length; i++) {
+      var b = COUNTRY_BOXES[i];
+      if (la >= b[1] && la <= b[3] && lo >= b[2] && lo <= b[4]) return b[0];
+    }
+    return "Open ocean / other";
+  }
   var CONTINENTS = [   // [name, south, west, north, east]
     ["Oceania", -50, 110, 0, 180], ["Asia", -11, 45, 78, 180], ["Europe", 35, -25, 72, 45], ["Africa", -35, -18, 37.5, 52],
     ["North America", 7, -170, 84, -50], ["South America", -56, -82, 13, -34], ["Antarctica", -90, -180, -60, 180]
   ];
-  var contOpen = {};
+  var contOpen = {}, contShut = {};
   try { contOpen = JSON.parse(sessionStorage.getItem("planes.contopen") || "{}") || {}; } catch (e) { /* none */ }
+  try { contShut = JSON.parse(sessionStorage.getItem("planes.contshut") || "{}") || {}; } catch (e) { /* none */ }
   var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "", contTab = "scan";
   // Worldwide emergency squawks (7700 / 7600 / 7500), kept 30 days; radio / transponder emergencies only, no news
   var wemg = store.get("wemg", []).filter(function (r) { return Date.now() - r.last < 30 * 86400000; });
@@ -2648,8 +2687,9 @@ body.infoup main{visibility:hidden}
   var CONT_DAYS_MS = 30 * 86400000, SCAN_EVERY_MS = 15 * 60000;
   var contList = store.get("cont", []).filter(function (r) { return Date.now() - r.last < CONT_DAYS_MS && !(r.type === "P3" || r.type === "P1" || (r.type === "P8" && !/^NZ/i.test(r.reg || "")) || (/antonov/i.test(r.why || "") && !/^(AN22|A124|A225)$/.test(r.type || "")) || r.type === "PITS" || r.type === "EXTR" || r.type === "E300"); });   // (the military clean-up runs later, once RARE_TYPES exists)   // [{hex, cs, ty, why, reg, country, cont, t, last, lat, lon, alt}]
   // The Rare list is for New Zealand and the nearby Pacific; the rest of the world lives under Continents
-  // (within 3000 km of home)
-  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && distKm(LAT, LON, lat, lon) <= 3000; }
+  // (within 5500 km of home, plus all of Australia)
+  function inAustralia(lat, lon) { return lat >= -44 && lat <= -10.5 && lon >= 112 && lon <= 154.5; }
+  function nearNZ(lat, lon) { return typeof lat === "number" && typeof lon === "number" && (distKm(LAT, LON, lat, lon) <= 5500 || inAustralia(lat, lon)); }
   function contOf(a) {
     for (var i = 0; i < CONTINENTS.length; i++) if (inContinent(CONTINENTS[i], a)) return CONTINENTS[i][0];
     return "Elsewhere";
@@ -2786,15 +2826,22 @@ body.infoup main{visibility:hidden}
     $("conttitle").textContent = contSel;
     var head = '<button type="button" class="act" data-cont="">← Continents</button>';
     var list = contList.filter(function (r) { return r.cont === contSel; });
-    // grouped by aircraft type like the main list, rarest (fewest planes) first: tap a title or its arrow to open or close that type (all closed to start with)
+    // one block per country the plane is flying over, and inside it a block per aircraft type (closed to start with, rarest first):
+    // tap a name or its arrow to open or close it
     var by = {};
-    list.forEach(function (r) { var k = (r.ty || "Other").replace(/\s*\([A-Z0-9]+\)$/, "") || "Other"; (by[k] = by[k] || []).push(r); });
-    var keys = Object.keys(by).sort(function (a, b) { return by[a].length - by[b].length || (a < b ? -1 : 1); });
+    list.forEach(function (r) { var k = rareCountry(r); (by[k] = by[k] || []).push(r); });
+    var keys = Object.keys(by).sort(function (a, b) { return by[b].length - by[a].length || (a < b ? -1 : 1); });
     $("controws").innerHTML = head + busy +
       (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
-        var open = !!contOpen[contSel + "|" + k];
-        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><i>' + esc(by[k].map(roleText).filter(Boolean)[0] || by[k][0].why || "") + "</i><span>" + by[k].length + "</span></div>" +
-          (open ? by[k].map(contRow).join("") : "");
+        var open = !contShut[contSel + "|" + k], types = {};
+        by[k].forEach(function (r) { var t = (r.ty || "Other").replace(/\s*\([A-Z0-9]+\)$/, "") || "Other"; (types[t] = types[t] || []).push(r); });
+        var tkeys = Object.keys(types).sort(function (a, b) { return types[a].length - types[b].length || (a < b ? -1 : 1); });
+        return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this country">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
+          (open ? tkeys.map(function (t) {
+            var tOpen = !!contOpen[contSel + "|" + k + "|" + t];
+            return '<div class="grp sub' + (tOpen ? "" : " shut") + '" data-tt="' + esc(k + "|" + t) + '"><b>' + esc(t) + '</b><button type="button" class="fold" aria-label="' + (tOpen ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><i>' + esc(types[t].map(roleText).filter(Boolean)[0] || types[t][0].why || "") + "</i><span>" + types[t].length + "</span></div>" +
+              (tOpen ? types[t].map(contRow).join("") : "");
+          }).join("") : "");
       }).join(""));
   }
   // The background sweep asks the feed for planes around a grid of points, just like the map does when you pan it there,
@@ -2949,11 +2996,19 @@ body.infoup main{visibility:hidden}
   });
   $("controws").addEventListener("click", function (e) {
     if (rowSelect(e)) return;
+    var tt = e.target.closest ? e.target.closest("[data-tt]") : null;
+    if (tt) {
+      var tq = contSel + "|" + tt.getAttribute("data-tt");
+      if (contOpen[tq]) delete contOpen[tq]; else contOpen[tq] = 1;
+      try { sessionStorage.setItem("planes.contopen", JSON.stringify(contOpen)); } catch (e5) { /* not saved */ }
+      drawContinents();
+      return;
+    }
     var tg = e.target.closest ? e.target.closest("[data-tg]") : null;
     if (tg) {
       var tk = contSel + "|" + tg.getAttribute("data-tg");
-      if (contOpen[tk]) delete contOpen[tk]; else contOpen[tk] = 1;
-      try { sessionStorage.setItem("planes.contopen", JSON.stringify(contOpen)); } catch (e3) { /* not saved */ }
+      if (contShut[tk]) delete contShut[tk]; else contShut[tk] = 1;
+      try { sessionStorage.setItem("planes.contshut", JSON.stringify(contShut)); } catch (e3) { /* not saved */ }
       drawContinents();
       return;
     }
@@ -4215,7 +4270,7 @@ body.infoup main{visibility:hidden}
       kept.push(r);
     });
     if (kept.length !== rareList.length) { rareList = kept.reverse(); store.set("rare", rareList); }
-    // Anything on Continents that is within 3000 km of home belongs on the Rare list too
+    // Anything on Continents that is within 5500 km of home belongs on the Rare list too
     var have = {}, added = 0;
     rareList.forEach(function (r) { have[r.hex] = 1; });
     contList.forEach(function (r) {
@@ -4255,7 +4310,7 @@ body.infoup main{visibility:hidden}
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
-    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 3000 km; rare planes seen further away go on the Continents list
+    if (typeof a.lat === "number" && !nearNZ(a.lat, a.lon) && !/^(Antarctic flight|Research|South of NZ)$/.test(why || "")) {   // the Rare list is only for planes within 5500 km; rare planes seen further away go on the Continents list
       contNote(a, why, contIndex()); contSave(); if (!$("contpanel").hidden) drawContinents();
       return false;
     }
@@ -4311,18 +4366,32 @@ body.infoup main{visibility:hidden}
     });
     return out;
   }
+  // The Rare list is split by the country each plane was last over, one fold-able block per country
+  var rareShut = {};
+  try { rareShut = JSON.parse(sessionStorage.getItem("planes.rareshut") || "{}") || {}; } catch (e) { /* none */ }
+  function rareRow(r) {
+    var here = latest(r.hex, null);
+    return '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
+      (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
+      esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+  }
   function drawRareList() {
     Array.prototype.forEach.call(document.querySelectorAll("#rarepanel [data-tab]"), function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === rareTab); });
     if (rareTab === "emg") return drawEmgList();
-    var day = null, shown = rareShown(), rareList = rareOnly();
+    var shown = rareShown(), rareList = rareOnly(), by = {};
+    shown.forEach(function (r) { var c = rareCountry(r); (by[c] = by[c] || []).push(r); });
+    // New Zealand first, then the countries with the most planes
+    var keys = Object.keys(by).sort(function (a, b) { return (b === "New Zealand") - (a === "New Zealand") || by[b].length - by[a].length || (a < b ? -1 : 1); });
     $("rarerows").innerHTML = '<div class="rseg">' + RARE_RANGES.map(function (x) {
       return '<button type="button" data-range="' + x[0] + '"' + (rareRange === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>";
-    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : shown.map(function (r) {
-      var here = latest(r.hex, null), d = dayLabel(r.t), head = "";
-      if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
-      return head + '<button type="button" class="rr' + (delSel[r.hex] ? " sel" : "") + '" data-hex="' + esc(r.hex) + '"><span class="star">★</span><span class="rm"><span class="rc">' + esc(r.cs) +
-        (r.with && r.with.length ? '<span class="pal">flying alongside ' + esc(r.with.join(", ")) + "</span>" : "") + '</span><span class="rt">' + esc(r.why + " · " + r.ty + (r.reg && r.reg !== r.cs ? " · " + r.reg : "")) + '</span>' + roleLine(r) + '</span><span class="rw">' +
-        esc(when(r.t)) + (r.times > 1 ? "<br>seen " + r.times + "×" : "") + (here ? '<br><span class="now">On map now</span>' : "") + "</span></button>";
+    }).join("") + "</div>" + (!rareList.length ? "" : !shown.length ? '<div class="note">No rare planes ' + (rareRange === "today" ? "today" : "in the last " + rareRange + " days") + " yet.</div>" : keys.map(function (k) {
+      var open = !rareShut[k], day = null;
+      return '<div class="grp' + (open ? "" : " shut") + '" data-rg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this country">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
+        (open ? by[k].map(function (r) {
+          var d = dayLabel(r.t), head = "";
+          if (d !== day) { day = d; head = '<div class="rday">' + esc(d) + "</div>"; }
+          return head + rareRow(r);
+        }).join("") : "");
     }).join("")) + (rareList.length ? "" : '<div class="note">No rare planes in the last 30 days. Military visitors, Antarctic flights, planes south of NZ, vintage aircraft and unusual types will show up here.</div>');
   }
   function dayLabel(t) {
@@ -4439,6 +4508,14 @@ body.infoup main{visibility:hidden}
     if (rowSelect(e)) return;
     var en = e.target.closest ? e.target.closest(".en") : null;
     if (en) { if (!e.target.closest("a")) en.classList.toggle("open"); return; }
+    var cg = e.target.closest ? e.target.closest("[data-rg]") : null;
+    if (cg) {
+      var ck = cg.getAttribute("data-rg");
+      if (rareShut[ck]) delete rareShut[ck]; else rareShut[ck] = 1;
+      try { sessionStorage.setItem("planes.rareshut", JSON.stringify(rareShut)); } catch (e4) { /* not saved */ }
+      drawRareList();
+      return;
+    }
     var rg = e.target.closest ? e.target.closest("[data-range]") : null;
     if (rg) {
       rareRange = rg.getAttribute("data-range");
