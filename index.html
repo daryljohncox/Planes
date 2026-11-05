@@ -4321,6 +4321,7 @@ body.infoup main{visibility:hidden}
     if (path.length > RARE_PATH_MAX) r.path = path.filter(function (x, i) { return i % 2 === 0 || i === path.length - 1; });
     return r;
   }
+  var JET_TRAINERS = { T38: 1, HAWK: 1, M346: 1, L39: 1, L29: 1, L159: 1, T50: 1, T45: 1, T37: 1 };
   function noteRare(a, why) {   // returns true if it's new: not seen in the last 6 hours, or off on another flight
     var now = Date.now(), gnd = a.alt === "ground", fk = flightKey(a.flight, a.reg);
     if (banned(a.hex)) return false;   // deleted from the list a short while ago
@@ -4347,6 +4348,8 @@ body.infoup main{visibility:hidden}
       store.set("rare", rareList);
       return false;
     }
+    // A jet trainer only gets one entry a day: its newest flight replaces the earlier one from today
+    if (JET_TRAINERS[a.type]) rareList = rareList.filter(function (r) { return !(r.hex === a.hex && dayLabel(r.t) === "Today"); });
     rareList.unshift(rareInfo({ hex: a.hex, cs: a.callsign, fk: fk, ty: typeName(a) + (a.type ? " (" + a.type + ")" : ""), reg: a.reg, why: why, t: now, last: now, lat: a.lat, lon: a.lon, air: !gnd, gnd: gnd, gndT: gnd ? now : undefined }, a));
     rareList = rareList.filter(function (r) { return now - r.t < RARE_DAYS_MS; });
     if (rareList.length > RARE_KEEP) rareList.length = RARE_KEEP;
