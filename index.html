@@ -2679,6 +2679,8 @@ body.infoup main{visibility:hidden}
   ];
   var contOpen = {}, contShut = {};
   try { contOpen = JSON.parse(sessionStorage.getItem("planes.contopen") || "{}") || {}; } catch (e) { /* none */ }
+  var contRange = "month";
+  try { contRange = localStorage.getItem("planes.contrange") || "month"; } catch (e) { /* none */ }
   try { contShut = JSON.parse(sessionStorage.getItem("planes.contshut") || "{}") || {}; } catch (e) { /* none */ }
   var scanAt = 0, scanBusy = false, scanDone = 0, scanTotal = 0, scanErr = 0, contSel = "", contTab = "scan";
   // Worldwide emergency squawks (7700 / 7600 / 7500), kept 30 days; radio / transponder emergencies only, no news
@@ -2828,19 +2830,24 @@ body.infoup main{visibility:hidden}
     var list = contList.filter(function (r) { return r.cont === contSel; });
     // one block per country the plane is flying over, and inside it a block per aircraft type (closed to start with, rarest first):
     // tap a name or its arrow to open or close it
+    var cut = { today: 0, week: 7, month: 30 }[contRange];
+    if (contRange === "today") list = list.filter(function (r) { return dayLabel(r.t) === "Today"; });
+    else list = list.filter(function (r) { return Date.now() - r.t < cut * 86400000; });
+    list.sort(function (a, b) { return b.t - a.t; });
     var by = {};
     list.forEach(function (r) { var k = rareCountry(r); (by[k] = by[k] || []).push(r); });
-    var keys = Object.keys(by).sort(function (a, b) { return by[b].length - by[a].length || (a < b ? -1 : 1); });
-    $("controws").innerHTML = head + busy +
-      (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + " in the last 30 days") + ".</div>" : keys.map(function (k) {
-        var open = !contShut[contSel + "|" + k], types = {};
-        by[k].forEach(function (r) { var t = (r.ty || "Other").replace(/\s*\([A-Z0-9]+\)$/, "") || "Other"; (types[t] = types[t] || []).push(r); });
-        var tkeys = Object.keys(types).sort(function (a, b) { return types[a].length - types[b].length || (a < b ? -1 : 1); });
+    var keys = Object.keys(by).sort(function (a, b) { return (b === "New Zealand") - (a === "New Zealand") || by[b].length - by[a].length || (a < b ? -1 : 1); });
+    var seg = '<div class="rseg">' + [["today", "Today"], ["week", "Week"], ["month", "Month"]].map(function (x) {
+      return '<button type="button" data-crange="' + x[0] + '"' + (contRange === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>";
+    }).join("") + "</div>";
+    $("controws").innerHTML = head + seg + busy +
+      (!list.length ? '<div class="note">' + (scanBusy || !scanAt ? "Nothing yet" : "No very rare aircraft seen over " + esc(contSel) + (contRange === "today" ? " today" : contRange === "week" ? " in the last 7 days" : " in the last 30 days")) + ".</div>" : keys.map(function (k) {
+        var open = !contShut[contSel + "|" + k], day = null;
         return '<div class="grp' + (open ? "" : " shut") + '" data-tg="' + esc(k) + '"><b>' + esc(k) + '</b><button type="button" class="fold" aria-label="' + (open ? "Close" : "Open") + ' this country">' + FOLD_SVG + "</button><span>" + by[k].length + "</span></div>" +
-          (open ? tkeys.map(function (t) {
-            var tOpen = !!contOpen[contSel + "|" + k + "|" + t];
-            return '<div class="grp sub' + (tOpen ? "" : " shut") + '" data-tt="' + esc(k + "|" + t) + '"><b>' + esc(t) + '</b><button type="button" class="fold" aria-label="' + (tOpen ? "Close" : "Open") + ' this type">' + FOLD_SVG + '</button><i>' + esc(types[t].map(roleText).filter(Boolean)[0] || types[t][0].why || "") + "</i><span>" + types[t].length + "</span></div>" +
-              (tOpen ? types[t].map(contRow).join("") : "");
+          (open ? by[k].map(function (r) {
+            var d = dayLabel(r.t), h = "";
+            if (d !== day) { day = d; h = '<div class="rday">' + esc(d) + "</div>"; }
+            return h + contRow(r);
           }).join("") : "");
       }).join(""));
   }
@@ -2996,6 +3003,13 @@ body.infoup main{visibility:hidden}
   });
   $("controws").addEventListener("click", function (e) {
     if (rowSelect(e)) return;
+    var cr = e.target.closest ? e.target.closest("[data-crange]") : null;
+    if (cr) {
+      contRange = cr.getAttribute("data-crange");
+      try { localStorage.setItem("planes.contrange", contRange); } catch (e6) { /* not saved */ }
+      drawContinents();
+      return;
+    }
     var tt = e.target.closest ? e.target.closest("[data-tt]") : null;
     if (tt) {
       var tq = contSel + "|" + tt.getAttribute("data-tt");
